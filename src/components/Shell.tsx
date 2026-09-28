@@ -15,10 +15,12 @@ import {
   TypesView,
 } from "../views/registry.tsx";
 import { PageView } from "./PageView.tsx";
+import { Dock } from "./dock/Dock.tsx";
+import { RIGHT_MAX, RIGHT_MIN, REVEAL_EVENT, revealPanel, setRightOpen, setRightWidth, useLayout } from "../lib/layout.ts";
 import { QuickSwitcher } from "./QuickSwitcher.tsx";
 import { SettingsDialog } from "./SettingsDialog.tsx";
 import { ShareDialog } from "./ShareDialog.tsx";
-import { Sidebar } from "./Sidebar.tsx";
+import { ShellActionsProvider, Sidebar } from "./Sidebar.tsx";
 import { TopBar } from "./TopBar.tsx";
 import { TrashView } from "./TrashView.tsx";
 import { TabBar } from "./TabBar.tsx";
@@ -86,11 +88,84 @@ function assistantOpen(): boolean {
 
 function AssistantMount() {
   const { open } = useAssistant();
-  return open ? (
+  const layout = useLayout();
+  const docked = layout.left.includes("assistant") || layout.right.includes("assistant");
+  // Moved into a dock: opening the assistant shows that panel instead.
+  useEffect(() => {
+    if (docked && open) {
+      revealPanel("assistant");
+      openAssistant(false);
+    }
+  }, [docked, open]);
+  return open && !docked ? (
     <Suspense fallback={null}>
       <AssistantPanel />
     </Suspense>
   ) : null;
+}
+
+/** The right dock, beside the page and below the top bar. */
+function RightDock({
+  mobile,
+  onSearch,
+  onOpenSettings,
+  onNavigate,
+}: {
+  mobile: boolean;
+  onSearch: () => void;
+  onOpenSettings: (tab?: string) => void;
+  onNavigate: () => void;
+}) {
+  const layout = useLayout();
+  const actions = useMemo(() => ({ onSearch, onOpenSettings, onNavigate }), [onSearch, onOpenSettings, onNavigate]);
+  if (!layout.rightOpen) return null;
+  return (
+    <>
+      {mobile && <div className="rdock-scrim" onClick={() => setRightOpen(false)} />}
+      <aside className="rdock" style={{ ["--rdock-w" as string]: `${layout.rightWidth}px` }} aria-label="Right panels">
+        <RightDockResizer />
+        <div className="rdock-scroll">
+          <ShellActionsProvider value={actions}>
+            <Dock side="right" />
+          </ShellActionsProvider>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function RightDockResizer() {
+  const width = useLayout().rightWidth;
+  return (
+    <div
+      className="rdock-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize the right panels"
+      onPointerDown={(e) => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        const aside = (e.currentTarget as HTMLElement).parentElement!;
+        const startX = e.clientX;
+        let w = width;
+        document.documentElement.classList.add("resizing-sidebar");
+        const move = (ev: PointerEvent) => {
+          w = Math.round(Math.min(RIGHT_MAX, Math.max(RIGHT_MIN, width - (ev.clientX - startX))));
+          aside.style.setProperty("--rdock-w", `${w}px`);
+        };
+        const up = () => {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+          window.removeEventListener("pointercancel", up);
+          document.documentElement.classList.remove("resizing-sidebar");
+          if (w !== width) setRightWidth(w);
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+        window.addEventListener("pointercancel", up);
+      }}
+    />
+  );
 }
 
 export function Shell({ ws, route }: { ws: Workspace; route: Route }) {
@@ -166,6 +241,23 @@ export function Shell({ ws, route }: { ws: Workspace; route: Route }) {
     if (!pageId) ws.setPresence({ pageId: undefined });
   }, [ws, pageId]);
 
+  // Panels: a revealed panel's dock opens (the left dock is the sidebar).
+  useEffect(() => {
+    const onReveal = (e: Event) => {
+      if ((e as CustomEvent<{ side: string }>).detail.side === "left") setSidebarOpen(true);
+    };
+    window.addEventListener(REVEAL_EVENT, onReveal);
+    return () => window.removeEventListener(REVEAL_EVENT, onReveal);
+  }, []);
+  const openSwitcher = useCallback(() => setSwitcher(true), []);
+  const openSettings = useCallback((tab?: string) => setSettingsTab(tab ?? "profile"), []);
+  const closeRightOnPhone = useCallback(() => {
+    if (mobile) setRightOpen(false);
+  }, [mobile]);
+  const closeSidebarOnPhone = useCallback(() => {
+    if (mobile) setSidebarOpen(false);
+  }, [mobile]);
+
   const view: ViewName = route.name === "view" ? route.view : "home";
   // Canvases (whiteboard, paint, graph, skill tree) keep the bottom edge for their own tools.
   const showTabBar =
@@ -175,12 +267,7 @@ export function Shell({ ws, route }: { ws: Workspace; route: Route }) {
     <AppContext.Provider value={ctx}>
       <div className={`app${sidebarOpen ? " sidebar-open" : " sidebar-closed"}${showTabBar ? " has-tabbar" : ""}`}>
         {sidebarOpen && mobile && <div className="sidebar-scrim" onClick={() => setSidebarOpen(false)} />}
-        <Sidebar
-          onSearch={() => setSwitcher(true)}
-          onOpenSettings={(tab) => setSettingsTab(tab ?? "profile")}
-          onShare={() => setShare(true)}
-          onNavigate={() => mobile && setSidebarOpen(false)}
-        />
+        <Sidebar onSearch={openSwitcher} onOpenSettings={openSettings} onShare={() => setShare(true)} onNavigate={closeSidebarOnPhone} />
         <main className="main">
           <TopBar
             meta={meta}
@@ -188,7 +275,12 @@ export function Shell({ ws, route }: { ws: Workspace; route: Route }) {
             onToggleSidebar={() => setSidebarOpen((v) => !v)}
             onShare={() => setShare(true)}
           />
-          {pageId ? <PageView key={pageId} pageId={pageId} /> : <ViewBody view={view} ws={ws} deck={route.name === "view" ? route.deck : undefined} onShare={() => setShare(true)} />}
+          <div className="main-body">
+            <div className="main-content">
+              {pageId ? <PageView key={pageId} pageId={pageId} /> : <ViewBody view={view} ws={ws} deck={route.name === "view" ? route.deck : undefined} onShare={() => setShare(true)} />}
+            </div>
+            <RightDock mobile={mobile} onSearch={openSwitcher} onOpenSettings={openSettings} onNavigate={closeRightOnPhone} />
+          </div>
         </main>
         {showTabBar && <TabBar active={route.name === "view" ? view : null} onSearch={() => setSwitcher(true)} />}
       </div>

@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import * as Y from "yjs";
 
-interface Heading {
+export interface Heading {
   id: string;
   level: number;
   text: string;
 }
 
-function readHeadings(fragment: Y.XmlFragment): Heading[] {
+export function readHeadings(fragment: Y.XmlFragment): Heading[] {
   const out: Heading[] = [];
   for (const node of fragment.createTreeWalker((n) => n instanceof Y.XmlElement && n.nodeName === "heading")) {
     const el = node as Y.XmlElement;

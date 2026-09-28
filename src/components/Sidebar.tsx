@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, type DragEvent, type MouseEvent as ReactMouseEvent } from "react";
 import {
   CREATE_OPTIONS,
   TEMPLATES_SYSTEM,
@@ -33,6 +33,7 @@ import {
 import { PageIcon } from "./customize/PageIcon.tsx";
 import { SidebarResizer } from "./customize/SidebarResizer.tsx";
 import { Icon, Menu, type Anchor, type MenuItem } from "./ui.tsx";
+import { Dock } from "./dock/Dock.tsx";
 
 const EXPANDED_KEY = "basalt:expanded";
 const MORE_KEY = "basalt:nav-more";
@@ -287,6 +288,16 @@ function WorkspaceSwitcher({ onOpenSettings }: { onOpenSettings: () => void }) {
   );
 }
 
+/** Things the dock panels need from the shell. */
+interface ShellActions {
+  onSearch: () => void;
+  onOpenSettings: (tab?: string) => void;
+  onNavigate: () => void;
+}
+const ShellActionsContext = createContext<ShellActions>({ onSearch: () => {}, onOpenSettings: () => {}, onNavigate: () => {} });
+export const ShellActionsProvider = ShellActionsContext.Provider;
+export const useShellActions = () => useContext(ShellActionsContext);
+
 export function Sidebar({
   onSearch,
   onOpenSettings,
@@ -298,25 +309,253 @@ export function Sidebar({
   onShare: () => void;
   onNavigate: () => void;
 }) {
+  const { ws } = useApp();
+  const actions = useMemo(() => ({ onSearch, onOpenSettings, onNavigate }), [onSearch, onOpenSettings, onNavigate]);
+  return (
+    <aside className="sidebar">
+      <div className="sidebar-top">
+        <WorkspaceSwitcher onOpenSettings={() => onOpenSettings("workspace")} />
+      </div>
+      <div className="sidebar-scroll">
+        <ShellActionsProvider value={actions}>
+          <Dock side="left" />
+        </ShellActionsProvider>
+      </div>
+      <div className="sidebar-bottom">
+        <StatusDot ws={ws} />
+        <span className="spacer" />
+        <button className="icon-btn" title="Share & sync" onClick={onShare}>
+          <Icon name="users" />
+        </button>
+        <button className="icon-btn" title="Settings" onClick={() => onOpenSettings()}>
+          <Icon name="settings" />
+        </button>
+      </div>
+      <SidebarResizer />
+      <PageDialogsHost />
+    </aside>
+  );
+}
+
+/** Search, Today, the assistant, skills, flashcards, and "More". */
+export function NavPanel() {
+  const { ws } = useApp();
+  const { onSearch, onOpenSettings, onNavigate } = useShellActions();
+  const route = useRoute();
+  const settings = useSettings();
+  const appearance = settings.appearance;
+  const activeView = route.name === "view" ? route.view : null;
+  const due = useDueCount(ws);
+  const assistant = useAssistant();
+  const [navMenu, setNavMenu] = useState<{ id: string; label: string; anchor: Anchor } | null>(null);
+  const [moreOpen, setMoreOpen] = useState(() => localStorage.getItem(MORE_KEY) === "1");
+  const showMore = moreOpen || (activeView !== null && MORE_VIEWS.includes(activeView));
+  const hidden = new Set(appearance.hiddenNav);
+
+  const go = (view: ViewName) => {
+    navigate({ name: "view", wsId: ws.id, view });
+    onNavigate();
+  };
+  const onNavContext = (id: string, label: string) => (e: ReactMouseEvent) => {
+    e.preventDefault();
+    setNavMenu({ id, label, anchor: { x: e.clientX, y: e.clientY } });
+  };
+  const navItem = (view: ViewName, icon: string, label: string, badge?: number) =>
+    hidden.has(view) ? null : (
+      <button
+        className={`nav-item${activeView === view ? " active" : ""}`}
+        data-nav={view}
+        onClick={() => go(view)}
+        onContextMenu={view === "home" || view === "trash" ? undefined : onNavContext(view, label)}
+      >
+        <Icon name={icon} />
+        <span className="grow">{label}</span>
+        {badge ? <span className="nav-badge">{badge > 999 ? "999+" : badge}</span> : null}
+      </button>
+    );
+  const nav = (id: string, badge?: number) => {
+    const n = SIDEBAR_NAV.find((x) => x.id === id)!;
+    return navItem(id as ViewName, n.icon, n.label, badge);
+  };
+
+  return (
+    <div className="dock-nav">
+      <button className="nav-item" onClick={onSearch}>
+        <Icon name="search" />
+        <span className="grow">Search</span>
+        <span className="kbd">{MOD} K</span>
+      </button>
+      {navItem("home", "home", "Today")}
+      {!hidden.has("assistant") && (
+        <button
+          className={`nav-item${assistant.open ? " active" : ""}`}
+          data-nav="assistant"
+          onClick={() => {
+            toggleAssistant();
+            onNavigate();
+          }}
+          onContextMenu={onNavContext("assistant", settings.assistant.name)}
+        >
+          <Icon name="sparkle" />
+          <span className="grow ellipsis">{settings.assistant.name}</span>
+          <span className="kbd">{MOD} J</span>
+        </button>
+      )}
+      {nav("skills")}
+      {nav("learn", due)}
+      <button
+        className="nav-item nav-more"
+        aria-expanded={showMore}
+        onClick={() => {
+          localStorage.setItem(MORE_KEY, showMore ? "0" : "1");
+          setMoreOpen(!showMore);
+        }}
+      >
+        <span className={`sidebar-more-chevron${showMore ? " open" : ""}`}>
+          <Icon name="chevron" size={12} stroke={2.4} />
+        </span>
+        <span className="grow">More</span>
+      </button>
+      {showMore && (
+        <div className="nav-more-items">
+          {nav("graph")}
+          {nav("types")}
+          {nav("memory")}
+          {navItem("trash", "trash", "Trash")}
+        </div>
+      )}
+      {navMenu && (
+        <Menu
+          anchor={navMenu.anchor}
+          onClose={() => setNavMenu(null)}
+          items={[
+            {
+              label: `Hide “${navMenu.label}”`,
+              icon: <Icon name="eye" />,
+              onClick: () => updateAppearance({ hiddenNav: [...appearance.hiddenNav, navMenu.id] }),
+            },
+            { label: "Customize sidebar…", icon: <Icon name="sliders" />, onClick: () => onOpenSettings("appearance") },
+          ]}
+        />
+      )}
+    </div>
+  );
+}
+
+/** Starred pages, in the order you drag them into. */
+export function FavoritesPanel() {
+  const app = useApp();
+  const { ws, openPage } = app;
+  const { onNavigate } = useShellActions();
+  const pages = usePages(ws);
+  const route = useRoute();
+  const appearance = useSettings().appearance;
+  const activeId = route.name === "page" ? route.pageId : null;
+  const [favDrag, setFavDrag] = useState<{ id: string; over?: string; after?: boolean } | null>(null);
+  const [ctx, setCtx] = useState<{ meta: PageMeta; anchor: Anchor } | null>(null);
+  const favorites = useMemo(() => {
+    const byId = new Map(pages.filter((p) => p.favorite).map((p) => [p.id, p]));
+    return orderFavorites([...byId.keys()], appearance.favoriteOrder).map((id) => byId.get(id)!);
+  }, [pages, appearance.favoriteOrder]);
+
+  const dropFavorite = (targetId: string, after: boolean) => {
+    const id = favDrag?.id;
+    setFavDrag(null);
+    if (!id || id === targetId) return;
+    const list = favorites.map((f) => f.id).filter((f) => f !== id);
+    const at = list.indexOf(targetId) + (after ? 1 : 0);
+    list.splice(at, 0, id);
+    updateAppearance({ favoriteOrder: list });
+  };
+
+  if (!favorites.length) return <div className="dock-empty small faint">Star a page (☆ in its top bar) to pin it here.</div>;
+  return (
+    <div>
+      {favorites.map((f) => (
+        <button
+          key={f.id}
+          className={`nav-item fav-item${activeId === f.id ? " active" : ""}${
+            favDrag?.over === f.id ? (favDrag.after ? " drop-after" : " drop-before") : ""
+          }${favDrag?.id === f.id ? " dragging" : ""}`}
+          onClick={() => {
+            openPage(f.id);
+            onNavigate();
+          }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setCtx({ meta: f, anchor: { x: e.clientX, y: e.clientY } });
+          }}
+          draggable
+          onDragStart={(e) => {
+            e.stopPropagation();
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", f.id);
+            setFavDrag({ id: f.id });
+          }}
+          onDragEnd={() => setFavDrag(null)}
+          onDragOver={(e) => {
+            if (!favDrag || favDrag.id === f.id) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const r = e.currentTarget.getBoundingClientRect();
+            const after = e.clientY > r.top + r.height / 2;
+            if (favDrag.over !== f.id || favDrag.after !== after) setFavDrag({ ...favDrag, over: f.id, after });
+          }}
+          onDrop={(e) => {
+            if (!favDrag) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const r = e.currentTarget.getBoundingClientRect();
+            dropFavorite(f.id, e.clientY > r.top + r.height / 2);
+          }}
+        >
+          <PageIcon meta={f} className="tree-icon" />
+          <span className="grow ellipsis">{displayTitle(f)}</span>
+        </button>
+      ))}
+      {ctx && (
+        <Menu
+          anchor={ctx.anchor}
+          items={pageContextItems(app, ctx.meta, pages, { onRename: () => openPage(ctx.meta.id) })}
+          onClose={() => setCtx(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/** "+" in the Pages panel header. */
+export function NewPageButton() {
+  const [anchor, setAnchor] = useState<Anchor | null>(null);
+  return (
+    <>
+      <button
+        className="icon-btn"
+        title="New page"
+        aria-label="New page"
+        onClick={(e) => {
+          e.stopPropagation();
+          setAnchor(e.currentTarget.getBoundingClientRect());
+        }}
+      >
+        <Icon name="plus" />
+      </button>
+      {anchor && <NewPageMenu anchor={anchor} parentId={null} onClose={() => setAnchor(null)} />}
+    </>
+  );
+}
+
+/** Every page as a tree you can drag pages around in. */
+export function PagesPanel() {
   const app = useApp();
   const { ws, openPage } = app;
   const pages = usePages(ws);
   const route = useRoute();
-  const appearance = useSettings().appearance;
-  const [favDrag, setFavDrag] = useState<{ id: string; over?: string; after?: boolean } | null>(null);
-  const [navMenu, setNavMenu] = useState<{ id: string; label: string; anchor: Anchor } | null>(null);
   const activeId = route.name === "page" ? route.pageId : null;
-  const activeView = route.name === "view" ? route.view : null;
   const [expanded, setExpanded] = useState(loadExpanded);
   const [dragging, setDragging] = useState<string | null>(null);
   const [ctx, setCtx] = useState<{ meta: PageMeta; anchor: Anchor } | null>(null);
-  const [newAnchor, setNewAnchor] = useState<Anchor | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
-  const due = useDueCount(ws);
-  const assistant = useAssistant();
-  const settings = useSettings();
-  const [moreOpen, setMoreOpen] = useState(() => localStorage.getItem(MORE_KEY) === "1");
-  const showMore = moreOpen || (activeView !== null && MORE_VIEWS.includes(activeView));
 
   // Reveal the active page in the tree.
   useEffect(() => {
@@ -350,228 +589,61 @@ export function Sidebar({
   };
 
   const roots = useMemo(() => childrenOf(pages, null), [pages]);
-  const favorites = useMemo(() => {
-    const byId = new Map(pages.filter((p) => p.favorite).map((p) => [p.id, p]));
-    return orderFavorites([...byId.keys()], appearance.favoriteOrder).map((id) => byId.get(id)!);
-  }, [pages, appearance.favoriteOrder]);
-  const hidden = new Set(appearance.hiddenNav);
-
-  const dropFavorite = (targetId: string, after: boolean) => {
-    const id = favDrag?.id;
-    setFavDrag(null);
-    if (!id || id === targetId) return;
-    const list = favorites.map((f) => f.id).filter((f) => f !== id);
-    const at = list.indexOf(targetId) + (after ? 1 : 0);
-    list.splice(at, 0, id);
-    updateAppearance({ favoriteOrder: list });
-  };
-
-  const go = (view: ViewName) => {
-    navigate({ name: "view", wsId: ws.id, view });
-    onNavigate();
-  };
-
-  const ctxItems = (meta: PageMeta): MenuItem[] =>
-    pageContextItems(app, meta, pages, { onRename: () => setRenaming(meta.id) });
-
-  const onNavContext = (id: string, label: string) => (e: ReactMouseEvent) => {
-    e.preventDefault();
-    setNavMenu({ id, label, anchor: { x: e.clientX, y: e.clientY } });
-  };
-
-  const navItem = (view: ViewName, icon: string, label: string, badge?: number) =>
-    hidden.has(view) ? null : (
-      <button
-        className={`nav-item${activeView === view ? " active" : ""}`}
-        data-nav={view}
-        onClick={() => go(view)}
-        onContextMenu={view === "home" || view === "trash" ? undefined : onNavContext(view, label)}
-      >
-        <Icon name={icon} />
-        <span className="grow">{label}</span>
-        {badge ? <span className="nav-badge">{badge > 999 ? "999+" : badge}</span> : null}
-      </button>
-    );
-  const nav = (id: string, badge?: number) => {
-    const n = SIDEBAR_NAV.find((x) => x.id === id)!;
-    return navItem(id as ViewName, n.icon, n.label, badge);
-  };
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-top">
-        <WorkspaceSwitcher onOpenSettings={() => onOpenSettings("workspace")} />
+    <div>
+      <div
+        className="tree"
+        onDragOver={(e) => dragging && e.preventDefault()}
+        onDrop={(e) => {
+          // Dropping on empty space moves the page to the top level.
+          if (e.target === e.currentTarget && dragging) {
+            e.stopPropagation();
+            movePage(ws.doc, dragging, null);
+            setDragging(null);
+          }
+        }}
+      >
+        {roots.map((p) => (
+          <TreeItem
+            key={p.id}
+            meta={p}
+            pages={pages}
+            depth={0}
+            activeId={activeId}
+            expanded={expanded}
+            toggle={toggle}
+            onContext={(meta, anchor) => setCtx({ meta, anchor })}
+            dragState={{ dragging, setDragging }}
+            renaming={renaming}
+            setRenaming={setRenaming}
+          />
+        ))}
+        {roots.length === 0 && <div className="tree-empty small faint">No pages yet</div>}
       </div>
-      <div className="sidebar-scroll">
-        <button className="nav-item" onClick={onSearch}>
-          <Icon name="search" />
-          <span className="grow">Search</span>
-          <span className="kbd">{MOD} K</span>
-        </button>
-        {navItem("home", "home", "Today")}
-        {!hidden.has("assistant") && (
-          <button
-            className={`nav-item${assistant.open ? " active" : ""}`}
-            data-nav="assistant"
-            onClick={() => {
-              toggleAssistant();
-              onNavigate();
-            }}
-            onContextMenu={onNavContext("assistant", settings.assistant.name)}
-          >
-            <Icon name="sparkle" />
-            <span className="grow ellipsis">{settings.assistant.name}</span>
-            <span className="kbd">{MOD} J</span>
-          </button>
-        )}
-        {nav("skills")}
-        {nav("learn", due)}
-
-        {favorites.length > 0 && (
-          <>
-            <div className="sidebar-section">Favorites</div>
-            {favorites.map((f) => (
-              <button
-                key={f.id}
-                className={`nav-item fav-item${activeId === f.id ? " active" : ""}${
-                  favDrag?.over === f.id ? (favDrag.after ? " drop-after" : " drop-before") : ""
-                }${favDrag?.id === f.id ? " dragging" : ""}`}
-                onClick={() => openPage(f.id)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  setCtx({ meta: f, anchor: { x: e.clientX, y: e.clientY } });
-                }}
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = "move";
-                  e.dataTransfer.setData("text/plain", f.id);
-                  setFavDrag({ id: f.id });
-                }}
-                onDragEnd={() => setFavDrag(null)}
-                onDragOver={(e) => {
-                  if (!favDrag || favDrag.id === f.id) return;
-                  e.preventDefault();
-                  const r = e.currentTarget.getBoundingClientRect();
-                  const after = e.clientY > r.top + r.height / 2;
-                  if (favDrag.over !== f.id || favDrag.after !== after) setFavDrag({ ...favDrag, over: f.id, after });
-                }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  const r = e.currentTarget.getBoundingClientRect();
-                  dropFavorite(f.id, e.clientY > r.top + r.height / 2);
-                }}
-              >
-                <PageIcon meta={f} className="tree-icon" />
-                <span className="grow ellipsis">{displayTitle(f)}</span>
-              </button>
-            ))}
-          </>
-        )}
-
-        <div className="sidebar-section row">
-          <span className="grow">Pages</span>
-          <button
-            className="icon-btn"
-            title="New page"
-            onClick={(e) => setNewAnchor(e.currentTarget.getBoundingClientRect())}
-          >
-            <Icon name="plus" />
-          </button>
-        </div>
-        <div
-          className="tree"
-          onDragOver={(e) => dragging && e.preventDefault()}
-          onDrop={(e) => {
-            // Dropping on empty space moves the page to the top level.
-            if (e.target === e.currentTarget && dragging) {
-              movePage(ws.doc, dragging, null);
-              setDragging(null);
-            }
-          }}
-        >
-          {roots.map((p) => (
-            <TreeItem
-              key={p.id}
-              meta={p}
-              pages={pages}
-              depth={0}
-              activeId={activeId}
-              expanded={expanded}
-              toggle={toggle}
-              onContext={(meta, anchor) => setCtx({ meta, anchor })}
-              dragState={{ dragging, setDragging }}
-              renaming={renaming}
-              setRenaming={setRenaming}
-            />
-          ))}
-          {roots.length === 0 && <div className="tree-empty small faint">No pages yet</div>}
-        </div>
-        <div className="new-page-row">
-          <button
-            className="nav-item faint grow"
-            onClick={() => {
-              const id = createPage(ws.doc, { createdBy: getSettings().identity.name });
-              openPage(id);
-            }}
-          >
-            <Icon name="plus" />
-            <span className="grow">New page</span>
-          </button>
-          <button className="icon-btn" title="New from template" aria-label="New from template" onClick={() => openTemplatePicker(null)}>
-            <Icon name="template" />
-          </button>
-        </div>
+      <div className="new-page-row">
         <button
-          className="sidebar-section sidebar-more"
-          aria-expanded={showMore}
+          className="nav-item faint grow"
           onClick={() => {
-            localStorage.setItem(MORE_KEY, showMore ? "0" : "1");
-            setMoreOpen(!showMore);
+            const id = createPage(ws.doc, { createdBy: getSettings().identity.name });
+            openPage(id);
           }}
         >
-          <span className="grow">More</span>
-          <span className={`sidebar-more-chevron${showMore ? " open" : ""}`}>
-            <Icon name="chevron" size={12} stroke={2.4} />
-          </span>
+          <Icon name="plus" />
+          <span className="grow">New page</span>
         </button>
-        {showMore && (
-          <>
-            {nav("graph")}
-            {nav("types")}
-            {nav("memory")}
-            {navItem("trash", "trash", "Trash")}
-          </>
-        )}
-      </div>
-      <div className="sidebar-bottom">
-        <StatusDot ws={ws} />
-        <span className="spacer" />
-        <button className="icon-btn" title="Share & sync" onClick={onShare}>
-          <Icon name="users" />
-        </button>
-        <button className="icon-btn" title="Settings" onClick={() => onOpenSettings()}>
-          <Icon name="settings" />
+        <button className="icon-btn" title="New from template" aria-label="New from template" onClick={() => openTemplatePicker(null)}>
+          <Icon name="template" />
         </button>
       </div>
-      {ctx && <Menu anchor={ctx.anchor} items={ctxItems(ctx.meta)} onClose={() => setCtx(null)} />}
-      {newAnchor && <NewPageMenu anchor={newAnchor} parentId={null} onClose={() => setNewAnchor(null)} />}
-      {navMenu && (
+      {ctx && (
         <Menu
-          anchor={navMenu.anchor}
-          onClose={() => setNavMenu(null)}
-          items={[
-            {
-              label: `Hide “${navMenu.label}”`,
-              icon: <Icon name="eye" />,
-              onClick: () => updateAppearance({ hiddenNav: [...appearance.hiddenNav, navMenu.id] }),
-            },
-            { label: "Customize sidebar…", icon: <Icon name="sliders" />, onClick: () => onOpenSettings("appearance") },
-          ]}
+          anchor={ctx.anchor}
+          items={pageContextItems(app, ctx.meta, pages, { onRename: () => setRenaming(ctx.meta.id) })}
+          onClose={() => setCtx(null)}
         />
       )}
-      <SidebarResizer />
-      <PageDialogsHost />
-    </aside>
+    </div>
   );
 }
 

@@ -25,6 +25,7 @@ import { useTheme } from "../../lib/theme.ts";
 import { lensSupported } from "../../lib/liquidGlass.ts";
 import { Icon, Segmented, Toggle } from "../ui.tsx";
 import { DesignGallery } from "./DesignGallery.tsx";
+import { resetLayout } from "../../lib/layout.ts";
 import { PageIcon } from "./PageIcon.tsx";
 import { fileToWallpaperDataUrl } from "./image.ts";
 
@@ -362,6 +363,14 @@ export function AppearanceSettings() {
           />
           <span className="ap-value mono">{a.sidebarWidth}px</span>
         </label>
+        <div className="cz-line">
+          <span className="grow small muted">
+            Panels: drag a panel's header in the sidebar or the right dock (the ⊟ button in the top bar) to move it, or use its ⋯ menu.
+          </span>
+          <button className="btn btn-sm" onClick={resetLayout}>
+            <Icon name="reset" size={14} /> Reset layout
+          </button>
+        </div>
         <div className="ap-subtitle small muted">Show in sidebar</div>
         <div className="ap-nav-grid">
           {SIDEBAR_NAV.map((n) => {

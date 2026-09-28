@@ -113,6 +113,9 @@ The relay is a tiny append-only log of encrypted blobs. If it loses its data (e.
 ### Today
 The home screen. Ask your assistant anything, tick off today's quests, see how many flashcards are due, pick up the course lesson you're on, and open today's daily note. The sidebar stays short: Search, Today, the assistant, Skill tree, Flashcards, your pages, and *More* (Graph, Types, Claude memory, Trash).
 
+### Your layout
+Everything around the page is made of panels in two docks: the sidebar on the left and a right dock (the ⊟ button in the top bar). Panels: Navigate, Favorites, Pages, Outline, Backlinks, Local graph, Quests and the Assistant. Drag a panel by its header to reorder it or move it to the other side, click the header to collapse it, and use its ⋯ menu to move it up/down, across, or hide it (handy on iPad). *Add panel* brings hidden ones back and *Reset layout* restores the default; drag the right dock's edge to resize it. Put the Assistant in a dock and `Ctrl/⌘ J` opens it there instead of the floating chat. The layout is saved per device.
+
 ### Pages, links & databases
 - `/` for blocks: headings, lists, to-dos, toggles, tables, code, images, files, **equations (LaTeX)**, sub-pages.
 - **Pages hold anything:** `/canvas`, `/database` and `/code notebook` put a live canvas, database or notebook right inside the page (each is also its own page in the sidebar); `/embed a page` shows any other page inline. Canvases can be resized by dragging their bottom edge. In markdown and Obsidian vaults this is `![[Page title]]` on its own line.

@@ -17,6 +17,7 @@ import { copyText } from "../lib/platform.ts";
 import { pageToMarkdown, downloadText } from "../lib/markdown.ts";
 import { useTheme } from "../lib/theme.ts";
 import { useSettings } from "../lib/settings.ts";
+import { setRightOpen, useLayout } from "../lib/layout.ts";
 import { safeFileName } from "../../shared/markdown.ts";
 import {
   CUSTOMIZE_EVENT,
@@ -198,6 +199,7 @@ export function TopBar({
   const scope = meta && !canvas && style.tint ? pageScopeProps({ tint: style.tint }, dark) : null;
 
   const showCompanion = useSettings().assistant.character;
+  const layout = useLayout();
   return (
     <header className={`topbar${scope ? " page-scope-bar" : ""}`} style={scope?.style} {...(scope?.data ?? {})}>
       <button className="icon-btn sidebar-toggle" onClick={onToggleSidebar} title="Toggle sidebar (Ctrl+\)">
@@ -210,6 +212,17 @@ export function TopBar({
       <button className="btn btn-sm btn-ghost" onClick={onShare}>
         <Icon name="share" size={14} />
         <span className="hide-mobile">Share</span>
+      </button>
+      <button
+        className={`icon-btn rdock-toggle${layout.rightOpen ? " active" : ""}`}
+        onClick={() => setRightOpen(!layout.rightOpen)}
+        title={layout.rightOpen ? "Hide the right panels" : "Show the right panels (outline, backlinks, quests…)"}
+        aria-label="Right panels"
+        aria-pressed={layout.rightOpen}
+      >
+        <span className="mirror" aria-hidden>
+          <Icon name="sidebar" />
+        </span>
       </button>
       {meta && locked && (
         <button

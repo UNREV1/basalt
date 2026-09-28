@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useApp, usePages, usePeers, useWorkspaceStatus } from "../../lib/hooks.ts";
 import { shareLink, type Workspace } from "../../lib/workspace.ts";
 import { getSettings } from "../../lib/settings.ts";
+import { desktop, type ClaudeCodeStatus } from "../../lib/desktop.ts";
 import { displayTitle, ensureSystemPage, pageText, type PageMeta } from "../../../shared/model.ts";
 import { Icon, timeAgo } from "../../components/ui.tsx";
 import "./memory.css";
@@ -114,6 +115,82 @@ function useMcpLaunch(): McpLaunch | null {
   return launch;
 }
 
+const CODE_STATE: Record<ClaudeCodeStatus["state"], string> = {
+  none: "One click adds Basalt to every Claude Code project. You only do this once.",
+  this: "Claude Code can reach this workspace from any project.",
+  outdated: "Claude Code has an older setup for this workspace. Update it to use this app.",
+  other: "Claude Code is set up for another workspace. Switching points it at this one.",
+};
+
+/** Desktop app: add Basalt to Claude Code with one click, then start a session. */
+function ClaudeCodeConnect({ link, connected }: { link: string; connected: boolean }) {
+  const [st, setSt] = useState<ClaudeCodeStatus | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const refresh = useCallback(() => {
+    desktop?.claudeCodeStatus?.(link).then(setSt, () => setSt(null));
+  }, [link]);
+  useEffect(() => {
+    refresh();
+    // It may have been added by hand in a terminal meanwhile.
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [refresh]);
+
+  const add = async () => {
+    setBusy(true);
+    setError("");
+    const res = await desktop?.addToClaudeCode?.(link).catch((e: unknown) => ({ ok: false, message: String(e) }));
+    setBusy(false);
+    if (!res?.ok) setError(res?.message || "Basalt couldn't add itself to Claude Code.");
+    refresh();
+  };
+
+  const added = st?.state === "this";
+  const missing = st ? !st.installed && !added : false;
+  return (
+    <ol className="mem-connect">
+      <li className={added ? "done" : ""}>
+        <span className="mem-connect-num" aria-hidden>
+          {added ? <Icon name="check" size={13} stroke={2.6} /> : 1}
+        </span>
+        <div className="mem-connect-text">
+          <strong>{added ? "Added to Claude Code" : "Add Basalt to Claude Code"}</strong>
+          <span>
+            {!st
+              ? "Checking…"
+              : missing
+                ? "Claude Code wasn't found on this computer. Install it first, or run the command below in a terminal."
+                : CODE_STATE[st.state]}
+          </span>
+          {error && <span className="mem-connect-error">{error}</span>}
+        </div>
+        {!added && (
+          <button className="btn btn-primary" disabled={busy || !st || missing} onClick={add}>
+            {busy ? "Adding…" : st?.state === "other" ? "Switch to this workspace" : st?.state === "outdated" ? "Update" : "Add to Claude Code"}
+          </button>
+        )}
+      </li>
+      <li className={connected ? "done" : ""}>
+        <span className="mem-connect-num" aria-hidden>
+          {connected ? <Icon name="check" size={13} stroke={2.6} /> : 2}
+        </span>
+        <div className="mem-connect-text">
+          <strong>{connected ? "Claude is connected" : "Start Claude Code"}</strong>
+          {connected ? (
+            <span>A Claude session is using this workspace right now.</span>
+          ) : (
+            <span>
+              Open a terminal and run <code>claude</code>. Claude joins when a session starts and shows up at the top of this
+              page while it’s open. Type <code>/mcp</code> in Claude Code to check.
+            </span>
+          )}
+        </div>
+      </li>
+    </ol>
+  );
+}
+
 interface MemoryNode {
   meta: PageMeta;
   path: string;
@@ -153,6 +230,8 @@ export default function MemoryView({ ws }: { ws: Workspace }) {
   const launch = useMcpLaunch();
   // The desktop app runs the MCP server with its own runtime; it has no vault CLI.
   const desktopApp = !!launch?.env?.ELECTRON_RUN_AS_NODE;
+  // The desktop app can run `claude mcp add` itself (desktop/claude-setup.cjs).
+  const oneClick = desktopApp && !!desktop?.addToClaudeCode;
 
   const link = shareLink(ws.info);
   const masked = link.replace(ws.info.key, `${ws.info.key.slice(0, 4)}••••••••••••`);
@@ -278,7 +357,9 @@ export default function MemoryView({ ws }: { ws: Workspace }) {
           ) : (
             <>
               <strong>Claude is not connected</strong>
-              <span className="mem-status-sub">Set it up below — Claude shows up here the moment it joins.</span>
+              <span className="mem-status-sub">
+                Claude connects while a Claude Code or Claude Desktop session is open. Set it up below, then start a session.
+              </span>
             </>
           )}
         </div>
@@ -362,10 +443,32 @@ export default function MemoryView({ ws }: { ws: Workspace }) {
           ))}
         </div>
 
-        {tab === "code" && (
+        {tab === "code" && oneClick && (
+          <div className="mem-steps">
+            <ClaudeCodeConnect link={link} connected={connected} />
+            <details className="mem-manual">
+              <summary>Or run the command yourself</summary>
+              <p>Run this once in a terminal; Claude Code then has Basalt in every project:</p>
+              <CopyBlock code={claudeCmd(link)} display={claudeCmd(shown)} label="Terminal" />
+              <p className="mem-muted">
+                If it says basalt already exists, remove the old one first with <code>claude mcp remove basalt -s user</code>.
+              </p>
+            </details>
+            <p className="mem-muted">
+              Try <code>/mcp__basalt__memory_protocol</code> at the start of a session, or{" "}
+              <code>/mcp__basalt__teach_me</code> followed by a topic.
+            </p>
+          </div>
+        )}
+        {tab === "code" && !oneClick && (
           <div className="mem-steps">
             <p>Run this once in a terminal; Claude Code then has Basalt in every project:</p>
             <CopyBlock code={claudeCmd(link)} display={claudeCmd(shown)} label="Terminal" />
+            <p>
+              Then start Claude Code (<code>claude</code>): Claude joins when a session starts and shows up at the top of this
+              page while it’s open. If the command says basalt already exists, run{" "}
+              <code>claude mcp remove basalt -s user</code> first.
+            </p>
             <p className="mem-muted">
               Try <code>/mcp__basalt__memory_protocol</code> at the start of a session, or{" "}
               <code>/mcp__basalt__teach_me</code> followed by a topic.

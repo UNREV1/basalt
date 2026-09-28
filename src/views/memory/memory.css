@@ -234,6 +234,81 @@
   margin-bottom: 12px;
 }
 
+/* One-click setup (desktop app): numbered steps that tick off. */
+.mem-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.mem-connect li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+}
+.mem-connect-num {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-muted);
+}
+.mem-connect li.done .mem-connect-num {
+  border-color: var(--success);
+  background: var(--success);
+  color: #fff;
+}
+.mem-connect-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  line-height: 1.5;
+}
+.mem-connect-text > span {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.mem-connect-error {
+  color: var(--danger) !important;
+  white-space: pre-wrap;
+}
+.mem-connect .btn {
+  flex: none;
+}
+.mem-manual {
+  margin: 0 0 10px;
+}
+.mem-manual summary {
+  cursor: pointer;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.mem-manual > p {
+  margin: 0 0 8px;
+}
+@media (max-width: 560px) {
+  .mem-connect li {
+    flex-wrap: wrap;
+  }
+  .mem-connect .btn {
+    margin-left: 36px;
+  }
+}
+
 .mem-code {
   position: relative;
   border: 1px solid var(--border);

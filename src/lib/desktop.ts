@@ -8,6 +8,16 @@ export interface DesktopBridge {
   getAutoUpdate(): Promise<boolean | null>;
   setAutoUpdate(on: boolean): Promise<boolean | null>;
   openDataFolder(): Promise<string>;
+  /** null when the link isn't a workspace link. */
+  claudeCodeStatus?(link: string): Promise<ClaudeCodeStatus | null>;
+  addToClaudeCode?(link: string): Promise<{ ok: boolean; message: string } | null>;
+}
+
+export interface ClaudeCodeStatus {
+  /** The claude CLI was found on this computer. */
+  installed: boolean;
+  /** none: not added · this: added for this workspace · outdated: this workspace, old command · other: another workspace. */
+  state: "none" | "this" | "outdated" | "other";
 }
 
 export const desktop: DesktopBridge | null =

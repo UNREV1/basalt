@@ -9,6 +9,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const { createUpdater } = require("./updater.cjs");
+const claudeSetup = require("./claude-setup.cjs");
 
 // The web app's storage (IndexedDB) is tied to its address, so always prefer
 // the same local port; only fall back when something else is using it.
@@ -17,6 +18,8 @@ const PORTS = [8787, 18787, 28787, 38787];
 let win = null;
 let relay = null;
 let appUrl = "";
+/** How Claude starts Basalt's connector (see mcpLaunch). */
+let claudeLaunch;
 const updater = createUpdater(() => win);
 
 if (!app.requestSingleInstanceLock()) {
@@ -84,6 +87,7 @@ function isBasaltAt(port) {
 async function startServer() {
   const { createBasaltServer } = require("./app/server.cjs");
   const mcp = mcpLaunch();
+  claudeLaunch = mcp;
   for (const port of PORTS) {
     relay = createBasaltServer({
       dataDir: path.join(app.getPath("userData"), "relay"),
@@ -163,6 +167,15 @@ function registerIpc() {
     return updater.isAutomatic();
   });
   ipcMain.handle("basalt:open-data-folder", (e) => (fromApp(e) ? shell.openPath(app.getPath("userData")) : undefined));
+  // The page only passes the workspace link; the command Claude runs is always this app's own.
+  ipcMain.handle("basalt:claude-code-status", (e, link) =>
+    fromApp(e) && claudeSetup.validLink(link) ? claudeSetup.status(link, claudeLaunch) : null,
+  );
+  ipcMain.handle("basalt:claude-code-add", (e, link) => {
+    if (!fromApp(e)) return null;
+    if (!claudeSetup.validLink(link)) return { ok: false, message: "That isn't a workspace link." };
+    return claudeSetup.add(link, claudeLaunch);
+  });
 }
 
 function createWindow() {

@@ -24,6 +24,7 @@ import { defaultAppearance, updateAppearance, updateSettings, useSettings, type 
 import { useTheme } from "../../lib/theme.ts";
 import { lensSupported } from "../../lib/liquidGlass.ts";
 import { Icon, Segmented, Toggle } from "../ui.tsx";
+import { DesignGallery } from "./DesignGallery.tsx";
 import { PageIcon } from "./PageIcon.tsx";
 import { fileToWallpaperDataUrl } from "./image.ts";
 
@@ -215,6 +216,10 @@ export function AppearanceSettings() {
 
   return (
     <div className="appearance col">
+      <Group title="Design" hint="Pick a complete look. Everything below fine-tunes it.">
+        <DesignGallery />
+      </Group>
+
       <Group title="Theme">
         <div className="row wrap" style={{ gap: 10 }}>
           <Segmented<"system" | "light" | "dark">

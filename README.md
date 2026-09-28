@@ -164,6 +164,8 @@ Real life, with the progression mechanics of an RPG (but none of the video-game 
 ### Liquid Glass design
 Basalt's default look is inspired by Apple's Liquid Glass — on **every** platform, because it's the same web app on Windows, Android, macOS, iOS and Linux. The glass really **refracts**: each floating surface (sidebar, menus, toolbars, dialogs, the phone tab bar, whiteboard tools) bends what's behind it at its edges like the rim of a lens, with a lit specular edge, then frosts it. Refraction runs in Chromium — the desktop app, Chrome, Edge and Android; Safari and Firefox show frosted glass.
 
+**Designs:** Settings → Appearance opens with a gallery of complete looks — Calm (default), Windows 11, Clean, Graphite, Liquid Glass, Journal, Nord, Midnight and High contrast — each shown as a live miniature; one click switches, and everything below it fine-tunes the one you picked (also *Change design…* in `Ctrl/⌘ K`).
+
 Settings → Appearance → Liquid Glass: pick a backdrop (Calm by default; Aurora, Sunrise, Ocean, Meadow, Graphite or your own photo), set **Refraction** and **Frost**, choose **Subtle** or **Round** corners, or turn on **Reduce transparency** for solid surfaces (also honored from your OS setting where supported). The classic flat themes (Basalt, Paper, Nord, Solarized, Midnight, High contrast) are still there.
 
 ### Make it yours

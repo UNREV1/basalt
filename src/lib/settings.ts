@@ -9,7 +9,7 @@ export interface Identity {
   color: string;
 }
 
-export type UiFont = "sans" | "serif" | "mono" | "rounded";
+export type UiFont = "sans" | "serif" | "mono" | "rounded" | "system";
 
 /** Per-device look & feel (Settings → Appearance). Never synced. */
 export interface Appearance {

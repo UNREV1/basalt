@@ -122,8 +122,14 @@ export function QuickSwitcher({
         ? [{ key: "cmd:customize", icon: <Icon name="sliders" />, title: "Customize this page…", run: () => openCustomize(currentPage) }]
         : []),
       {
-        key: "cmd:appearance",
+        key: "cmd:design",
         icon: <Icon name="palette" />,
+        title: "Change design…",
+        run: () => window.dispatchEvent(new CustomEvent("basalt:open-settings", { detail: { tab: "appearance" } })),
+      },
+      {
+        key: "cmd:appearance",
+        icon: <Icon name="sliders" />,
         title: "Appearance: theme, accent, fonts…",
         run: () => window.dispatchEvent(new CustomEvent("basalt:open-settings", { detail: { tab: "appearance" } })),
       },

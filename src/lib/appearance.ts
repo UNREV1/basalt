@@ -85,9 +85,11 @@ export const FONT_STACKS: Record<UiFont, string> = {
   serif: `ui-serif, "New York", "Iowan Old Style", "Apple Garamond", Baskerville, "Times New Roman", "Droid Serif", Times, "Source Serif Pro", serif`,
   mono: `ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace`,
   rounded: `ui-rounded, "SF Pro Rounded", "Hiragino Maru Gothic ProN", Quicksand, Comfortaa, Manjari, "Arial Rounded MT", "Arial Rounded MT Bold", Calibri, source-sans-pro, sans-serif`,
+  // The device's own UI font: Segoe UI on Windows, San Francisco on iPhone and iPad.
+  system: `"Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, Roboto, sans-serif`,
 };
 
-export const FONT_LABELS: Record<UiFont, string> = { sans: "Sans", serif: "Serif", mono: "Mono", rounded: "Rounded" };
+export const FONT_LABELS: Record<UiFont, string> = { sans: "Sans", serif: "Serif", mono: "Mono", rounded: "Rounded", system: "System" };
 
 type Tokens = Record<string, string>;
 
@@ -317,6 +319,31 @@ export const THEME_PRESETS: ThemePreset[] = [
       bg: "#191919", soft: "#202020", sunken: "#151515", hover: "rgba(255, 255, 255, 0.06)", active: "rgba(255, 255, 255, 0.1)",
       text: "#e9e9e7", muted: "#9b9a97", faint: "#6b6a67", border: "#2e2e2e", strong: "#3d3d3d",
       accent: "#7c7cf0", accentHover: "#8f8ff5", accentSoft: "rgba(124, 124, 240, 0.18)", dark: true,
+    }),
+  },
+  {
+    id: "fluent",
+    name: "Windows 11",
+    description: "Layered surfaces and Windows blue, like the apps that come with Windows",
+    light: tokens({
+      bg: "#fbfbfb", soft: "#f3f3f3", sunken: "#ebebeb", hover: "rgba(0, 0, 0, 0.045)", active: "rgba(0, 0, 0, 0.08)",
+      text: "#1b1b1b", muted: "#5d5d5d", faint: "#8a8a8a", border: "#e5e5e5", strong: "#d1d1d1",
+      accent: "#005fb8", accentHover: "#1a6fc2", accentSoft: "rgba(0, 95, 184, 0.1)", dark: false,
+    }),
+    dark: tokens({
+      bg: "#272727", soft: "#202020", sunken: "#1c1c1c", hover: "rgba(255, 255, 255, 0.06)", active: "rgba(255, 255, 255, 0.1)",
+      text: "#ffffff", muted: "#c5c5c5", faint: "#8b8b8b", border: "#333333", strong: "#454545",
+      accent: "#60cdff", accentHover: "#7dd7ff", accentSoft: "rgba(96, 205, 255, 0.16)", accentText: "#000000", dark: true,
+    }),
+  },
+  {
+    id: "graphite",
+    name: "Graphite",
+    description: "Dark graphite with a violet accent, dense like a code editor",
+    dark: tokens({
+      bg: "#1e1e1e", soft: "#262626", sunken: "#1a1a1a", hover: "rgba(255, 255, 255, 0.06)", active: "rgba(255, 255, 255, 0.1)",
+      text: "#dcddde", muted: "#999999", faint: "#666666", border: "#303030", strong: "#3f3f3f",
+      accent: "#8a70f5", accentHover: "#9d87f7", accentSoft: "rgba(138, 112, 245, 0.2)", dark: true,
     }),
   },
   {

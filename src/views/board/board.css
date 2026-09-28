@@ -1,0 +1,219 @@
+/* Whiteboard view. Excalidraw brings its own UI; we size it to the shell and
+   blend its chrome with Basalt's type. */
+
+.board-view {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+  overscroll-behavior: none;
+  /* Before Excalidraw paints, match its canvas colour instead of flashing. */
+  background: #ffffff;
+}
+html[data-theme="dark"] .board-view {
+  background: #121212;
+}
+
+.board-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.board-view .excalidraw {
+  --ui-font: var(--font);
+}
+
+/* "Link to page" — reuses Excalidraw's sidebar-trigger look (see its Library
+   button). The label only shows when the top-right column has room, so the
+   collaborator avatars next to it never collapse into "+N". */
+.board-view .excalidraw .layer-ui__wrapper__top-right {
+  container-type: inline-size;
+}
+.board-view .excalidraw .board-link-trigger {
+  flex-shrink: 0;
+  width: var(--lg-button-size);
+  padding: 0;
+  font-weight: 500;
+  font-size: 0.8125rem;
+  letter-spacing: 0;
+  line-height: 1;
+  white-space: nowrap;
+}
+.board-view .excalidraw .board-link-trigger svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+.board-view .excalidraw .board-link-trigger__label {
+  display: none;
+}
+@container (min-width: 400px) {
+  .board-view .excalidraw .board-link-trigger {
+    width: auto;
+    padding: 0 0.75rem;
+  }
+  .board-view .excalidraw .board-link-trigger__label {
+    display: inline;
+  }
+}
+.board-view .excalidraw .board-link-trigger:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.board-view .excalidraw .board-link-trigger:disabled:hover {
+  background-color: var(--color-surface-low);
+}
+.board-view .excalidraw .board-link-trigger.active {
+  background-color: var(--color-primary-light, var(--color-surface-low));
+  color: var(--color-primary);
+}
+.board-view .excalidraw.excalidraw--mobile .board-link-trigger {
+  align-self: center;
+}
+
+/* Page picker (portalled to <body>, so it uses Basalt tokens). */
+.board-link-picker {
+  width: min(320px, calc(100vw - 32px));
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+.board-link-picker__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  margin-bottom: 4px;
+  height: 36px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-faint);
+}
+.board-link-picker__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 14px;
+}
+.board-link-picker__input::placeholder {
+  color: var(--text-faint);
+}
+.board-link-picker__list {
+  max-height: min(320px, 50vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.board-link-picker__item {
+  height: 34px;
+  color: var(--text);
+}
+.board-link-picker__icon {
+  width: 20px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.board-link-picker__kind {
+  font-size: 12px;
+  color: var(--text-faint);
+  flex-shrink: 0;
+}
+.board-link-picker__check {
+  display: inline-flex;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.board-link-picker__empty {
+  padding: 14px 8px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+@media (pointer: coarse) {
+  .board-link-picker__item {
+    height: 42px;
+  }
+}
+
+/* ---- paint on the canvas (PaintView canvas mode) -------------------------------------
+ * Hosts for paint layers inside Excalidraw's stacking context: under its canvas
+ * (z 0) and over it (z 3), below Excalidraw's UI (z 4). */
+.board-view .excalidraw .cv-host {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.board-view .excalidraw .cv-host-under {
+  z-index: 0;
+}
+.board-view .excalidraw .cv-host-over {
+  z-index: 3;
+}
+/* Floating paint panels, above the whiteboard UI. */
+.cv-paint-ui {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+}
+/* Whiteboard | Paint switch (top right). Labels show whenever there's room. */
+.board-view .excalidraw .cv-mode {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--border-radius-lg);
+  background: var(--island-bg-color);
+  box-shadow: var(--shadow-island);
+}
+.board-view .excalidraw .cv-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: calc(var(--lg-button-size) - 4px);
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(var(--border-radius-lg) - 2px);
+  background: transparent;
+  color: var(--color-on-surface);
+  font-family: var(--ui-font);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.board-view .excalidraw .cv-mode-btn:hover {
+  background: var(--button-hover-bg, var(--color-surface-low));
+}
+.board-view .excalidraw .cv-mode-btn.on {
+  background: var(--color-primary-light, var(--color-surface-low));
+  color: var(--color-primary);
+}
+.board-view .excalidraw .cv-mode-btn svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+}
+/* Painting: the paint bar replaces the whiteboard's shape toolbar and hints
+   (on phones, its whole top bar; the paint bar's Done goes back). */
+.board-view.cv-painting .excalidraw :is(.App-toolbar, .HintViewer),
+.board-view.cv-painting .excalidraw--mobile :is(.App-top-bar, .mobile-misc-tools-container) {
+  visibility: hidden;
+}
+/* While painting on a phone, the paint bar replaces Excalidraw's bottom toolbar. */
+.board-view.cv-painting .excalidraw--mobile .App-bottom-bar {
+  display: none;
+}
+/* Phones: the shape toolbar scrolls sideways so the Paint button always fits. */
+.board-view .excalidraw--mobile .App-toolbar-container {
+  grid-template-columns: minmax(0, 1fr) auto;
+  max-width: 100%;
+}
+.board-view .excalidraw--mobile .App-toolbar--mobile {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}

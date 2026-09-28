@@ -1,0 +1,45 @@
+/* Desktop app window (Electron, see desktop/main.cjs).
+ *
+ * The window has no native title bar: the top bar doubles as the drag handle,
+ * and the OS window buttons float over it — on the right on Windows/Linux
+ * (title bar overlay), top-left on macOS (traffic lights). index.html sets
+ * html[data-desktop="win32" | "darwin" | "linux"].
+ */
+
+html[data-desktop] :is(.topbar, .sidebar-top) {
+  -webkit-app-region: drag;
+  user-select: none;
+}
+html[data-desktop] :is(.topbar, .sidebar-top) :is(button, a, input, select, textarea, [role="button"], [contenteditable]) {
+  -webkit-app-region: no-drag;
+}
+
+/* The gap above the floating glass panes is draggable too. */
+html[data-desktop][data-glass] body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: 10px;
+  z-index: 1000;
+  -webkit-app-region: drag;
+}
+
+/* Windows / Linux: keep top-bar buttons clear of minimize / maximize / close.
+   Uses the window-controls-overlay area when the browser reports it. */
+html[data-desktop]:not([data-desktop="darwin"]) .topbar {
+  padding-right: max(150px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 150px))));
+}
+
+/* macOS: room for the traffic lights in the sidebar, or in the top bar when
+   the sidebar is closed. */
+html[data-desktop="darwin"] .sidebar-top {
+  padding-top: 38px;
+}
+html[data-desktop="darwin"] .sidebar-closed .topbar {
+  padding-left: 80px;
+}
+@media (max-width: 800px) {
+  html[data-desktop="darwin"] .topbar {
+    padding-left: 80px;
+  }
+}

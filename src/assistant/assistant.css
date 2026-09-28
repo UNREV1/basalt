@@ -1,0 +1,696 @@
+/* The assistant: companion character (Pebble.tsx, Companion.tsx), chat panel
+   (AssistantPanel.tsx) and chat pages (views/chat/ChatView.tsx). */
+
+/* ---- the pebble ----------------------------------------------------------------- */
+
+.pebble {
+  display: block;
+  overflow: visible;
+}
+.pebble-stop-hi {
+  stop-color: #c9c7ff;
+}
+.pebble-stop-mid {
+  stop-color: var(--accent);
+}
+.pebble-stop-lo {
+  stop-color: #2c2a7a;
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  .pebble-stop-hi {
+    stop-color: color-mix(in srgb, var(--accent) 40%, #fff);
+  }
+  .pebble-stop-lo {
+    stop-color: color-mix(in srgb, var(--accent) 60%, #000);
+  }
+}
+.pebble-shadow {
+  fill: rgba(10, 12, 30, 0.22);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pb-shadow 2.8s ease-in-out infinite;
+}
+.pebble-rim {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1.2;
+}
+.pebble-shine {
+  fill: #fff;
+  opacity: 0.55;
+}
+.pebble-white {
+  fill: #fff;
+}
+.pebble-pupil {
+  fill: #17172a;
+}
+.pebble-glint {
+  fill: #fff;
+}
+.pebble-cheek {
+  fill: #ff8fb1;
+  opacity: 0.4;
+}
+.pebble-mouth,
+.pebble-lid,
+.pebble-happy-eyes path {
+  fill: none;
+  stroke: #17172a;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+.pebble-lid {
+  display: none;
+}
+.pebble-mouth-open {
+  display: none;
+  fill: #17172a;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.pebble-happy-eyes {
+  display: none;
+}
+.pebble-bob {
+  animation: pb-bob 2.8s ease-in-out infinite;
+}
+.pebble-squash {
+  transform-origin: 32px 58px;
+}
+.pebble-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pb-blink 5.2s infinite;
+}
+.pebble-pupils {
+  transition: transform 0.12s ease-out;
+}
+.pebble-orbit {
+  display: none;
+  fill: var(--accent);
+  transform-origin: 32px 32px;
+  animation: pb-spin 1.4s linear infinite;
+}
+.pebble-orbit circle {
+  transform-origin: 32px 32px;
+}
+.pebble-orbit circle:nth-child(2) {
+  transform: rotate(120deg);
+  opacity: 0.7;
+}
+.pebble-orbit circle:nth-child(3) {
+  transform: rotate(240deg);
+  opacity: 0.45;
+}
+.pebble-ring {
+  display: none;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  transform-origin: 32px 32px;
+}
+
+/* moods */
+.pebble-thinking .pebble-orbit {
+  display: inline;
+}
+.pebble-thinking .pebble-pupils {
+  translate: 1.4px -1.8px;
+}
+.pebble-working .pebble-bob {
+  animation-duration: 1.1s;
+}
+.pebble-working .pebble-ring {
+  display: inline;
+  stroke-dasharray: 10 8;
+  animation: pb-spin 2.2s linear infinite;
+  opacity: 0.8;
+}
+.pebble-working .pebble-lid {
+  display: inline;
+}
+.pebble-talking .pebble-mouth {
+  display: none;
+}
+.pebble-talking .pebble-mouth-open {
+  display: inline;
+  animation: pb-talk 0.32s ease-in-out infinite alternate;
+}
+.pebble-happy .pebble-eyes {
+  display: none;
+}
+.pebble-happy .pebble-happy-eyes {
+  display: inline;
+}
+.pebble-happy .pebble-bob {
+  animation: pb-hop 0.7s ease-in-out 2;
+}
+.pebble-happy .pebble-mouth {
+  d: path("M26.8 42.4q5.2 5.2 10.4 0");
+}
+.pebble-sad .pebble-mouth {
+  d: path("M28 46q4-3.2 8 0");
+}
+.pebble-sad .pebble-lid {
+  display: inline;
+}
+.pebble-sad .pebble-bob {
+  animation: pb-droop 3.6s ease-in-out infinite;
+}
+.pebble-listening .pebble-ring {
+  display: inline;
+  animation: pb-pulse 1.3s ease-out infinite;
+}
+
+@keyframes pb-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+@keyframes pb-shadow {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scaleX(0.86);
+    opacity: 0.75;
+  }
+}
+@keyframes pb-blink {
+  0%,
+  93%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.08);
+  }
+}
+@keyframes pb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes pb-talk {
+  from {
+    transform: scaleY(0.35);
+  }
+  to {
+    transform: scaleY(1.15);
+  }
+}
+@keyframes pb-hop {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-10px) scale(1.04, 0.97);
+  }
+}
+@keyframes pb-droop {
+  0%,
+  100% {
+    transform: translateY(2px);
+  }
+  50% {
+    transform: translateY(3.5px);
+  }
+}
+@keyframes pb-pulse {
+  from {
+    transform: scale(0.9);
+    opacity: 0.9;
+  }
+  to {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+}
+
+/* ---- the companion ------------------------------------------------------------ */
+
+.companion {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 1500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  will-change: transform;
+  filter: drop-shadow(0 6px 14px rgba(20, 20, 60, 0.18));
+}
+.companion:active {
+  cursor: grabbing;
+}
+.companion.cp-hidden {
+  visibility: hidden;
+  pointer-events: none;
+}
+.companion:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 50%;
+}
+.companion.cp-flying .pebble-squash {
+  transform: scale(1.06, 0.94);
+  transition: transform 0.2s;
+}
+.cp-bubble {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  max-width: 240px;
+  width: max-content;
+  padding: 7px 11px;
+  border-radius: 14px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+  line-height: 1.35;
+  pointer-events: none;
+  animation: cp-pop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.cp-bubble-left {
+  right: 30%;
+  border-bottom-right-radius: 4px;
+}
+.cp-bubble-right {
+  left: 30%;
+  border-bottom-left-radius: 4px;
+}
+.cp-below .cp-bubble {
+  bottom: auto;
+  top: calc(100% + 6px);
+  border-radius: 14px;
+}
+.cp-below .cp-bubble-left {
+  border-top-right-radius: 4px;
+}
+.cp-below .cp-bubble-right {
+  border-top-left-radius: 4px;
+}
+/* The companion's resting slot in the top bar. */
+.cp-dock {
+  width: 36px;
+  height: 36px;
+  flex: none;
+}
+.cp-thought {
+  font-style: italic;
+  color: var(--text-muted);
+}
+@keyframes cp-pop {
+  from {
+    transform: scale(0.85) translateY(4px);
+    opacity: 0;
+  }
+}
+/* What the companion is working on glows briefly. */
+.as-target-glow {
+  box-shadow: 0 0 0 2px var(--accent) !important;
+  border-radius: var(--radius);
+  transition: box-shadow 0.2s;
+}
+
+html[data-glass] .cp-bubble {
+  background: linear-gradient(180deg, var(--glass-hi), transparent 60%), var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-edge);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pebble *,
+  .pebble {
+    animation: none !important;
+  }
+}
+
+/* ---- the panel ------------------------------------------------------------------- */
+
+.as-panel {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 1200;
+  width: min(420px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: as-in 0.24s cubic-bezier(0.2, 0.9, 0.3, 1.1);
+}
+.as-panel.as-phone {
+  inset: 0;
+  width: auto;
+  border-radius: 0;
+  border: none;
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+@keyframes as-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+html[data-glass] .as-panel {
+  /* A reading surface: calmer than the floating chrome. */
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 30%), var(--glass-sheet);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-edge);
+  border-radius: var(--glass-radius);
+}
+html[data-glass] .as-panel.as-phone {
+  border-radius: 0;
+}
+
+.as-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 10px 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+html[data-glass] .as-head {
+  border-bottom-color: var(--glass-edge-soft);
+}
+.as-avatar {
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+.as-head-text {
+  flex: 1;
+  min-width: 0;
+}
+.as-name {
+  font-weight: 600;
+}
+.as-status {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.as-body-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.as-thread {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 14px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.as-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.as-msg-user {
+  align-items: flex-end;
+}
+.as-msg-user .as-bubble {
+  max-width: 88%;
+  padding: 8px 12px;
+  border-radius: 16px 16px 5px 16px;
+  background: var(--accent);
+  color: var(--accent-text);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.as-msg-assistant {
+  font-size: 14px;
+  line-height: 1.55;
+}
+.as-msg-assistant :is(p, ul, ol) {
+  margin: 0 0 0.5em;
+}
+.as-msg-assistant > :last-child :is(p, ul, ol):last-child {
+  margin-bottom: 0;
+}
+.as-note {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.as-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.as-step {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.as-step-icon {
+  width: 14px;
+  display: inline-flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.as-step-done .as-step-icon {
+  color: var(--success, #2e9e5b);
+}
+.as-step-error .as-step-icon {
+  color: var(--danger);
+}
+.spinner-sm {
+  width: 11px;
+  height: 11px;
+  border-width: 1.5px;
+}
+.as-actions {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.as-actions summary {
+  cursor: pointer;
+  width: max-content;
+}
+.as-actions ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.as-welcome {
+  margin: auto 0;
+  padding: 12px 4px;
+  text-align: center;
+}
+.as-welcome-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+.as-welcome-sub {
+  margin: 6px auto 14px;
+  max-width: 320px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.as-ideas {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+}
+.as-idea {
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  text-align: left;
+  cursor: pointer;
+}
+.as-idea:hover {
+  background: var(--bg-hover);
+}
+html[data-glass] .as-idea {
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 65%), var(--glass-fill);
+  border-color: var(--glass-edge);
+}
+
+.as-composer {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+}
+html[data-glass] .as-composer {
+  border-top-color: var(--glass-edge-soft);
+}
+.as-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+.as-input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  max-height: 180px;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  line-height: 1.4;
+}
+html[data-glass] .as-input {
+  background: var(--glass-field);
+  border-color: var(--glass-field-edge);
+}
+.as-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.as-send {
+  height: 36px;
+  min-width: 36px;
+  justify-content: center;
+}
+.as-mic.active {
+  color: var(--danger);
+  animation: as-mic 1.2s ease-in-out infinite;
+}
+@keyframes as-mic {
+  50% {
+    opacity: 0.55;
+  }
+}
+.as-stop-square {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: currentColor;
+}
+.as-voice-error {
+  color: var(--danger);
+  margin-bottom: 6px;
+}
+
+.as-history {
+  list-style: none;
+  margin: 0;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+}
+.as-history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.as-history-item:hover,
+.as-history-item.active {
+  background: var(--bg-hover);
+}
+.as-history-when {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+.as-empty-history {
+  padding: 24px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+/* ---- chat pages ---------------------------------------------------------------------- */
+
+.as-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  width: 100%;
+}
+.as-page .as-thread {
+  padding: 18px 20px 8px;
+}
+.as-page .as-composer {
+  border-top: none;
+  padding: 8px 20px 20px;
+}
+
+/* ---- settings ------------------------------------------------------------------------ */
+
+.as-mcp-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.settings-sep {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 4px 0;
+  width: 100%;
+}
+/* Full-screen on phones: solid, so the page behind doesn't show through the text. */
+html[data-glass] .as-panel.as-phone {
+  background: var(--glass-solid);
+}
+
+/* Settings → Assistant: connect the Claude apps */
+.as-connect {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-soft, var(--bg));
+}
+.as-connect .btn {
+  flex: none;
+  text-decoration: none;
+}
+@media (max-width: 560px) {
+  .as-connect {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

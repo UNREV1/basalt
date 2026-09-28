@@ -1,0 +1,99 @@
+{
+  "name": "basalt-desktop",
+  "productName": "Basalt",
+  "version": "0.1.0",
+  "description": "Basalt desktop app: your free, private workspace in its own window, with sync for the devices around you.",
+  "author": "Basalt",
+  "license": "MIT",
+  "private": true,
+  "main": "main.cjs",
+  "scripts": {
+    "prepare-app": "node build.mjs",
+    "start": "node build.mjs && electron .",
+    "dist": "node build.mjs && electron-builder",
+    "dist:win": "node build.mjs && electron-builder --win",
+    "dist:mac": "node build.mjs && electron-builder --mac",
+    "dist:linux": "node build.mjs && electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "app.basalt.desktop",
+    "productName": "Basalt",
+    "copyright": "MIT License",
+    "directories": {
+      "output": "release",
+      "buildResources": "build-resources"
+    },
+    "files": [
+      "main.cjs",
+      "updater.cjs",
+      "package.json",
+      "app/**/*"
+    ],
+    "asar": true,
+    "icon": "build-resources/icon.png",
+    "publish": {
+      "provider": "github",
+      "owner": "UNREV1",
+      "repo": "basalt",
+      "releaseType": "release"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Basalt",
+      "artifactName": "Basalt-Setup.${ext}"
+    },
+    "portable": {
+      "artifactName": "Basalt-Portable.${ext}"
+    },
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "artifactName": "Basalt-mac.${ext}",
+      "identity": "-",
+      "hardenedRuntime": false
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office",
+      "artifactName": "Basalt-${arch}.${ext}"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "repository": "github:UNREV1/basalt",
+  "homepage": "https://github.com/UNREV1/basalt"
+}

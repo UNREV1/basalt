@@ -1,0 +1,403 @@
+.mem {
+  --claude: #d97757;
+  --claude-soft: rgba(217, 119, 87, 0.14);
+}
+
+.mem-header-icon {
+  font-size: 30px;
+  line-height: 1;
+}
+
+.mem-lead {
+  margin: 0 0 18px;
+  max-width: 680px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.mem-muted {
+  color: var(--text-muted);
+}
+
+.mem code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-sunken);
+  overflow-wrap: anywhere;
+}
+
+/* ---- live status ---------------------------------------------------------- */
+
+.mem-status {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-soft);
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+.mem-status.on {
+  border-color: color-mix(in srgb, var(--claude) 45%, transparent);
+  background: var(--claude-soft);
+}
+.mem-dot {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex-shrink: 0;
+}
+.mem-status.on .mem-dot {
+  background: var(--claude);
+}
+.mem-status.on .mem-dot::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--claude);
+  opacity: 0;
+  animation: mem-pulse 1.8s ease-out infinite;
+}
+@keyframes mem-pulse {
+  0% {
+    transform: scale(0.6);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mem-status.on .mem-dot::after {
+    animation: none;
+  }
+}
+.mem-status-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.mem-status-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.mem-inline-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.mem-inline-link:hover {
+  text-decoration-color: currentColor;
+}
+.mem-sync {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+/* ---- callouts ---------------------------------------------------------------- */
+
+.mem-callout {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.55;
+  border: 1px solid transparent;
+}
+.mem-callout > svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.mem-callout > div {
+  flex: 1;
+  min-width: 0;
+}
+.mem-callout.warn {
+  align-items: center;
+  background: var(--warning-soft);
+  border-color: color-mix(in srgb, var(--warning) 45%, transparent);
+}
+.mem-callout.danger {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+.mem-callout.danger > svg {
+  color: var(--danger);
+}
+
+/* ---- features ------------------------------------------------------------------ */
+
+.mem-features {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0 8px;
+}
+.mem-feature {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.mem-feature > span {
+  font-size: 20px;
+  line-height: 1.2;
+}
+.mem-feature p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+/* ---- sections ------------------------------------------------------------------- */
+
+.mem-section {
+  margin-top: 30px;
+}
+.mem-section h2 {
+  margin: 0 0 6px;
+  font-size: 19px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.mem-section > p,
+.mem-steps > p {
+  margin: 0 0 10px;
+  line-height: 1.55;
+}
+.mem-section-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 10px;
+}
+.mem-section-head h2 {
+  margin: 0;
+}
+.mem-section-head .btn {
+  align-self: center;
+}
+
+.mem-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 14px;
+  max-width: 520px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.mem-field .input {
+  color: var(--text);
+}
+
+.mem-tabs {
+  margin-bottom: 12px;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.mem-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.mem-steps .mem-code {
+  margin-bottom: 12px;
+}
+
+.mem-code {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-sunken);
+  min-width: 0;
+}
+.mem-code-label {
+  padding: 7px 12px 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text-faint);
+}
+.mem-code pre {
+  margin: 0;
+  padding: 8px 12px 12px;
+  padding-right: 92px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.mem-code pre code {
+  padding: 0;
+  background: none;
+  font-size: inherit;
+}
+.mem-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: var(--bg);
+}
+.mem-copy.copied {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 50%, transparent);
+}
+
+.mem-reveal {
+  margin: 2px 0 0;
+}
+
+/* ---- memory notes ------------------------------------------------------------------ */
+
+.mem-tree,
+.mem-tree ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.mem-tree {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.mem-tree > li + li,
+.mem-tree ul > li {
+  border-top: 1px solid var(--border);
+}
+.mem-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px 10px 10px;
+  border: none;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+.mem-note:hover {
+  background: var(--bg-hover);
+}
+.mem-note:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.mem-note-icon {
+  width: 22px;
+  text-align: center;
+  font-size: 16px;
+  line-height: 20px;
+  flex-shrink: 0;
+}
+.mem-note-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.mem-note-title {
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mem-note-path {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mem-note-snippet {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mem-note-time {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-faint);
+  line-height: 20px;
+}
+
+.mem-empty {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+.mem-empty .empty-icon {
+  font-size: 30px;
+}
+.mem-empty > div:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+}
+.mem-empty p {
+  margin: 2px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+  .mem-features {
+    grid-template-columns: 1fr;
+  }
+  .mem-status {
+    flex-wrap: wrap;
+  }
+  .mem-empty {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .mem-callout.warn {
+    flex-wrap: wrap;
+  }
+  .mem-code pre {
+    padding-right: 12px;
+    padding-top: 36px;
+  }
+  .mem-code-label + pre {
+    padding-top: 12px;
+  }
+}

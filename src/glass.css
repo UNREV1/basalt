@@ -1,0 +1,509 @@
+/* Liquid Glass — Basalt's default look on every platform.
+ *
+ * Everything here is scoped to html[data-glass] (set by src/lib/appearance.ts
+ * for the "Liquid Glass" theme). Materials come from the --glass-* tokens, so
+ * "Reduce transparency" swaps them for opaque ones without touching shapes.
+ *
+ *   floating chrome  sidebar, menus, dialogs, sheets, toasts, floating panels
+ *                    → strong glass: blur + saturation, sheen, bright edge
+ *   content sheet    the main area, a calmer frosted pane for reading
+ *   controls         capsules with specular highlights and springy presses
+ */
+
+html[data-glass] {
+  /* Corners: "subtle" (default) keeps shapes calm; Settings → Appearance → Corners → Round
+     switches to Apple-style capsules. */
+  --glass-radius: 14px;
+  --glass-radius-md: 12px;
+  --glass-radius-sm: 8px;
+  --glass-pill: 9px;
+  --glass-dialog: 16px;
+  --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --radius: 8px;
+  --radius-lg: 12px;
+  scrollbar-color: var(--glass-edge-soft) transparent;
+}
+html[data-glass][data-corners="round"] {
+  --glass-radius: 26px;
+  --glass-radius-md: 18px;
+  --glass-radius-sm: 12px;
+  --glass-pill: 999px;
+  --glass-dialog: 28px;
+  --radius: 12px;
+  --radius-lg: 20px;
+}
+
+html[data-glass] body {
+  background: var(--wallpaper);
+  background-size: cover;
+  background-attachment: fixed;
+}
+
+/* ---- materials --------------------------------------------------------------- */
+
+/* Strong glass for chrome that floats above content. */
+html[data-glass]
+  :is(
+    .sidebar,
+    .menu,
+    .modal,
+    .sheet,
+    .welcome-card,
+    .gv-panel,
+    .gv-zoom,
+    .gv-hover,
+    .sk-panel,
+    .sk-controls,
+    .sk-legend,
+    .sk-tip,
+    .sk-radar-tip,
+    .pv-pop,
+    .pv-selbar,
+    .pv-showui,
+    .pv-sheet,
+    .co-gen-bar,
+    .bn-toolbar,
+    .bn-suggestion-menu,
+    .bn-grid-suggestion-menu,
+    .bn-menu-dropdown,
+    .bn-panel,
+    .bn-panel-popover,
+    .bn-form-popover,
+    .bn-emoji-picker-popover
+  ) {
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 42%), var(--glass-fill-strong) !important;
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge) !important;
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    inset 0 0 0 1px var(--glass-edge-soft),
+    var(--glass-shadow) !important;
+}
+
+/* Softer glass for surfaces inside the content sheet (cards, toolbars). */
+html[data-glass]
+  :is(
+    .card,
+    .home-card,
+    .create-card,
+    .recent-card,
+    .backlink,
+    .install-hint,
+    .pv-topbar,
+    .pv-docker,
+    .sk-toolbar,
+    .db-toolbar,
+    .learn-empty-card,
+    .mem-copy
+  ) {
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 55%), var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    0 4px 18px var(--glass-shade);
+}
+
+/* Sticky bars that content scrolls under: nearly opaque, blurred. */
+html[data-glass] :is(.db-thead-wrap, .learn-session-top, .nb-cell-toolbar) {
+  background: var(--glass-solid);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+}
+html[data-glass] .db-td.db-td-title {
+  background: var(--glass-solid);
+}
+
+/* ---- layout: floating panes over the wallpaper ------------------------------ */
+
+html[data-glass] .app {
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom))
+    max(10px, env(safe-area-inset-left));
+  gap: 10px;
+}
+
+html[data-glass] .sidebar {
+  height: auto;
+  border-radius: var(--glass-radius);
+  overflow: hidden;
+}
+html[data-glass] .sidebar-closed .sidebar {
+  margin-left: calc(-1 * var(--sidebar-w) - 12px);
+}
+html[data-glass] .sidebar-bottom {
+  border-top-color: var(--glass-edge-soft);
+}
+
+html[data-glass] .main {
+  border-radius: var(--glass-radius);
+  background: linear-gradient(180deg, var(--glass-hi) 0, transparent 120px), var(--glass-sheet);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    var(--glass-shadow);
+}
+
+html[data-glass] .topbar {
+  background: transparent;
+  border-bottom-color: transparent;
+  padding: 0 12px;
+  height: calc(var(--topbar-h) + 6px);
+}
+
+html[data-glass] .welcome {
+  background: transparent;
+}
+html[data-glass] .welcome-card {
+  border-radius: calc(var(--glass-radius) + 6px);
+}
+
+/* ---- navigation ------------------------------------------------------------- */
+
+html[data-glass] :is(.nav-item, .tree-row, .ws-switcher, .crumb, .menu-item, .qs-item, .outline-item) {
+  border-radius: var(--glass-radius-sm);
+}
+
+html[data-glass] :is(.nav-item.active, .tree-row.active, .qs-item.selected) {
+  background: linear-gradient(180deg, var(--glass-hi), transparent 80%), var(--glass-lens);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    0 2px 10px var(--glass-shade);
+  color: var(--text);
+}
+
+html[data-glass] .nav-badge {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+html[data-glass] .ws-icon {
+  border-radius: 9px;
+  background: linear-gradient(180deg, var(--glass-hi), transparent), var(--glass-lens);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+
+/* ---- controls ------------------------------------------------------------------ */
+
+html[data-glass] .btn {
+  border-radius: var(--glass-pill);
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 65%), var(--glass-fill);
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    0 1px 3px var(--glass-shade);
+  transition:
+    transform 0.35s var(--spring),
+    background 0.15s,
+    box-shadow 0.2s;
+}
+html[data-glass] .btn:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 65%), var(--glass-lens);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    0 4px 14px var(--glass-shade);
+  transform: translateY(-0.5px);
+}
+html[data-glass] .btn:active:not(:disabled) {
+  transform: scale(0.96);
+  transition-duration: 0.08s;
+}
+
+html[data-glass] .btn-primary {
+  color: var(--accent-text);
+  border-color: rgba(255, 255, 255, 0.35);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0) 60%), var(--accent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    0 6px 18px rgba(0, 122, 255, 0.3);
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  html[data-glass] .btn-primary {
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.45),
+      0 6px 18px color-mix(in srgb, var(--accent) 35%, transparent);
+  }
+}
+html[data-glass] .btn-primary:hover:not(:disabled) {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.36) 0%, rgba(255, 255, 255, 0) 60%), var(--accent-hover);
+}
+
+html[data-glass] .btn-danger {
+  color: var(--danger);
+  border-color: var(--glass-edge);
+}
+html[data-glass] .btn-danger:hover:not(:disabled) {
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 65%), var(--danger-soft);
+}
+
+html[data-glass] .btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+html[data-glass] .icon-btn {
+  border-radius: var(--glass-pill);
+  transition:
+    transform 0.35s var(--spring),
+    background 0.15s;
+}
+html[data-glass] .icon-btn:hover {
+  background: var(--glass-lens);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+html[data-glass] .icon-btn:active {
+  transform: scale(0.9);
+}
+html[data-glass] .icon-btn.active {
+  background: var(--accent-soft);
+}
+
+html[data-glass] :is(.input, .select, .textarea) {
+  border-radius: var(--glass-radius-sm);
+  background: var(--glass-field);
+  border-color: var(--glass-field-edge);
+  box-shadow: inset 0 1px 2px var(--glass-shade);
+}
+html[data-glass] :is(.input, .select, .textarea):focus {
+  border-color: var(--accent);
+  box-shadow:
+    inset 0 1px 2px var(--glass-shade),
+    0 0 0 4px var(--accent-soft);
+}
+
+html[data-glass] .tabs {
+  border-radius: calc(var(--glass-pill) + 3px);
+  padding: 3px;
+  background: var(--glass-field);
+  box-shadow: inset 0 1px 2px var(--glass-shade);
+}
+html[data-glass] .tab {
+  border-radius: var(--glass-pill);
+  transition:
+    background 0.2s,
+    box-shadow 0.2s,
+    transform 0.35s var(--spring);
+}
+html[data-glass] .tab.active {
+  background: linear-gradient(180deg, var(--glass-hi), transparent 80%), var(--glass-lens);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    0 2px 8px var(--glass-shade);
+}
+html[data-glass] .tab:active {
+  transform: scale(0.95);
+}
+
+html[data-glass] .badge {
+  background: var(--glass-lens);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+
+html[data-glass] .kbd {
+  border-radius: 7px;
+  border-color: var(--glass-field-edge);
+  background: var(--glass-field);
+}
+
+html[data-glass] .avatar {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+/* ---- cards --------------------------------------------------------------------- */
+
+html[data-glass] :is(.card, .home-card, .create-card, .recent-card, .backlink, .install-hint) {
+  border-radius: var(--radius-lg);
+  transition:
+    transform 0.4s var(--spring),
+    box-shadow 0.2s,
+    background 0.2s;
+}
+html[data-glass] :is(.home-card, .create-card, .recent-card):hover {
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 55%), var(--glass-lens);
+  transform: translateY(-2px);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    0 10px 30px var(--glass-shade);
+}
+html[data-glass] :is(.home-card, .create-card, .recent-card):active {
+  transform: scale(0.98);
+}
+html[data-glass] .home-card.accent,
+html[data-glass] .install-hint {
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 55%), var(--accent-soft);
+}
+
+/* ---- overlays -------------------------------------------------------------------- */
+
+html[data-glass] .modal-backdrop,
+html[data-glass] .sheet-backdrop {
+  background: rgba(10, 12, 24, 0.22);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+html[data-glass] .modal {
+  border-radius: var(--glass-dialog);
+}
+/* Dialogs, sheets and menus are for reading: nearly opaque, whatever the lens does. */
+html[data-glass] :is(.modal, .sheet, .menu) {
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 42%), var(--glass-solid) !important;
+}
+html[data-glass] :is(.modal-header, .modal-footer) {
+  border-color: var(--glass-edge-soft);
+}
+html[data-glass] .menu {
+  border-radius: var(--glass-radius-md);
+  padding: 6px;
+}
+html[data-glass] .menu-item {
+  border-radius: var(--glass-radius-sm);
+}
+html[data-glass] .menu-sep {
+  background: var(--glass-edge-soft);
+}
+html[data-glass] .sheet {
+  border-radius: var(--glass-dialog) var(--glass-dialog) 0 0 !important;
+}
+
+html[data-glass] .toast {
+  border-radius: var(--glass-pill);
+  padding: 10px 18px;
+  color: var(--text);
+  background: linear-gradient(180deg, var(--glass-hi), transparent 60%), var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-edge);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    var(--glass-shadow);
+}
+
+html[data-glass] .quick-switcher .qs-input-row {
+  border-bottom-color: var(--glass-edge-soft);
+}
+
+/* ---- editor ------------------------------------------------------------------------- */
+
+html[data-glass] .doc-editor .bn-container {
+  --bn-colors-editor-background: transparent;
+  --bn-colors-menu-background: var(--glass-fill-strong);
+  --bn-colors-tooltip-background: var(--glass-fill-strong);
+  --bn-colors-hovered-background: var(--bg-hover);
+  --bn-colors-selected-background: var(--bg-active);
+  --bn-colors-border: var(--glass-edge-soft);
+  --bn-border-radius-medium: var(--glass-radius-sm);
+  --bn-border-radius-large: var(--glass-radius-md);
+}
+html[data-glass] .doc-editor .bn-editor {
+  background: transparent;
+}
+html[data-glass] :is(.bn-suggestion-menu, .bn-menu-dropdown, .bn-toolbar) {
+  border-radius: var(--glass-radius-md) !important;
+}
+
+/* ---- whiteboard (Excalidraw islands) ---------------------------------------------- */
+
+html[data-glass] .excalidraw {
+  --island-bg-color: var(--glass-fill-strong);
+  --popup-bg-color: var(--glass-fill-strong);
+  --border-radius-lg: var(--glass-radius-md);
+}
+html[data-glass] .excalidraw .Island {
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    var(--glass-shadow) !important;
+}
+
+/* ---- scrollbars ----------------------------------------------------------------------- */
+
+html[data-glass] ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+html[data-glass] ::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--glass-edge-soft) padding-box;
+}
+@supports (color: color-mix(in srgb, red, blue)) {
+  html[data-glass] ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text) 22%, transparent) padding-box;
+  }
+}
+html[data-glass] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---- phones: full-bleed sheet, floating capsule bars -------------------------------- */
+
+@media (max-width: 800px) {
+  html[data-glass] .app {
+    padding: 0;
+    gap: 0;
+  }
+  html[data-glass] .main {
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
+  }
+  html[data-glass] .topbar {
+    margin: max(8px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right)) 4px
+      max(10px, env(safe-area-inset-left));
+    height: 48px;
+    padding: 0 6px;
+    border-radius: max(var(--glass-radius), min(var(--glass-pill), 24px));
+    background: linear-gradient(180deg, var(--glass-hi), transparent 60%), var(--glass-fill-strong);
+    -webkit-backdrop-filter: var(--glass-blur);
+    backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-edge);
+    box-shadow:
+      inset 0 1px 0 var(--glass-edge),
+      0 6px 20px var(--glass-shade);
+  }
+  html[data-glass] .sidebar {
+    top: max(8px, env(safe-area-inset-top));
+    bottom: max(8px, env(safe-area-inset-bottom));
+    left: max(8px, env(safe-area-inset-left));
+    height: auto;
+  }
+  html[data-glass] .sidebar-closed .sidebar {
+    margin-left: calc(-1 * min(300px, 86vw) - 24px);
+  }
+  html[data-glass] .sidebar-scrim {
+    background: rgba(10, 12, 24, 0.2);
+  }
+}
+
+/* Honour motion preferences for the springy bits. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-glass] :is(.btn, .icon-btn, .tab, .home-card, .create-card, .recent-card) {
+    transition: none;
+  }
+}
+
+/* ---- refraction (src/lib/liquidGlass.ts, Chromium) --------------------------------
+ * Bars and toolbars that float over content use clearer glass so the lensing
+ * shows; menus and panels keep their frosted fill for reading. */
+
+html[data-lens] {
+  --glass-clear: rgba(255, 255, 255, 0.2);
+}
+html[data-lens][data-theme="dark"] {
+  --glass-clear: rgba(28, 28, 34, 0.3);
+}
+html[data-lens] :is(.tabbar, .pv-selbar, .pv-showui, .pv-topbar, .gv-zoom, .sk-controls, .co-gen-bar)[data-lens],
+html[data-lens] .excalidraw .Island[data-lens] {
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 45%), var(--glass-clear) !important;
+}
+@media (max-width: 800px) {
+  html[data-lens] .topbar[data-lens] {
+    background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 45%), var(--glass-clear);
+  }
+}
+/* Labels on clear glass stay legible over busy content. */
+html[data-lens] :is(.tabbar, .topbar)[data-lens] {
+  text-shadow: 0 0 6px var(--glass-hi);
+}

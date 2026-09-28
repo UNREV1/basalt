@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#191919" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="description" content="Basalt — free, local-first, end-to-end encrypted workspace for notes, databases, whiteboards, painting, notebooks and learning, with realtime collaboration." />
+    <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- iPhone / iPad: installable from Safari → Share → Add to Home Screen. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Basalt" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="format-detection" content="telephone=no" />
+    <title>Basalt</title>
+    <script>
+      // Apply theme + per-device appearance before first paint to avoid a flash.
+      // src/lib/appearance.ts caches the compiled CSS under "basalt:appearance".
+      try {
+        var s = JSON.parse(localStorage.getItem("basalt:settings") || "{}");
+        var a = JSON.parse(localStorage.getItem("basalt:appearance") || "null") || {};
+        var t = s.theme || "system";
+        var dark = t === "dark" || (t === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
+        if (a.only) dark = a.only === "dark";
+        var root = document.documentElement;
+        // Desktop app window (desktop/main.cjs loads /?desktop=<platform>).
+        var desk = new URLSearchParams(location.search).get("desktop");
+        if (desk) root.dataset.desktop = desk;
+        root.dataset.theme = dark ? "dark" : "light";
+        if (a.density) root.dataset.density = a.density;
+        if (a.corners) root.dataset.corners = a.corners;
+        // Liquid Glass is the default look; a first visit has no cache yet.
+        if (a.glass !== false) root.dataset.glass = "";
+        var add = function (id, css) {
+          var el = document.createElement("style");
+          el.id = id;
+          el.textContent = css;
+          document.head.appendChild(el);
+        };
+        if (a.css) add("basalt-appearance", a.css);
+        var ap = s.appearance || {};
+        if (ap.customCssEnabled && ap.customCss) add("basalt-custom-css", ap.customCss);
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

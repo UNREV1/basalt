@@ -1,0 +1,252 @@
+.iep {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
+
+.iep-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.iep-heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.iep-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 20px 16px 18px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--bg-soft);
+  text-align: center;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.iep-drop.dragging {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.iep-drop.disabled {
+  opacity: 0.6;
+}
+.iep-drop-icon {
+  font-size: 26px;
+  line-height: 1;
+}
+.iep-drop-title {
+  font-weight: 600;
+}
+.iep-drop-sub {
+  max-width: 440px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.iep-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.iep-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: fit-content;
+}
+.iep-check input {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  margin: 0;
+}
+
+.iep-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.iep-row-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+}
+.iep-row-text span {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.iep-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--warning-soft);
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.iep-confirm .iep-actions {
+  justify-content: flex-start;
+  margin-top: 0;
+}
+
+.iep-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+.iep-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  min-width: 0;
+}
+.iep-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+.iep-card p {
+  flex: 1;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+.iep-card .btn {
+  align-self: flex-start;
+}
+.iep-card .select {
+  width: 100%;
+  flex: none;
+  height: 32px;
+}
+
+.iep-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+}
+.iep-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  min-width: 0;
+}
+.iep-progress-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+}
+.iep-progress-pct {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.iep-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-active);
+  overflow: hidden;
+}
+.iep-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.2s ease-out;
+}
+
+.iep-outcome {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 12px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+}
+.iep-outcome.success {
+  background: var(--success-soft);
+  border-color: color-mix(in srgb, var(--success) 35%, transparent);
+}
+.iep-outcome.error {
+  background: var(--danger-soft);
+  border-color: color-mix(in srgb, var(--danger) 35%, transparent);
+}
+.iep-outcome-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.iep-outcome.success .iep-outcome-head > svg {
+  color: var(--success);
+}
+.iep-outcome.error .iep-outcome-head > svg {
+  color: var(--danger);
+}
+.iep-outcome p {
+  margin: 0;
+}
+.iep-outcome details {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.iep-outcome summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.iep-outcome ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  max-height: 160px;
+  overflow: auto;
+  word-break: break-word;
+}
+
+@media (max-width: 520px) {
+  .iep-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .iep-row .btn {
+    align-self: flex-start;
+  }
+}

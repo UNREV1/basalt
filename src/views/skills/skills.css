@@ -1,0 +1,1652 @@
+/* Skills: calm, Basalt-native styling. Area colors arrive per element as
+   --c and are used only as small accents (rings, dots, thin bars). */
+
+.sk-root {
+  --sk-dot: rgba(55, 53, 47, 0.12);
+  --sk-panel-w: 380px;
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+}
+[data-theme="dark"] .sk-root {
+  --sk-dot: rgba(255, 255, 255, 0.07);
+}
+
+/* ---- toolbar ------------------------------------------------------------- */
+
+.sk-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  min-height: 50px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-wrap: wrap;
+  position: relative;
+  z-index: 6;
+}
+.sk-tabs .tab svg {
+  opacity: 0.8;
+}
+.sk-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.sk-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  width: 200px;
+  padding: 0 6px 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text-muted);
+}
+.sk-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.sk-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+}
+.sk-search-clear {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: var(--bg-active);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sk-area-filter {
+  max-width: 170px;
+}
+.sk-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 2px 8px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  cursor: pointer;
+  line-height: 1.25;
+  text-align: right;
+}
+.sk-stat:hover {
+  background: var(--bg-hover);
+}
+.sk-stat-main {
+  font-size: 13px;
+  font-weight: 600;
+}
+.sk-stat-sub {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sk-ai-hint {
+  color: var(--text-muted);
+}
+
+/* ---- canvas -------------------------------------------------------------- */
+
+.sk-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+.sk-canvas {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: grab;
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.sk-canvas.panning,
+.sk-canvas.dragging,
+.sk-canvas.dragging .sk-node {
+  cursor: grabbing;
+}
+.sk-canvas:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent-soft);
+}
+.sk-svg {
+  display: block;
+}
+.sk-dot {
+  fill: var(--sk-dot);
+}
+
+/* ground under each group of skills */
+.sk-band line {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+.sk-band text {
+  font-size: 12px;
+  font-weight: 500;
+  fill: var(--text-muted);
+  text-anchor: middle;
+}
+.sk-band-level {
+  fill: var(--text-faint);
+  font-weight: 400;
+}
+
+/* edges */
+.sk-edge {
+  transition: opacity 0.15s;
+}
+.sk-edge.dim {
+  opacity: 0.2;
+}
+.sk-edge-line {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+}
+.sk-edge.off .sk-edge-line,
+.sk-edge.met .sk-edge-line {
+  stroke-dasharray: 4 5;
+}
+.sk-edge.met .sk-edge-line {
+  stroke: var(--text-faint);
+}
+.sk-edge.hl .sk-edge-line {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+
+/* nodes (no CSS transform on .sk-node: it would replace the SVG translate) */
+.sk-node {
+  cursor: pointer;
+  outline: none;
+  transition: opacity 0.15s;
+}
+.sk-node.dim {
+  opacity: 0.2;
+}
+.sk-node.locked {
+  opacity: 0.55;
+}
+.sk-node.locked.dim {
+  opacity: 0.15;
+}
+.sk-node-hit {
+  fill: transparent;
+}
+.sk-node-core {
+  fill: var(--bg);
+  stroke: var(--border-strong);
+  stroke-width: 2.5;
+  transition: fill 0.12s;
+}
+.sk-node:hover .sk-node-core {
+  fill: var(--bg-soft);
+}
+.sk-ring {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.5s ease;
+}
+.sk-node-icon {
+  font-size: 24px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.sk-node-level rect {
+  fill: var(--bg);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.sk-node-level text {
+  font-size: 10.5px;
+  font-weight: 600;
+  fill: var(--text-muted);
+  text-anchor: middle;
+  dominant-baseline: central;
+  font-variant-numeric: tabular-nums;
+}
+.sk-node-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  fill: var(--text);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--bg);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.sk-node-select {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.sk-node:focus-visible .sk-node-core {
+  stroke: var(--accent);
+}
+.sk-node-lock rect {
+  fill: var(--bg);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.sk-node-lock path {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+.sk-node-lock text {
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--text-muted);
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.sk-node-done circle {
+  fill: var(--success);
+  stroke: var(--bg);
+  stroke-width: 2;
+}
+.sk-node-done path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sk-node-peer {
+  stroke: var(--bg);
+  stroke-width: 2;
+}
+/* a single quiet fade after a level-up */
+.sk-node-flash {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: 2;
+  pointer-events: none;
+  animation: sk-flash 1.4s ease-out forwards;
+}
+@keyframes sk-flash {
+  from {
+    opacity: 0.9;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* hover tooltip */
+.sk-tip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 8px));
+  max-width: 280px;
+  padding: 7px 10px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  font-size: 12.5px;
+  z-index: 4;
+}
+.sk-tip.below {
+  transform: translate(-50%, 8px);
+}
+.sk-tip-title {
+  font-weight: 600;
+}
+.sk-tip-meta,
+.sk-tip-lock {
+  color: var(--text-muted);
+}
+
+/* today's quests strip */
+.sk-quest-strip {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  pointer-events: none;
+  z-index: 3;
+  padding: 2px;
+  mask-image: linear-gradient(90deg, #000 calc(100% - 24px), transparent);
+}
+.sk-quest-strip::-webkit-scrollbar {
+  display: none;
+}
+.sk-body.with-panel .sk-quest-strip {
+  right: calc(var(--sk-panel-w) + 24px);
+}
+.sk-quest-strip > * {
+  pointer-events: auto;
+  flex-shrink: 0;
+}
+.sk-quest-strip-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px 0 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg);
+  border-radius: var(--radius);
+}
+.sk-qchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  white-space: nowrap;
+  cursor: pointer;
+  font-size: 13px;
+  transition: border-color 0.12s, background 0.12s;
+}
+.sk-qchip:hover {
+  background: var(--bg-soft);
+  border-color: var(--border-strong);
+}
+.sk-qchip-check {
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  color: var(--accent-text);
+  flex-shrink: 0;
+}
+.sk-qchip.done .sk-qchip-check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.sk-qchip.done .sk-qchip-title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.sk-qchip-meta {
+  font-size: 12px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* canvas controls & help */
+.sk-controls {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: var(--shadow-sm);
+  z-index: 3;
+}
+.sk-controls .icon-btn {
+  width: 30px;
+  height: 30px;
+  font-weight: 600;
+}
+.sk-controls .sk-fit {
+  width: auto;
+  padding: 0 8px;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.sk-controls-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--border);
+}
+.sk-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 56px;
+  width: 300px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: fade 0.12s ease-out;
+}
+.sk-legend p {
+  margin: 0;
+  line-height: 1.45;
+}
+.sk-legend-ranks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.sk-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+/* ---- side panel / bottom sheet --------------------------------------------- */
+
+.sk-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: var(--sk-panel-w);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  z-index: 5;
+  animation: fade 0.12s ease-out;
+}
+.sk-sheet-handle {
+  display: none;
+  justify-content: center;
+  padding: 8px 0 2px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.sk-sheet-handle span {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+.sk-panel-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 10px 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sk-panel-badge {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+}
+.sk-panel-badge:hover {
+  background: var(--bg-hover);
+}
+.sk-panel-badge.locked > span {
+  opacity: 0.55;
+}
+.sk-name-input {
+  width: 100%;
+  font-size: 17px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border-radius: 6px;
+  outline: none;
+}
+.sk-name-input:hover {
+  background: var(--bg-hover);
+}
+.sk-name-input:focus {
+  background: var(--bg);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+.sk-area-pick {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 7px 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sk-area-pick:hover {
+  background: var(--bg-hover);
+}
+.sk-area-pick:focus-within {
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.sk-area-pick select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+  font-size: 14px;
+}
+.sk-dot-c {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--c);
+  flex-shrink: 0;
+}
+.sk-rank {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0;
+}
+.sk-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.sk-level-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+.sk-level-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.sk-level-num {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.sk-level-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-variant-numeric: tabular-nums;
+}
+.sk-streak {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.sk-streak.today {
+  color: var(--text);
+  font-weight: 500;
+}
+.sk-goal {
+  gap: 8px;
+}
+.sk-goal-select {
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  font-size: 12.5px;
+  padding: 0 6px;
+}
+.sk-goal-done {
+  color: var(--success);
+  font-weight: 600;
+}
+.sk-xpbar {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--bg-active);
+  overflow: hidden;
+}
+.sk-xpbar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--c);
+  transition: width 0.5s ease;
+}
+.sk-locked-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.sk-locked-note svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.sk-locked-note strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.sk-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+}
+.sk-link:hover {
+  text-decoration: underline;
+}
+
+.sk-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 26px;
+  margin-bottom: 6px;
+}
+.sk-section h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.sk-empty-line {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--text-faint);
+}
+.sk-quick {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.sk-quick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 7px 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.sk-quick-btn:hover {
+  background: var(--bg-hover);
+}
+.sk-quick-btn strong {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.sk-quick-btn span {
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.sk-log-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.sk-min-input {
+  width: 64px;
+  flex-shrink: 0;
+}
+.sk-num {
+  width: 60px;
+  height: 28px;
+  padding: 0 6px;
+}
+
+.sk-quest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sk-quest {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 8px 8px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.sk-check {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  background: transparent;
+  color: var(--accent-text);
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.12s, border-color 0.12s;
+}
+.sk-check:hover {
+  border-color: var(--accent);
+}
+.sk-quest.done .sk-check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.sk-check-count {
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.sk-quest-title {
+  font-weight: 500;
+}
+.sk-quest.done .sk-quest-title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.sk-quest-xp {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sk-quest-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+
+.sk-link-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sk-link-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.sk-link-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+.sk-link-main:hover:not(:disabled):not(.static) {
+  background: var(--bg-hover);
+}
+.sk-link-main:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+.sk-mini-badge {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  font-size: 16px;
+}
+.sk-met {
+  color: var(--success);
+}
+.sk-row-action {
+  opacity: 0;
+}
+.sk-link-row:hover .sk-row-action,
+.sk-quest:hover .sk-row-action,
+.sk-history-row:hover .sk-row-action,
+.sk-row-action:focus-visible {
+  opacity: 1;
+}
+@media (hover: none) {
+  .sk-row-action {
+    opacity: 0.7;
+  }
+}
+.sk-add-select {
+  width: 100%;
+  height: 30px;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.sk-add-select.sm {
+  width: auto;
+  margin-top: 0;
+}
+.sk-course-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+.sk-course-progress .sk-xpbar {
+  height: 4px;
+}
+.sk-desc {
+  width: 100%;
+  min-height: 70px;
+}
+
+.sk-history {
+  display: flex;
+  flex-direction: column;
+}
+.sk-history-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.sk-history-row:last-child {
+  border-bottom: none;
+}
+.sk-history-row.as-button {
+  width: 100%;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  border-radius: 0;
+}
+.sk-history-row.as-button:hover {
+  background: var(--bg-hover);
+}
+.sk-history-icon {
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.sk-history-xp {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sk-history-xp.neg {
+  color: var(--danger);
+}
+.sk-history-time {
+  width: 64px;
+  text-align: right;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.sk-danger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.sk-delete {
+  color: var(--danger);
+}
+.sk-confirm {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+.sk-picker {
+  width: 300px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sk-picker-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+.sk-picker-empty {
+  padding: 8px;
+}
+
+/* ---- overview ---------------------------------------------------------------- */
+
+.sk-sheet-scroll,
+.sk-empty-scroll {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+}
+.sk-sheet {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 24px 24px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.sk-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 18px 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.sk-hero-text {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.sk-hero-text .sk-xpbar {
+  max-width: 420px;
+}
+.sk-hero-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.sk-hero-title .sk-rank {
+  font-size: 14px;
+}
+.sk-hero-stats {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 4px 24px;
+  margin: 0;
+}
+.sk-hero-stats dt {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.sk-hero-stats dd {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sk-sheet-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 16px;
+}
+.sk-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+.sk-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sk-card-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sk-radar {
+  position: relative;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+}
+.sk-radar svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.sk-radar-ring {
+  fill: none;
+  stroke: var(--border);
+}
+.sk-radar-axis {
+  stroke: var(--border);
+}
+.sk-radar-caption {
+  text-align: center;
+  margin-top: 4px;
+}
+.sk-radar-shape {
+  fill: var(--accent);
+  fill-opacity: 0.1;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+.sk-radar-dot {
+  stroke: var(--bg);
+  stroke-width: 1.5;
+}
+.sk-radar-hit {
+  fill: transparent;
+}
+.sk-radar-point {
+  cursor: pointer;
+  outline: none;
+}
+.sk-radar-label {
+  font-size: 12px;
+  font-weight: 500;
+  fill: var(--text);
+}
+.sk-radar-value {
+  font-size: 11px;
+  fill: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.sk-radar-point:hover .sk-radar-label,
+.sk-radar-point:focus-visible .sk-radar-label {
+  fill: var(--accent);
+}
+.sk-radar-tip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 6px));
+  display: flex;
+  flex-direction: column;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-size: 12.5px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.sk-radar-tip span {
+  color: var(--text-muted);
+}
+.sk-radar-empty {
+  padding: 24px;
+  text-align: center;
+}
+.sk-area-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.sk-area-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+}
+.sk-area-row:hover {
+  background: var(--bg-hover);
+}
+.sk-area-icon {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  flex-shrink: 0;
+  font-size: 18px;
+}
+.sk-area-name {
+  display: block;
+  font-weight: 500;
+}
+.sk-area-row .sk-xpbar {
+  height: 4px;
+  margin: 5px 0 4px;
+}
+.sk-area-level {
+  min-width: 30px;
+  text-align: right;
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- empty state & templates --------------------------------------------------- */
+
+.sk-empty {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 48px 24px 80px;
+}
+.sk-empty-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.sk-empty-head h2 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.sk-empty-head p {
+  max-width: 620px;
+  margin: 0 0 6px;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.sk-empty-sub {
+  margin: 32px 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.sk-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 8px;
+}
+.sk-template {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  text-align: left;
+  cursor: pointer;
+  color: var(--text);
+  transition: background 0.12s;
+}
+.sk-template:hover {
+  background: var(--bg-hover);
+}
+.sk-template.featured {
+  grid-column: 1 / -1;
+}
+.sk-template strong {
+  display: block;
+  font-weight: 600;
+}
+.sk-template-icon {
+  font-size: 24px;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+.sk-template-blurb {
+  display: block;
+  margin: 1px 0 3px;
+  line-height: 1.4;
+}
+
+/* ---- dialogs ---------------------------------------------------------------- */
+
+.sk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sk-field > span:first-child {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+}
+.sk-icon-pick {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+}
+.sk-icon-pick:hover {
+  background: var(--bg-hover);
+}
+.sk-icon-pick.sm {
+  width: 32px;
+  height: 32px;
+  font-size: 17px;
+}
+.sk-area-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sk-area-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+.sk-area-chip::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--c);
+}
+.sk-area-chip:hover {
+  background: var(--bg-hover);
+}
+.sk-area-chip.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.sk-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 4px 0 10px;
+  border-radius: 6px;
+  background: var(--bg-sunken);
+  font-size: 13px;
+}
+.sk-token button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sk-token button:hover {
+  background: var(--bg-active);
+}
+.sk-areas-edit {
+  display: flex;
+  flex-direction: column;
+}
+.sk-area-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.sk-area-edit .input {
+  min-width: 120px;
+}
+.sk-attr-input {
+  width: 64px;
+  min-width: 64px !important;
+  text-transform: uppercase;
+}
+.sk-swatches {
+  display: flex;
+  gap: 4px;
+}
+.sk-swatch {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.sk-swatch.active {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--text-muted);
+}
+.sk-preview {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 440px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg-soft);
+}
+.sk-preview-edge {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 2;
+}
+.sk-preview-node {
+  fill: var(--bg);
+  stroke: var(--border-strong);
+  stroke-width: 2.5;
+}
+.sk-preview-icon {
+  font-size: 24px;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+.sk-preview-label {
+  font-size: 15px;
+  font-weight: 500;
+  fill: var(--text);
+  text-anchor: middle;
+  paint-order: stroke;
+  stroke: var(--bg-soft);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.sk-example {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  font-size: 12.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sk-example:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.sk-gen-progress {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--bg-sunken);
+  overflow: hidden;
+}
+.sk-gen-progress > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.3s;
+}
+.sk-gen-areas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.sk-error {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* ---- responsive ------------------------------------------------------------ */
+
+@media (max-width: 900px) {
+  .sk-hide-narrow {
+    display: none;
+  }
+  .sk-search {
+    width: 160px;
+  }
+  .sk-sheet-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sk-hero {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .sk-hero-stats {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .sk-toolbar {
+    gap: 6px;
+  }
+  .sk-stat {
+    display: none;
+  }
+  .sk-filters {
+    order: 10;
+    flex-basis: 100%;
+  }
+  .sk-search {
+    flex: 1;
+    width: auto;
+  }
+  .sk-area-filter {
+    max-width: 140px;
+  }
+  .sk-panel {
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: 58%;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    border-bottom: none;
+    box-shadow: var(--shadow-lg);
+    animation: sk-sheet-in 0.2s ease-out;
+  }
+  .sk-panel.expanded {
+    height: calc(100% - 8px);
+  }
+  .sk-sheet-handle {
+    display: flex;
+  }
+  .sk-panel-head {
+    padding-top: 6px;
+  }
+  @keyframes sk-sheet-in {
+    from {
+      transform: translateY(24px);
+      opacity: 0;
+    }
+  }
+  .sk-body.with-panel .sk-quest-strip {
+    right: 12px;
+  }
+  .sk-sheet {
+    padding: 16px 16px 80px;
+  }
+  .sk-hero {
+    padding: 16px;
+    gap: 14px;
+  }
+  .sk-hero-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .sk-empty {
+    padding: 28px 16px 80px;
+  }
+  .sk-empty-head h2 {
+    font-size: 24px;
+  }
+  .sk-legend {
+    width: calc(100% - 24px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sk-root *,
+  .sk-root *::before,
+  .sk-root *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* ---- skill page header (SkillHeader.tsx) ---------------------------------------- */
+
+.page-skill {
+  margin: 4px 0 18px;
+}
+.sk-page {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 10%, transparent), transparent 60%), var(--bg);
+}
+.sk-page-top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.sk-page-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 4px;
+}
+.sk-page-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+}
+.sk-page-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.sk-page-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sk-page-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.sk-page-chip:hover {
+  background: var(--bg-hover);
+}
+.sk-page-archived {
+  flex-direction: row;
+  align-items: center;
+}
+@media (max-width: 720px) {
+  .sk-page-grid {
+    grid-template-columns: 1fr;
+  }
+}
+html[data-glass] .sk-page {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--c) 14%, transparent), transparent 60%),
+    var(--glass-lens);
+  border-color: var(--glass-edge-soft);
+  box-shadow: inset 0 1px 0 var(--glass-edge);
+}

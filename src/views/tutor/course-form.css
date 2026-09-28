@@ -1,0 +1,147 @@
+/* Level / goal / notes pickers (tutor home and course setup). */
+
+.tu-field {
+  border: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tu-label {
+  padding: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tu-levels {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.tu-level {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 10px 9px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+  min-width: 0;
+}
+.tu-level:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-soft);
+}
+.tu-level.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.tu-level-bars {
+  display: flex;
+  gap: 2px;
+  align-items: flex-end;
+  height: 12px;
+  margin-bottom: 3px;
+}
+.tu-level-bars span {
+  width: 4px;
+  border-radius: 1px;
+  background: var(--border-strong);
+}
+.tu-level-bars span:nth-child(1) { height: 4px; }
+.tu-level-bars span:nth-child(2) { height: 6px; }
+.tu-level-bars span:nth-child(3) { height: 8px; }
+.tu-level-bars span:nth-child(4) { height: 10px; }
+.tu-level-bars span:nth-child(5) { height: 12px; }
+.tu-level-bars span.on {
+  background: var(--accent);
+}
+.tu-level-name {
+  font-weight: 600;
+  font-size: 13px;
+  line-height: 1.3;
+}
+.tu-level-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.tu-goals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.tu-goal {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s, background 0.12s, box-shadow 0.12s;
+  min-width: 0;
+}
+.tu-goal:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-soft);
+}
+.tu-goal.selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.tu-goal-icon {
+  font-size: 22px;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--bg-sunken);
+  flex-shrink: 0;
+}
+.tu-goal.selected .tu-goal-icon {
+  background: var(--bg);
+}
+.tu-goal-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.tu-goal-name {
+  font-weight: 600;
+}
+.tu-goal-desc {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.tu-notes {
+  width: 100%;
+  min-height: 60px;
+}
+
+@media (max-width: 720px) {
+  .tu-levels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .tu-levels .tu-level:last-child {
+    grid-column: span 2;
+  }
+  .tu-goals {
+    grid-template-columns: 1fr;
+  }
+}

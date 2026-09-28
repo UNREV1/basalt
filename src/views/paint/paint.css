@@ -1,0 +1,1674 @@
+/* Paint studio. Uses Basalt tokens from src/styles.css; the canvas surround is
+   a neutral mid-gray (Krita-style) in both themes so colors read true. */
+
+.pv-root {
+  --pv-surround: #8f8f92;
+  --pv-paper-tile: #fbfaf7;
+  --pv-checker: repeating-conic-gradient(#d9d9d9 0 25%, #ffffff 0 50%) 0 0 / 10px 10px;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--text);
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  overflow: hidden;
+}
+[data-theme="dark"] .pv-root {
+  --pv-surround: #3b3b3e;
+  --pv-paper-tile: #f4f2ec;
+}
+
+.pv-grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.pv-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ---- buttons ------------------------------------------------------------ */
+
+.pv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.pv-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.pv-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.pv-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
+.pv-btn:focus-visible,
+.pv-tool:focus-visible,
+.pv-preset-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.pv-btn-label {
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+}
+.pv-zoom-btn {
+  min-width: 58px;
+  font-variant-numeric: tabular-nums;
+}
+.pv-btn.pv-danger:hover {
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
+/* ---- top bar ------------------------------------------------------------ */
+
+.pv-topbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 48px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.pv-topbar::-webkit-scrollbar {
+  display: none;
+}
+.pv-sep {
+  width: 1px;
+  height: 22px;
+  margin: 0 3px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.pv-preset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 8px 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pv-preset-btn:hover,
+.pv-preset-btn.active {
+  border-color: var(--border-strong);
+  background: var(--bg-soft);
+}
+.pv-preset-btn-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--pv-paper-tile);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.07);
+  overflow: hidden;
+}
+.pv-preset-btn-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pv-top-slider {
+  width: 148px;
+  flex-shrink: 0;
+}
+.pv-tool-opts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.pv-hint {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.pv-opt-label {
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+
+/* ---- Krita-style value slider ------------------------------------------------ */
+
+.pv-ks {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 28px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-sunken);
+  overflow: hidden;
+  cursor: ew-resize;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  touch-action: none;
+  outline: none;
+}
+.pv-ks:hover {
+  border-color: var(--border-strong);
+}
+.pv-ks:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.pv-ks-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent-soft);
+  border-right: 2px solid var(--accent);
+  pointer-events: none;
+}
+.pv-ks-label,
+.pv-ks-value {
+  position: relative;
+  z-index: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.pv-ks-label {
+  color: var(--text-muted);
+}
+.pv-ks-value {
+  color: var(--text);
+  font-weight: 600;
+}
+.pv-ks.disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.pv-ks-input {
+  height: 28px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+  background: var(--bg);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.pv-ks-alpha {
+  border-color: var(--border-strong);
+}
+.pv-ks-alpha .pv-ks-fill {
+  background: transparent;
+  border-right: 3px solid #fff;
+  box-shadow: 1px 0 0 rgba(0, 0, 0, 0.45);
+}
+.pv-ks-alpha .pv-ks-label,
+.pv-ks-alpha .pv-ks-value {
+  color: #111;
+  text-shadow: 0 0 3px #fff, 0 0 2px #fff;
+}
+
+/* ---- switch & segmented --------------------------------------------------------- */
+
+.pv-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+}
+.pv-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.pv-switch-track {
+  position: relative;
+  width: 30px;
+  height: 18px;
+  border-radius: 9px;
+  background: var(--border-strong);
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.pv-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 0.15s;
+}
+.pv-switch input:checked + .pv-switch-track {
+  background: var(--accent);
+}
+.pv-switch input:checked + .pv-switch-track .pv-switch-thumb {
+  transform: translateX(12px);
+}
+.pv-switch input:focus-visible + .pv-switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pv-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--bg-sunken);
+  flex-shrink: 0;
+}
+.pv-seg button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 26px;
+  min-width: 30px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.pv-seg button.active {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+.pv-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.22);
+}
+
+/* ---- popovers & menus ------------------------------------------------------------ */
+
+.pv-pop {
+  position: fixed;
+  z-index: 1100;
+  max-height: calc(100vh - 16px);
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  animation: pv-pop-in 0.12s ease-out;
+}
+@keyframes pv-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+.pv-menu {
+  min-width: 230px;
+  padding: 4px;
+}
+.pv-menu .menu-item {
+  gap: 10px;
+}
+.pv-menu-pad {
+  padding: 6px 8px 8px;
+  gap: 6px;
+}
+.pv-menu-check {
+  margin-left: auto;
+  color: var(--accent);
+}
+.pv-view-menu {
+  width: 270px;
+}
+.pv-pop-presets {
+  width: min(372px, calc(100vw - 16px));
+  padding: 8px;
+}
+.pv-pop-presets .pv-presets {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* ---- tool bar ---------------------------------------------------------------------- */
+
+.pv-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  position: relative;
+}
+.pv-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  width: 54px;
+  padding: 8px 0 10px;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+  overflow-y: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+.pv-toolbar-sep {
+  width: 26px;
+  height: 1px;
+  margin: 5px 0;
+  background: var(--border);
+  flex-shrink: 0;
+}
+.pv-tool {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+.pv-tool:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.pv-tool.active {
+  background: var(--accent);
+  color: var(--accent-text);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.pv-tool.latent {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  color: var(--accent);
+}
+.pv-mini-colors {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  margin-top: 6px;
+}
+.pv-mini-fg,
+.pv-mini-bg {
+  position: absolute;
+  width: 25px;
+  height: 25px;
+  border: 2px solid var(--bg);
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px var(--border-strong);
+  cursor: pointer;
+  padding: 0;
+}
+.pv-mini-fg {
+  left: 0;
+  top: 0;
+  z-index: 1;
+}
+.pv-mini-bg {
+  right: 0;
+  bottom: 0;
+}
+
+/* ---- stage & overlay ------------------------------------------------------------------ */
+
+.pv-stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--pv-surround);
+  touch-action: none;
+  outline: none;
+}
+.pv-canvas {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+/* The document: sized to width×height at the raster scale and placed with a
+   CSS transform, so panning and rotating never re-rasterize the artwork. */
+.pv-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+  box-shadow: 0 3px 18px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(0, 0, 0, 0.16);
+}
+.pv-checker {
+  position: absolute;
+  inset: 0;
+  background: repeating-conic-gradient(#d6d6d6 0 25%, #ffffff 0 50%) 0 0 / 16px 16px;
+}
+.pv-stack,
+.pv-paper-color,
+.pv-layer-el {
+  position: absolute;
+  inset: 0;
+}
+.pv-stack,
+.pv-layer-el {
+  isolation: isolate;
+}
+.pv-stack {
+  overflow: hidden;
+}
+.pv-layer-svg {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  will-change: transform;
+}
+.pv-overlay-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  will-change: transform;
+}
+.pv-guides line {
+  stroke: rgba(80, 80, 230, 0.8);
+  stroke-width: 1;
+  stroke-dasharray: 7 5;
+}
+.pv-guides circle {
+  fill: #5b5bd6;
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.pv-ants-bg {
+  fill: rgba(91, 91, 214, 0.08);
+  stroke: #fff;
+  stroke-width: 1.5;
+}
+.pv-ants {
+  fill: none;
+  stroke: #1a1a1a;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 4;
+  animation: pv-ants 0.6s linear infinite;
+}
+@keyframes pv-ants {
+  to {
+    stroke-dashoffset: -9;
+  }
+}
+.pv-sel-box {
+  fill: none;
+  stroke: #5b5bd6;
+  stroke-width: 1.5;
+}
+.pv-sel-item {
+  fill: none;
+  stroke: #5b5bd6;
+  stroke-opacity: 0.5;
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.pv-sel-stem {
+  stroke: #5b5bd6;
+  stroke-width: 1.5;
+}
+.pv-handle {
+  fill: #fff;
+  stroke: #5b5bd6;
+  stroke-width: 1.5;
+}
+.pv-handle-rot {
+  fill: #5b5bd6;
+  stroke: #fff;
+  stroke-width: 2;
+}
+.pv-string line {
+  stroke: rgba(20, 20, 20, 0.7);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 3;
+}
+.pv-string circle {
+  fill: #fff;
+  stroke: #222;
+  stroke-width: 1;
+}
+.pv-cursor-outer {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 3;
+}
+.pv-cursor-inner {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.85);
+  stroke-width: 1;
+}
+.pv-cursor-erase {
+  stroke-dasharray: 4 3;
+}
+.pv-cursor-dot {
+  fill: #111;
+  stroke: #fff;
+  stroke-width: 1;
+}
+.pv-pick-arc {
+  stroke: rgba(0, 0, 0, 0.45);
+  stroke-width: 1;
+}
+.pv-peer-arrow {
+  stroke: #fff;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+.pv-peer text {
+  font: 600 11px var(--font);
+  fill: #fff;
+}
+.pv-peer {
+  transition: transform 0.06s linear;
+}
+
+.pv-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pv-notice {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  z-index: 4;
+  max-width: calc(100% - 32px);
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(20, 20, 20, 0.86);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+  animation: pv-notice 0.18s ease-out;
+}
+@keyframes pv-notice {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -6px);
+  }
+}
+.pv-selbar {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+  animation: pv-pop-in 0.14s ease-out;
+}
+.pv-selbar-count {
+  padding: 0 8px 0 6px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.pv-showui {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12.5px;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  opacity: 0.8;
+}
+.pv-showui:hover {
+  opacity: 1;
+}
+.pv-pen-badge {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  color: #fff;
+  font-size: 11.5px;
+  pointer-events: none;
+}
+
+/* Vertical quick sliders (size / opacity) on narrow screens, Procreate-style. */
+.pv-quick {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 8px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+  transform: translateY(-50%);
+}
+.pv-quick-sep {
+  width: 14px;
+  height: 1px;
+  background: var(--border);
+}
+.pv-vslider {
+  position: relative;
+  width: 8px;
+  height: 118px;
+  border-radius: 4px;
+  background: var(--bg-sunken);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+  cursor: ns-resize;
+  touch-action: none;
+}
+.pv-vslider::before {
+  content: "";
+  position: absolute;
+  inset: -8px -12px;
+}
+.pv-vslider-fill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  border-radius: 4px;
+  background: var(--accent);
+  pointer-events: none;
+}
+.pv-vslider-thumb {
+  position: absolute;
+  left: 50%;
+  width: 18px;
+  height: 14px;
+  margin-left: -9px;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(0, 0, 0, 0.12);
+  pointer-events: none;
+}
+
+/* ---- docker ------------------------------------------------------------------------------ */
+
+.pv-docker {
+  width: 300px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--border);
+  background: var(--bg);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.pv-narrow .pv-docker {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  box-shadow: var(--shadow-lg);
+}
+.pv-section {
+  border-bottom: 1px solid var(--border);
+}
+.pv-section-head {
+  display: flex;
+  align-items: center;
+  height: 38px;
+  padding: 0 8px 0 6px;
+}
+.pv-section-toggle {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pv-section-toggle:hover {
+  color: var(--text);
+}
+.pv-section-action {
+  width: 26px;
+  height: 26px;
+}
+.pv-section-body {
+  padding: 2px 14px 14px;
+}
+
+/* ---- color ------------------------------------------------------------------------------- */
+
+.pv-color {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pv-color-top {
+  display: flex;
+  justify-content: center;
+}
+.pv-hsv {
+  position: relative;
+  flex-shrink: 0;
+  cursor: crosshair;
+  touch-action: none;
+}
+.pv-hsv-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, #ff0000, #ffff00, #00ff00, #00ffff, #0000ff, #ff00ff, #ff0000);
+}
+.pv-hsv-sv {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 4px;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+.pv-hsv-white,
+.pv-hsv-black {
+  position: absolute;
+  inset: 0;
+  border-radius: 4px;
+}
+.pv-hsv-white {
+  background: linear-gradient(to right, #fff, rgba(255, 255, 255, 0));
+}
+.pv-hsv-black {
+  background: linear-gradient(to top, #000, rgba(0, 0, 0, 0));
+}
+.pv-hsv-knob {
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45), 0 1px 4px rgba(0, 0, 0, 0.4);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+.pv-color-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.pv-fgbg {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  flex-shrink: 0;
+}
+.pv-fgbg-fg,
+.pv-fgbg-bg {
+  position: absolute;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
+}
+.pv-fgbg-fg {
+  left: 0;
+  top: 0;
+  z-index: 2;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--border-strong), 0 0 0 3px var(--bg);
+}
+.pv-fgbg-alpha {
+  position: absolute;
+  inset: 0;
+  background: var(--pv-checker);
+}
+.pv-fgbg-bg {
+  right: 0;
+  bottom: 0;
+  border: none;
+  padding: 0;
+  box-shadow: 0 0 0 1px var(--border-strong);
+  cursor: pointer;
+}
+.pv-fgbg-swap {
+  position: absolute;
+  right: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.pv-fgbg-swap:hover {
+  color: var(--text);
+  background: var(--bg-hover);
+}
+.pv-fgbg-reset {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+.pv-fgbg-reset span {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+.pv-fgbg-reset span:first-child {
+  left: 1px;
+  top: 3px;
+  background: #000;
+  z-index: 1;
+}
+.pv-fgbg-reset span:last-child {
+  left: 6px;
+  top: 7px;
+  background: #fff;
+}
+.pv-color-fields {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pv-hex {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 28px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-sunken);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.pv-hex:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.pv-hex input {
+  width: 100%;
+  min-width: 0;
+  border: none;
+  background: transparent;
+  outline: none;
+  font: inherit;
+  color: var(--text);
+}
+.pv-swatches-block {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.pv-mini-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+.pv-swatches {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(21px, 1fr));
+  gap: 4px;
+}
+.pv-swatch {
+  aspect-ratio: 1;
+  padding: 0;
+  border: none;
+  border-radius: 5px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.14);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.pv-swatch:hover {
+  transform: scale(1.14);
+}
+.pv-swatch.active {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--accent);
+}
+
+/* ---- layers ------------------------------------------------------------------------------ */
+
+.pv-layers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pv-layer-props {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pv-blend {
+  width: 116px;
+  height: 28px;
+  padding: 0 6px;
+  font-size: 12.5px;
+  flex-shrink: 0;
+}
+.pv-layer-list {
+  position: relative;
+  max-height: 312px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+.pv-layer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  margin-bottom: 4px;
+  padding: 0 4px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: var(--bg-soft);
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.12s;
+}
+.pv-layer:hover {
+  background: var(--bg-hover);
+}
+.pv-layer.active {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.pv-layer.lifted {
+  z-index: 3;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  transition: none;
+  cursor: grabbing;
+}
+.pv-layer.hidden-layer .pv-thumb,
+.pv-layer.hidden-layer .pv-layer-name {
+  opacity: 0.45;
+}
+.pv-thumb {
+  width: 48px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 5px;
+  background: var(--pv-checker);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  touch-action: none;
+}
+.pv-thumb svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pv-layer-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+  line-height: 1.25;
+}
+.pv-layer-meta {
+  display: flex;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.pv-layer-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pv-layer-icon:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+.pv-layer-icon.dim {
+  opacity: 0.32;
+}
+.pv-layer:hover .pv-layer-icon.dim {
+  opacity: 0.6;
+}
+.pv-layer-icon.dim:hover {
+  opacity: 1;
+}
+.pv-layer-icon.on {
+  color: var(--accent);
+}
+.pv-layer-icon.off {
+  color: var(--text-faint);
+}
+.pv-rename {
+  width: 100%;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  background: var(--bg);
+  outline: none;
+  font-size: 13px;
+  user-select: text;
+}
+.pv-layer-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* ---- brushes ------------------------------------------------------------------------------ */
+
+.pv-presets {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+.pv-preset {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s, box-shadow 0.12s;
+}
+.pv-preset:hover {
+  border-color: var(--border-strong);
+}
+.pv-preset.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.pv-preset-paper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+  border-radius: 7px;
+  background: var(--pv-paper-tile);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+.pv-preset-name {
+  padding: 0 3px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.pv-preview {
+  display: block;
+  overflow: visible;
+}
+.pv-brush-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pv-switches {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 0 2px;
+}
+.pv-reset {
+  align-self: flex-start;
+  color: var(--text-muted);
+}
+
+/* ---- dialogs ---------------------------------------------------------------------------- */
+
+.pv-modal .modal-header .icon-btn {
+  margin-right: -4px;
+}
+.pv-field-label {
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: -6px;
+}
+.pv-size-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pv-chip:hover {
+  background: var(--bg-hover);
+}
+.pv-chip.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.pv-chip input[type="radio"] {
+  display: none;
+}
+.pv-chip-shape {
+  width: 11px;
+  max-height: 15px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+.pv-chip-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.pv-checker-swatch {
+  background: var(--pv-checker);
+}
+.pv-color-input {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.pv-size-inputs {
+  align-items: flex-end;
+}
+.pv-swap-dims {
+  margin-bottom: 2px;
+}
+.pv-shortcuts {
+  max-width: 760px;
+}
+.pv-shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0 24px;
+}
+.pv-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.pv-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+/* ---- phones --------------------------------------------------------------------------------- */
+
+.pv-phone .pv-topbar {
+  gap: 2px;
+  padding: 0 8px;
+}
+.pv-phone .pv-preset-btn-name {
+  max-width: 88px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 480px) {
+  .pv-phone .pv-preset-btn-name {
+    display: none;
+  }
+  .pv-phone .pv-zoom-btn {
+    min-width: 48px;
+    padding: 0 6px;
+  }
+}
+.pv-phone .pv-tool-opts {
+  gap: 6px;
+}
+.pv-phone .pv-tool-opts .pv-switch-label {
+  display: none;
+}
+.pv-bottombar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 58px;
+  padding: 0 12px env(safe-area-inset-bottom);
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.pv-bottom-tools,
+.pv-bottom-panels {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.pv-bottom-tools {
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+}
+.pv-bottombar .pv-tool {
+  width: 42px;
+  height: 42px;
+}
+.pv-color-btn {
+  width: 32px;
+  height: 32px;
+  margin-left: 4px;
+  padding: 0;
+  border: 2.5px solid var(--bg);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--border-strong);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.pv-color-btn.active {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.pv-sheet {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(58px + env(safe-area-inset-bottom));
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  max-height: 66%;
+  border-radius: 16px 16px 0 0;
+  background: var(--bg);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.22);
+  animation: pv-sheet-in 0.2s ease-out;
+}
+@keyframes pv-sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+.pv-sheet-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 6px;
+}
+.pv-sheet-grip {
+  position: absolute;
+  left: 50%;
+  top: 5px;
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  transform: translateX(-50%);
+}
+.pv-sheet-body {
+  overflow-y: auto;
+  padding: 4px 16px 16px;
+  overscroll-behavior: contain;
+}
+.pv-sheet-sub {
+  margin: 14px 0 8px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pv-phone .pv-presets {
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+}
+.pv-phone .pv-layer-list {
+  max-height: none;
+}
+.pv-phone .pv-quick {
+  left: 10px;
+}
+.pv-phone .pv-selbar {
+  bottom: 12px;
+  max-width: calc(100% - 24px);
+}
+
+/* ---- popup palette (right-click) --------------------------------------------------------- */
+
+.pv-ppal {
+  position: absolute;
+  z-index: 7;
+  width: 0;
+  height: 0;
+}
+.pv-ppal-disc {
+  position: absolute;
+  left: -140px;
+  top: -140px;
+  width: 280px;
+  height: 280px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--bg) 90%, transparent);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(10px);
+  animation: pv-ppal-in 0.14s ease-out;
+}
+@keyframes pv-ppal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+}
+.pv-ppal-preset,
+.pv-ppal-color,
+.pv-ppal-center,
+.pv-ppal-mini {
+  position: absolute;
+  padding: 0;
+  border-radius: 50%;
+  animation: pv-ppal-in 0.16s ease-out;
+}
+.pv-ppal-preset {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
+  border: 1px solid var(--border);
+  background: var(--pv-paper-tile);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.pv-ppal-preset:hover {
+  transform: scale(1.1);
+}
+.pv-ppal-preset.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
+}
+.pv-ppal-color {
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--border-strong);
+  cursor: pointer;
+}
+.pv-ppal-color:hover {
+  transform: scale(1.15);
+}
+.pv-ppal-center {
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  box-shadow: 0 0 0 3px var(--bg), 0 0 0 4px var(--border-strong);
+  pointer-events: none;
+}
+.pv-ppal-mini {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.pv-ppal-mini:hover {
+  color: var(--text);
+}
+.pv-ppal-undo {
+  left: -31px;
+  top: 0;
+}
+.pv-ppal-redo {
+  left: 31px;
+  top: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pv-ants {
+    animation: none;
+  }
+  .pv-layer,
+  .pv-pop,
+  .pv-sheet,
+  .pv-notice {
+    transition: none;
+    animation: none;
+  }
+}
+
+/* ---- canvas mode: painting inside the whiteboard ------------------------------------
+ * The paint layers sit in Excalidraw's own stacking context: under its canvas
+ * (z 0, made transparent by BoardView) and over it (z 3, below its UI at z 4).
+ * The floating panels sit over everything in .cv-paint-ui. */
+
+.pv-embed-under,
+.pv-embed-stage {
+  position: absolute;
+  inset: 0;
+}
+.pv-embed-under {
+  z-index: 0;
+  pointer-events: none;
+}
+.pv-embed-stage {
+  z-index: 3;
+  flex: none;
+  background: transparent;
+  pointer-events: none;
+}
+.pv-embed-stage.active {
+  pointer-events: auto;
+}
+.pv-world-infinite {
+  box-shadow: none;
+}
+.pv-paper-svg rect {
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.18));
+}
+
+.pv-root.pv-embedded {
+  position: absolute;
+  inset: 0;
+  display: block;
+  height: auto;
+  background: none;
+  pointer-events: none;
+}
+.pv-embedded > * {
+  pointer-events: auto;
+}
+.pv-embedded :is(.pv-float-top, .pv-float-left, .pv-float-right, .pv-bottombar) {
+  position: absolute;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+.pv-embedded .pv-float-top {
+  top: 68px;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 24px);
+  height: 46px;
+  border-radius: 12px;
+}
+.pv-embedded .pv-float-left {
+  top: 124px;
+  left: 12px;
+  max-height: calc(100% - 196px);
+  width: 50px;
+  padding: 6px 0 8px;
+  border-radius: 12px;
+}
+.pv-embedded .pv-float-right {
+  top: 124px;
+  right: 12px;
+  bottom: 72px;
+  width: 290px;
+  border-radius: 12px;
+}
+.pv-embedded.pv-phone .pv-bottombar {
+  left: 8px;
+  right: 8px;
+  bottom: max(8px, env(safe-area-inset-bottom));
+  min-height: 56px;
+  padding: 0 10px;
+  border-radius: 16px;
+}
+.pv-embedded.pv-phone .pv-float-top {
+  top: 8px;
+  left: 8px;
+  right: 8px;
+  transform: none;
+  max-width: none;
+}
+.pv-embedded.pv-phone .pv-sheet {
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  left: 8px;
+  right: 8px;
+  border-radius: 16px;
+}
+.pv-done {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* Liquid Glass: the floating paint panels are glass too. */
+html[data-glass] .pv-embedded :is(.pv-float-top, .pv-float-left, .pv-float-right, .pv-bottombar, .pv-sheet) {
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 42%), var(--glass-fill-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border-color: var(--glass-edge);
+  border-radius: var(--glass-radius);
+  box-shadow:
+    inset 0 1px 0 var(--glass-edge),
+    var(--glass-shadow);
+}

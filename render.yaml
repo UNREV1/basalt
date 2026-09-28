@@ -1,0 +1,12 @@
+# One-click deploy on Render's free plan: https://render.com/deploy
+# Note: free web services have no persistent disk. That's fine for Basalt —
+# every member device keeps a full encrypted copy and re-uploads whatever the
+# relay is missing when it reconnects. Add a disk on a paid plan for a
+# relay that keeps data while everyone is offline.
+services:
+  - type: web
+    name: basalt
+    runtime: docker
+    plan: free
+    # The repository root is the Basalt app (github.com/UNREV1/basalt).
+    healthCheckPath: /api/health

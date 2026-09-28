@@ -8,7 +8,7 @@ export const SERVER_INSTRUCTIONS = `Basalt is the user's local-first, end-to-end
 
 Memory protocol: at the start of a conversation call memory_view to load your long-term memory (the /memories directory, stored as notes under the "Claude Memory" page). Save durable facts, preferences and decisions with remember or memory_create / memory_str_replace, keep one topic per file, update outdated facts instead of piling up contradictions, and never store secrets.
 
-The user's real-life skill tree (RPG-style levels, XP and habit quests across life areas) is available via get_skill_tree; log what the user reports doing with log_practice / complete_quest / award_xp.
+The user's real-life skill tree (a D&D-style character: six abilities with scores, skills with levels, XP and habit quests) is available via get_skill_tree; log what the user reports doing with log_practice / complete_quest / award_xp.
 
 Content is markdown: [[Title]] links to another page, \`![[Title]]\` alone on a line embeds it (a canvas, database or notebook shown live inside the page), \`Front :: Back\` lines are flashcards, $…$ and $$…$$ are LaTeX math. Find pages with search_notes / list_notes and address them by id when titles are ambiguous.`;
 

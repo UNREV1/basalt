@@ -52,9 +52,12 @@ from another computer.
 ## Claude Code
 
 ```sh
-claude mcp add --scope user basalt -- node /path/to/basalt/mcp/index.ts --link "<share link>"
+claude mcp add --env "BASALT_LINK=<share link>" --scope user basalt node /path/to/basalt/mcp/index.ts
 ```
 
+The link goes in `--env` rather than `--link` so the command works in every
+shell: PowerShell drops the `--` separator when `claude` was installed with
+npm, and Claude Code would then read `--link` as one of its own options.
 `--scope user` makes Basalt available in every project. MCP prompts show up as
 slash commands: `/mcp__basalt__memory_protocol`, `/mcp__basalt__teach_me <topic>` and `/mcp__basalt__level_up_my_life <goal>`.
 
@@ -147,7 +150,7 @@ bullets, no trailing spaces); `memory_str_replace` matches against exactly what
 | `record_quiz(course, lesson_id, score)` | Score 0–1 (or %); best ≥ 0.8 → mastered. |
 | `add_flashcards(page, cards[])` | Appends a `## Flashcards` section of `front :: back` lines for spaced repetition. |
 
-**Skill tree** (real life as an RPG: levels, XP and habit quests across life areas)
+**Skill tree** (real life as a D&D character: six abilities, skills with levels, XP and habit quests)
 
 | Tool | Purpose |
 | --- | --- |

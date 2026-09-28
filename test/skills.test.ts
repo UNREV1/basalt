@@ -4,6 +4,11 @@ import * as Y from "yjs";
 import { createPage, deletePageForever, findSystemPage, getPage, pageMeta, restorePage, trashPage, updatePage } from "../shared/model.ts";
 import { initCourse, setCurriculum, setProgress } from "../shared/course.ts";
 import {
+  abilityModifier,
+  abilityScore,
+  formatModifier,
+  scoreProgress,
+  skillAreasMap,
   addQuest,
   addXp,
   areaOf,
@@ -91,31 +96,65 @@ test("practice XP: 10 per minute, capped per log", () => {
   assert.equal(practiceXp(10_000), practiceXp(240));
 });
 
-test("areas: built-ins, overrides, custom areas and resolution", () => {
+test("abilities: the six built-ins, overrides, custom areas and resolution", () => {
   const doc = new Y.Doc();
   const areas = listAreas(doc);
-  assert.equal(areas.length, 9);
-  assert.deepEqual(areas.slice(0, 2).map((a) => a.id), ["body", "mind"]);
-  saveArea(doc, { ...areas[0], name: "Health" });
-  assert.equal(listAreas(doc)[0].name, "Health");
-  assert.equal(resolveAreaId(doc, "health"), "body");
-  assert.equal(resolveAreaId(doc, "INT"), "mind");
-  assert.equal(resolveAreaId(doc, "career"), "craft");
+  assert.deepEqual(
+    areas.map((a) => a.attribute),
+    ["STR", "DEX", "CON", "INT", "WIS", "CHA"],
+  );
+  saveArea(doc, { ...areas[0], name: "Might" });
+  assert.equal(listAreas(doc)[0].name, "Might");
+  assert.equal(resolveAreaId(doc, "might"), "str");
+  assert.equal(resolveAreaId(doc, "INT"), "int");
+  assert.equal(resolveAreaId(doc, "Wisdom"), "wis");
+  assert.equal(resolveAreaId(doc, "arcana"), "int", "D&D skills resolve to their ability");
+  assert.equal(resolveAreaId(doc, "Sleight of Hand"), "dex");
+  assert.equal(resolveAreaId(doc, "career"), "int", "old life areas resolve to abilities");
   assert.equal(resolveAreaId(doc, "nope"), undefined);
+  assert.equal(resolveAreaId(doc, "constructor"), undefined);
 
   const parenting = createArea(doc, { name: "Parenting", icon: "👪" });
-  assert.equal(listAreas(doc).length, 10);
+  assert.equal(listAreas(doc).length, 7);
   const s = createSkill(doc, { name: "Bedtime stories", category: "Parenting" });
   assert.equal(s.category, parenting.id);
   // Unknown names create a custom area.
   const t = createSkill(doc, { name: "Chess openings", category: "Games" });
   assert.equal(areaOf(doc, t).name, "Games");
 
-  deleteArea(doc, parenting.id, "heart");
-  assert.equal(getSkill(doc, s.id)!.category, "heart");
-  deleteArea(doc, "wealth");
-  assert.ok(!listAreas(doc).some((a) => a.id === "wealth"));
-  assert.ok(listAreas(doc, { includeDeleted: true }).some((a) => a.id === "wealth"));
+  deleteArea(doc, parenting.id, "wis");
+  assert.equal(getSkill(doc, s.id)!.category, "wis");
+  deleteArea(doc, "cha");
+  assert.ok(!listAreas(doc).some((a) => a.id === "cha"));
+  assert.ok(listAreas(doc, { includeDeleted: true }).some((a) => a.id === "cha"));
+});
+
+test("ability scores and modifiers follow D&D", () => {
+  assert.equal(abilityScore(0), 10);
+  assert.equal(abilityScore(3), 11);
+  assert.equal(abilityScore(30), 20);
+  assert.equal(abilityScore(MAX_LEVEL), 26);
+  assert.deepEqual([8, 9, 10, 11, 14, 20].map(abilityModifier), [-1, -1, 0, 0, 2, 5]);
+  assert.equal(formatModifier(2), "+2");
+  assert.equal(formatModifier(0), "+0");
+  assert.equal(formatModifier(-1), "−1");
+
+  assert.deepEqual(scoreProgress(0), { score: 10, fraction: 0, next: xpForLevel(3) });
+  const half = scoreProgress(xpForLevel(3) + (xpForLevel(6) - xpForLevel(3)) / 2);
+  assert.equal(half.score, 11);
+  assert.ok(Math.abs(half.fraction - 0.5) < 0.01);
+  assert.deepEqual(scoreProgress(xpForLevel(MAX_LEVEL)), { score: 26, fraction: 1, next: null });
+});
+
+test("skills from the old life areas move to abilities", () => {
+  const doc = new Y.Doc();
+  // As written by an older version: an old category and an edited old area.
+  skillsMap(doc).set("old", { id: "old", name: "Reading", icon: "📚", description: "", category: "mind", parents: [], requiredLevel: 1, courseIds: [], pageIds: [], createdAt: 1, updatedAt: 1 });
+  skillAreasMap(doc).set("body", { id: "body", name: "Fitness", icon: "💪", color: "#e34948" });
+  assert.equal(getSkill(doc, "old")!.category, "int");
+  assert.ok(!listAreas(doc).some((a) => a.id === "body"), "edits of old areas don't come back as custom areas");
+  assert.equal(characterSheet(doc).areas.find((a) => a.area.id === "int")!.skills, 1);
+  assert.equal(createSkill(doc, { name: "Budgeting", category: "wealth" }).category, "wis");
 });
 
 test("skills: create, edit, children/roots, delete cleans up prerequisites", () => {
@@ -322,13 +361,13 @@ test("quests: check-off grants XP, respects the period target, tracks streaks", 
   assert.equal(today[1].status.done, true);
 });
 
-test("character sheet: area levels, title, totals", () => {
+test("character sheet: ability scores, class, totals", () => {
   const doc = new Y.Doc();
   assert.equal(characterSheet(doc).title, "Novice Adventurer");
   assert.equal(characterSheet(doc).topRank, null);
-  const run = createSkill(doc, { name: "Running", category: "body" });
-  const lift = createSkill(doc, { name: "Lifting", category: "body" });
-  const read = createSkill(doc, { name: "Reading", category: "mind" });
+  const run = createSkill(doc, { name: "Running", category: "con" });
+  const lift = createSkill(doc, { name: "Lifting", category: "con" });
+  const read = createSkill(doc, { name: "Reading", category: "int" });
   logPractice(doc, run.id, 240);
   logPractice(doc, lift.id, 60);
   logPractice(doc, read.id, 30);
@@ -336,16 +375,28 @@ test("character sheet: area levels, title, totals", () => {
   assert.equal(sheet.skills, 3);
   assert.equal(sheet.xp, 3300);
   assert.equal(sheet.level, levelForXp(3300));
-  assert.equal(sheet.archetype, "Athlete");
-  assert.equal(sheet.title, `${rankForLevel(sheet.level).name} Athlete`);
-  const body = sheet.areas.find((a) => a.area.id === "body")!;
-  assert.equal(body.skills, 2);
-  assert.equal(body.xp, 3000);
-  assert.equal(body.level, levelForXp(3000));
-  assert.equal(body.top!.id, run.id);
-  assert.equal(sheet.areas.find((a) => a.area.id === "wealth")!.level, 0);
+  assert.equal(sheet.archetype, "Barbarian");
+  assert.equal(sheet.title, `${rankForLevel(sheet.level).name} Barbarian`);
+  const con = sheet.areas.find((a) => a.area.id === "con")!;
+  assert.equal(con.skills, 2);
+  assert.equal(con.xp, 3000);
+  assert.equal(con.level, levelForXp(3000));
+  assert.equal(con.score, abilityScore(levelForXp(3000)));
+  assert.equal(con.modifier, abilityModifier(con.score));
+  assert.equal(con.top!.id, run.id);
+  const wis = sheet.areas.find((a) => a.area.id === "wis")!;
+  assert.deepEqual([wis.level, wis.score, wis.modifier], [0, 10, 0]);
   assert.equal(sheet.totalLevel, levelForXp(2400) + levelForXp(600) + levelForXp(300));
   assert.equal(sheet.topRank!.name, rankForLevel(levelForXp(2400)).name);
+
+  // Two close abilities make a hybrid class.
+  const speak = createSkill(doc, { name: "Public speaking", category: "cha" });
+  const climb = createSkill(doc, { name: "Climbing", category: "str" });
+  logPractice(doc, speak.id, 240);
+  logPractice(doc, speak.id, 240);
+  logPractice(doc, climb.id, 240);
+  logPractice(doc, climb.id, 200);
+  assert.equal(characterSheet(doc).archetype, "Paladin");
 });
 
 test("plans create linked skills and resolve existing parents", () => {
@@ -375,7 +426,8 @@ test("summary outlines the tree for Claude", () => {
   logPractice(doc, a.id, 60, "Exercises");
   const text = skillTreeSummary(doc);
   assert.match(text, /4 skills/);
-  assert.match(text, /🛠️ Craft & Career \[area craft\]/);
+  assert.match(text, /Abilities: STR 10 \(\+0\) · DEX 10 \(\+0\) · CON 10 \(\+0\) · INT 11 \(\+0\)/);
+  assert.match(text, /🧠 Intelligence · INT 11 \(\+0\), level 3 \[area int\]/);
   assert.match(text, new RegExp(`🐍 Python \\[${a.id}\\]: L3 Novice, 600 XP`));
   assert.match(text, /goal L10/);
   assert.match(text, /LOCKED: needs Python L5 \(now L3\)/);

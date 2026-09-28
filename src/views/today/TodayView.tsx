@@ -259,7 +259,7 @@ function CharacterTile({ ws }: { ws: Workspace }) {
       <Icon name="sparkle" size={20} />
       <strong>{stats.skills ? `Level ${stats.level}` : "Your character"}</strong>
       <span className="small muted">
-        {stats.skills ? `${stats.title} · ${stats.skills} skill${stats.skills === 1 ? "" : "s"}` : "Level up in every area of life"}
+        {stats.skills ? `${stats.title} · ${stats.skills} skill${stats.skills === 1 ? "" : "s"}` : "Level up like a D&D character"}
       </span>
     </button>
   );

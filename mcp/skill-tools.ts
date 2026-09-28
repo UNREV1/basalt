@@ -7,6 +7,7 @@ import type * as Y from "yjs";
 import { z } from "zod";
 import { displayTitle, getPage, listPages, pageMeta } from "../shared/model.ts";
 import {
+  ABILITY_SKILLS,
   addQuest,
   addXp,
   completeQuest,
@@ -61,7 +62,7 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
     {
       title: "Get skill tree",
       description:
-        "The user's real-life skill tree (RPG-style progression across life areas: body, mind, career, wealth, social, heart, creativity, home, adventure): every skill with level, rank, XP, streaks, lock state, prerequisites and quests, plus today's quests. Each skill is also a page (its id is listed) where notes, plans and resources for it go — read or edit it with the note tools. Call this before coaching, planning or logging progress.",
+        "The user's real-life skill tree, built like a D&D character: every skill trains one of six abilities (Strength, Dexterity, Constitution, Intelligence = academics and memory techniques, Wisdom, Charisma) whose scores and modifiers grow with XP. Lists ability scores, every skill with level, rank, XP, streaks, lock state, prerequisites and quests, plus today's quests. Each skill is also a page (its id is listed) where notes, plans and resources for it go — read or edit it with the note tools. Call this before coaching, planning or logging progress.",
       input: {},
       readOnly: true,
     },
@@ -80,12 +81,19 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
   tool(
     "list_life_areas",
     {
-      title: "List life areas",
-      description: "Life areas (categories) skills belong to, with ids. Use an area id or name as `area` when adding skills.",
+      title: "List abilities",
+      description:
+        "The D&D-style abilities skills train (Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, plus any the user added), with ids and the D&D skills under each read as real life. Use an ability id, name, abbreviation or D&D skill name (e.g. \"Arcana\") as `area` when adding skills.",
       input: {},
       readOnly: true,
     },
-    () => listAreas(doc).map((a) => `${a.icon} ${a.name} [${a.id}]${a.description ? ` — ${a.description}` : ""}`).join("\n"),
+    () =>
+      listAreas(doc)
+        .map((a) => {
+          const dnd = ABILITY_SKILLS[a.id]?.map((s) => `${s.name} (${s.meaning})`).join("; ");
+          return `${a.icon} ${a.name}${a.attribute ? ` ${a.attribute}` : ""} [${a.id}]${a.description ? ` — ${a.description}` : ""}${dnd ? `\n  D&D skills: ${dnd}` : ""}`;
+        })
+        .join("\n"),
   );
 
   const QUEST = z.object({
@@ -100,7 +108,7 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
     {
       title: "Add skills",
       description:
-        "Add one or more skills to the user's skill tree in a single call (e.g. a whole plan for a life goal). Order foundations first. Prerequisites reference other `key`s in this call or existing skill names/ids; a skill unlocks when each prerequisite reaches `required_level`. Keep skills concrete and measurable, give each a fitting emoji and area, and add 1–2 realistic habit quests where practice matters.",
+        "Add one or more skills to the user's skill tree in a single call (e.g. a whole plan for a life goal). Order foundations first. Prerequisites reference other `key`s in this call or existing skill names/ids; a skill unlocks when each prerequisite reaches `required_level`. Keep skills concrete and measurable, give each a fitting emoji and the ability it trains, and add 1–2 realistic habit quests where practice matters.",
       input: {
         skills: z
           .array(
@@ -108,7 +116,7 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
               key: z.string().describe("Local key used by prerequisites within this call"),
               name: z.string(),
               icon: z.string().optional().describe("One emoji"),
-              area: z.string().optional().describe("Life area id or name (see list_life_areas)"),
+              area: z.string().optional().describe("Ability id, name or abbreviation, e.g. int / Intelligence / INT (see list_life_areas)"),
               description: z.string().optional().describe("What mastery looks like, in one or two sentences"),
               prerequisites: z.array(z.string()).optional(),
               required_level: z.number().int().min(1).max(50).optional().describe("Level each prerequisite needs (default 1)"),
@@ -288,10 +296,10 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
   );
 }
 
-export const LEVEL_UP_PROMPT = (goal?: string) => `Be my life coach and help me treat real life like an RPG, using the skill tree in my Basalt workspace.
+export const LEVEL_UP_PROMPT = (goal?: string) => `Be my life coach and help me treat real life like a D&D campaign, using the skill tree in my Basalt workspace. My character has six abilities (Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma); every skill trains one, and ability scores grow with XP.
 
-1. Call get_skill_tree and list_life_areas to see where I stand. Check memory_view /memories/ for what you know about me.
-2. ${goal ? `My goal: "${goal}". ` : "Ask what I want to get better at (any area of life) and how much time I have. "}Design or extend the tree with add_skills: foundations first, concrete measurable skills, sensible prerequisites and levels, spread across the relevant life areas. Add 1–2 realistic habit quests per skill I'll actively practice — ambitious but sustainable.
+1. Call get_skill_tree and list_life_areas to see my ability scores and skills. Check memory_view /memories/ for what you know about me.
+2. ${goal ? `My goal: "${goal}". ` : "Ask what I want to get better at and how much time I have. "}Design or extend the tree with add_skills: foundations first, concrete measurable skills, sensible prerequisites and levels, each under the ability it trains (Intelligence is academics and memory techniques). Add 1–2 realistic habit quests per skill I'll actively practice — ambitious but sustainable.
 3. When a skill is best learned through study, offer to build a course (teach_me) and link it with link_to_skill so lessons earn XP.
-4. Whenever I report what I did, log it (log_practice, complete_quest, or award_xp for milestones) and tell me my progress in one line. Celebrate level-ups briefly and suggest the next step.
-5. Every so often, review balance across areas and streaks, and adjust quests that are too easy or too hard. Remember important context about my goals in memory.`;
+4. Whenever I report what I did, log it (log_practice, complete_quest, or award_xp for milestones) and tell me my progress in one line. Celebrate level-ups and score increases briefly, in the spirit of a DM, and suggest the next step.
+5. Every so often, review my ability scores and streaks, point out neglected abilities, and adjust quests that are too easy or too hard. Remember important context about my goals in memory.`;

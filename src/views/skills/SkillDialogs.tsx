@@ -1,4 +1,4 @@
-// Dialogs: add a skill, edit life areas, pick a template.
+// Dialogs: add a skill, edit abilities, pick a template.
 
 import { useMemo, useState } from "react";
 import {
@@ -18,7 +18,7 @@ import { useApp } from "../../lib/hooks.ts";
 import { useTheme } from "../../lib/theme.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { EmojiPicker, Icon, Modal, type Anchor } from "../../components/ui.tsx";
-import { SKILL_TEMPLATES, type SkillTemplate } from "./templates.ts";
+import { FEATURED_TEMPLATE, SKILL_TEMPLATES, type SkillTemplate } from "./templates.ts";
 import { layoutTree } from "./layout.ts";
 import { plural, type SkillTreeData } from "./useSkillData.ts";
 
@@ -67,6 +67,7 @@ export function AddSkillModal({
   };
 
   const options = data.skills.filter((s) => !parents.includes(s.id));
+  const chosen = data.areas.find((a) => a.id === area);
 
   return (
     <Modal
@@ -103,8 +104,8 @@ export function AddSkillModal({
         />
       </div>
       <label className="sk-field">
-        <span>Life area</span>
-        <div className="sk-area-chips" role="radiogroup" aria-label="Life area">
+        <span>Ability</span>
+        <div className="sk-area-chips" role="radiogroup" aria-label="Ability">
           {data.areas.map((a) => (
             <button
               key={a.id}
@@ -118,6 +119,7 @@ export function AddSkillModal({
             </button>
           ))}
         </div>
+        {chosen?.description && <span className="small muted sk-area-hint">{chosen.description}</span>}
       </label>
       <div className="sk-field">
         <span>Prerequisites</span>
@@ -192,13 +194,13 @@ export function AreasModal({ ws, areas, dark, onClose }: { ws: Workspace; areas:
   const [confirm, setConfirm] = useState<string | null>(null);
   return (
     <Modal
-      title="Life areas"
+      title="Abilities"
       onClose={onClose}
       width={600}
       footer={
         <>
-          <button className="btn" onClick={() => createArea(ws.doc, { name: "New area" })}>
-            <Icon name="plus" size={14} /> Add area
+          <button className="btn" onClick={() => createArea(ws.doc, { name: "New ability" })}>
+            <Icon name="plus" size={14} /> Add ability
           </button>
           <span className="spacer" />
           <button className="btn btn-primary" onClick={onClose}>
@@ -208,7 +210,8 @@ export function AreasModal({ ws, areas, dark, onClose }: { ws: Workspace; areas:
       }
     >
       <p className="muted small" style={{ margin: 0 }}>
-        Areas are your character’s attributes. Every skill belongs to one; an area’s level grows with the XP of its skills.
+        Abilities are your character’s stats, as in D&amp;D. Every skill trains one, and an ability’s score grows with the XP
+        of its skills: 10 is an average person, 20 is years of practice.
       </p>
       <div className="sk-areas-edit">
         {areas.map((a) => (
@@ -222,7 +225,7 @@ export function AreasModal({ ws, areas, dark, onClose }: { ws: Workspace; areas:
             </button>
             <input
               className="input grow"
-              aria-label="Area name"
+              aria-label="Ability name"
               defaultValue={a.name}
               onBlur={(e) => e.target.value.trim() && e.target.value !== a.name && saveArea(ws.doc, { ...a, name: e.target.value.trim() })}
               onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
@@ -270,7 +273,7 @@ export function AreasModal({ ws, areas, dark, onClose }: { ws: Workspace; areas:
           </div>
         ))}
       </div>
-      {confirm && <p className="small muted" style={{ margin: 0 }}>Skills in a removed area move to the first remaining area.</p>}
+      {confirm && <p className="small muted" style={{ margin: 0 }}>Skills of a removed ability move to the first remaining one.</p>}
       {emoji && (
         <EmojiPicker
           anchor={emoji.anchor}
@@ -353,7 +356,7 @@ export function TemplateGrid({ onPick, compact }: { onPick: (t: SkillTemplate) =
   return (
     <div className={`sk-template-grid${compact ? " compact" : ""}`}>
       {SKILL_TEMPLATES.map((t) => (
-        <button key={t.id} className={`sk-template${t.id === "life" ? " featured" : ""}`} onClick={() => onPick(t)}>
+        <button key={t.id} className={`sk-template${t.id === FEATURED_TEMPLATE ? " featured" : ""}`} onClick={() => onPick(t)}>
           <span className="sk-template-icon">{t.icon}</span>
           <span className="grow" style={{ minWidth: 0 }}>
             <strong>{t.name}</strong>

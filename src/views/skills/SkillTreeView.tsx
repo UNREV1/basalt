@@ -1,6 +1,6 @@
 // Real-life skill tree ("life RPG"): skills as nodes with prerequisites,
-// levels, XP and ranks across every area of life, progressing from real
-// practice, quests and AI-tutor courses.
+// levels, XP and ranks, each training one of six D&D abilities, progressing
+// from real practice, quests and AI-tutor courses.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RANKS, updateSkill, listSkills, deleteSkill, ensureSkillPages, type SkillStats } from "../../../shared/skills.ts";
@@ -218,7 +218,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
   const hasManualPositions = data.skills.some((s) => s.pos);
   const menuItems: MenuItem[] = [
     { label: "Add from template…", icon: <Icon name="copy" size={15} />, onClick: () => setModal("templates") },
-    { label: "Edit life areas…", icon: <Icon name="edit" size={15} />, onClick: () => setModal("areas") },
+    { label: "Edit abilities…", icon: <Icon name="edit" size={15} />, onClick: () => setModal("areas") },
     { label: "Reset layout", icon: <Icon name="graph" size={15} />, onClick: tidy, disabled: !hasManualPositions },
     { label: `Archived skills${data.archived.length ? ` (${data.archived.length})` : ""}`, icon: <Icon name="trash" size={15} />, onClick: () => setModal("archived"), disabled: !data.archived.length },
   ];
@@ -248,7 +248,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
           </button>
           <button role="tab" aria-selected={tab === "overview"} className={`tab${tab === "overview" ? " active" : ""}`} onClick={() => setTab("overview")}>
             <Icon name="shapes" size={15} />
-            Overview
+            Character
           </button>
         </div>
         {tab === "tree" && !empty && (
@@ -279,11 +279,11 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
             </label>
             <select
               className="select sk-area-filter"
-              aria-label="Filter by life area"
+              aria-label="Filter by ability"
               value={areaFilter}
               onChange={(e) => (e.target.value ? showArea(e.target.value) : setAreaFilter(""))}
             >
-              <option value="">All areas</option>
+              <option value="">All abilities</option>
               {data.areas.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.icon} {a.name}

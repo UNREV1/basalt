@@ -1,6 +1,6 @@
 // Layered DAG layout for the skill tree. Roots sit on the "ground" and the
 // tree grows upward: layer = longest prerequisite chain below a skill.
-// Connected groups of skills are placed side by side, grouped by life area.
+// Connected groups of skills are placed side by side, grouped by ability.
 // Everything is ordered by creation time so adding a skill appends to the end
 // of its row and leaves earlier skills where they were.
 

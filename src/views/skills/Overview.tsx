@@ -1,12 +1,14 @@
-// Overview: overall level, life balance across areas, per-area progress,
-// today's quests and recent activity.
+// Overview: a D&D-style character sheet. Overall level and class, the six
+// ability scores, today's quests and recent activity.
 
 import { useMemo, useRef, useState } from "react";
 import {
+  ABILITY_SKILLS,
   completeQuest,
+  formatModifier,
   levelForXp,
-  levelProgress,
   rankForLevel,
+  scoreProgress,
   themedColor,
   totalXp,
   undoQuest,
@@ -22,11 +24,6 @@ import { Avatar, Icon, timeAgo } from "../../components/ui.tsx";
 import { XpBar } from "./SkillPanel.tsx";
 import { fmt, plural, type SkillTreeData } from "./useSkillData.ts";
 
-function niceMax(v: number): number {
-  const steps = [5, 10, 15, 20, 30, 40, 50];
-  return steps.find((s) => s >= v) ?? 50;
-}
-
 /** Quiet toast after a check-off or log that crossed a level. */
 export function levelUpMessage(name: string, before: number, after: number): string | null {
   if (after <= before) return null;
@@ -35,6 +32,7 @@ export function levelUpMessage(name: string, before: number, after: number): str
   return r1.id !== r0.id ? `Level ${after} · ${name} · now ${r1.name}` : `Level ${after} · ${name}`;
 }
 
+/** Ability scores on a hexagon: the center is 8, the outer ring 20 (or the best score, if higher). */
 function Radar({ areas, dark, onPick }: { areas: AreaStats[]; dark: boolean; onPick: (areaId: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ i: number; x: number; y: number } | null>(null);
@@ -42,19 +40,25 @@ function Radar({ areas, dark, onPick }: { areas: AreaStats[]; dark: boolean; onP
   const size = 360;
   const c = size / 2;
   const R = 108;
-  const max = niceMax(Math.max(5, ...areas.map((a) => a.level)));
+  const LOW = 8;
+  const top = Math.max(20, ...areas.map((a) => a.score));
+  const max = top + (top % 2);
   const angle = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / n;
   const pt = (i: number, r: number) => ({ x: c + Math.cos(angle(i)) * r, y: c + Math.sin(angle(i)) * r });
   const rings = [0.25, 0.5, 0.75, 1];
-  const poly = areas.map((a, i) => pt(i, (Math.min(a.level, max) / max) * R));
-  const hasData = areas.some((a) => a.level > 0);
+  const poly = areas.map((a, i) => pt(i, ((Math.min(a.score, max) - LOW) / (max - LOW)) * R));
+  const hasData = areas.some((a) => a.xp > 0);
   if (n < 3) {
-    return <div className="sk-radar-empty muted small">Add at least three life areas to see your balance.</div>;
+    return <div className="sk-radar-empty muted small">Add at least three abilities to see your scores.</div>;
   }
   const hovered = hover ? areas[hover.i] : null;
   return (
     <div className="sk-radar" ref={hostRef} onPointerLeave={() => setHover(null)}>
-      <svg viewBox={`-40 0 ${size + 80} ${size}`} role="img" aria-label={`Life balance: ${areas.map((a) => `${a.area.name} level ${a.level}`).join(", ")}`}>
+      <svg
+        viewBox={`-40 0 ${size + 80} ${size}`}
+        role="img"
+        aria-label={`Ability scores: ${areas.map((a) => `${a.area.name} ${a.score}, modifier ${formatModifier(a.modifier)}`).join("; ")}`}
+      >
         {rings.map((f) => (
           <polygon key={f} className="sk-radar-ring" points={areas.map((_, i) => pt(i, f * R)).map((p) => `${p.x},${p.y}`).join(" ")} />
         ))}
@@ -62,7 +66,7 @@ function Radar({ areas, dark, onPick }: { areas: AreaStats[]; dark: boolean; onP
           const p = pt(i, R);
           return <line key={i} className="sk-radar-axis" x1={c} y1={c} x2={p.x} y2={p.y} />;
         })}
-        {hasData && <polygon className="sk-radar-shape" points={poly.map((p) => `${p.x},${p.y}`).join(" ")} />}
+        <polygon className={`sk-radar-shape${hasData ? "" : " base"}`} points={poly.map((p) => `${p.x},${p.y}`).join(" ")} />
         {areas.map((a, i) => {
           const p = poly[i];
           const color = themedColor(a.area.color, dark);
@@ -79,7 +83,7 @@ function Radar({ areas, dark, onPick }: { areas: AreaStats[]; dark: boolean; onP
               className="sk-radar-point"
               tabIndex={0}
               role="button"
-              aria-label={`${a.area.name}: level ${a.level}, ${plural(a.skills, "skill")}. Show in tree`}
+              aria-label={`${a.area.name}: score ${a.score} (${formatModifier(a.modifier)}), ${plural(a.skills, "skill")}. Show in tree`}
               onPointerEnter={show}
               onFocus={show}
               onBlur={() => setHover(null)}
@@ -89,22 +93,25 @@ function Radar({ areas, dark, onPick }: { areas: AreaStats[]; dark: boolean; onP
               <circle cx={lp.x} cy={lp.y} r={24} className="sk-radar-hit" />
               {hasData && <circle cx={p.x} cy={p.y} r={4} fill={color} className="sk-radar-dot" />}
               <text x={lp.x} y={lp.y - 4} textAnchor={anchor} className="sk-radar-label">
-                {a.area.name}
+                {a.area.attribute || a.area.name}
               </text>
               <text x={lp.x} y={lp.y + 12} textAnchor={anchor} className="sk-radar-value">
-                {a.level > 0 ? `Level ${a.level}` : "—"}
+                {a.score} ({formatModifier(a.modifier)})
               </text>
             </g>
           );
         })}
       </svg>
-      <div className="sk-radar-caption small faint">Outer ring = level {max}</div>
+      <div className="sk-radar-caption small faint">
+        Center 8 · outer ring {max} · 10 is an average person
+      </div>
       {hover && hovered && (
         <div className="sk-radar-tip" style={{ left: hover.x, top: hover.y }}>
-          <strong>{hovered.area.name}</strong>
+          <strong>
+            {hovered.area.icon} {hovered.area.name} {hovered.score} ({formatModifier(hovered.modifier)})
+          </strong>
           <span>
-            {hovered.level > 0 ? `Level ${hovered.level} · ${fmt(hovered.xp)} XP` : "No skills yet"}
-            {hovered.skills > 0 && ` · ${plural(hovered.skills, "skill")}`}
+            {hovered.skills > 0 ? `Level ${hovered.level} · ${fmt(hovered.xp)} XP · ${plural(hovered.skills, "skill")}` : "No skills yet"}
           </span>
         </div>
       )}
@@ -216,7 +223,9 @@ export function OverviewView({
           <div className="sk-hero-text">
             <div className="sk-hero-title">
               Level {sheet.level}
-              <span className="sk-rank">{sheet.rank.name}</span>
+              <span className="sk-rank" title="Rank and class: the class comes from your strongest abilities">
+                {sheet.title}
+              </span>
             </div>
             <XpBar fraction={sheet.progress.fraction} color="var(--accent)" label="XP toward next level" />
             <div className="small muted">
@@ -246,42 +255,49 @@ export function OverviewView({
         </section>
 
         <div className="sk-sheet-grid">
-          <section className="sk-card">
+          <section className="sk-card sk-card-wide">
             <header className="sk-card-head">
-              <h3>Life balance</h3>
-              <span className="small faint">Area level from its skills’ XP</span>
-            </header>
-            <Radar areas={sheet.areas} dark={dark} onPick={onShowArea} />
-          </section>
-
-          <section className="sk-card">
-            <header className="sk-card-head">
-              <h3>Life areas</h3>
+              <h3>Abilities</h3>
+              <span className="small faint grow">Scores grow with the XP of their skills</span>
               <button className="btn btn-ghost btn-sm" onClick={onEditAreas}>
                 <Icon name="edit" size={14} /> Edit
               </button>
             </header>
-            <div className="sk-area-list">
+            <div className="sk-abilities">
               {sheet.areas.map((a) => {
                 const color = themedColor(a.area.color, dark);
-                const lp = levelProgress(a.xp);
+                const sp = scoreProgress(a.xp);
+                const dnd = ABILITY_SKILLS[a.area.id]?.map((s) => s.name).join(", ");
                 return (
-                  <button key={a.area.id} className="sk-area-row" onClick={() => onShowArea(a.area.id)} style={{ ["--c" as string]: color }}>
-                    <span className="sk-area-icon">{a.area.icon}</span>
-                    <span className="grow" style={{ minWidth: 0 }}>
-                      <span className="sk-area-name ellipsis">{a.area.name}</span>
-                      <XpBar fraction={a.skills ? lp.fraction : 0} color={color} label={`${a.area.name} progress`} />
-                      <span className="small muted ellipsis" style={{ display: "block" }}>
-                        {a.skills
-                          ? `${plural(a.skills, "skill")}${a.top ? ` · best: ${a.top.name}, level ${a.top.level}` : ""}`
-                          : a.area.description || "No skills yet"}
-                      </span>
+                  <button
+                    key={a.area.id}
+                    className="sk-ability"
+                    onClick={() => onShowArea(a.area.id)}
+                    style={{ ["--c" as string]: color }}
+                    title={a.area.description}
+                    aria-label={`${a.area.name} ${a.score}, modifier ${formatModifier(a.modifier)}. Show in tree`}
+                  >
+                    <span className="sk-ability-abbr">{a.area.attribute || a.area.name.slice(0, 3).toUpperCase()}</span>
+                    <span className="sk-ability-mod">{formatModifier(a.modifier)}</span>
+                    <span className="sk-ability-score">{a.score}</span>
+                    <span className="sk-ability-name ellipsis">
+                      {a.area.icon} {a.area.name}
                     </span>
-                    <span className="sk-area-level">{a.skills ? a.level : "—"}</span>
+                    <XpBar fraction={a.skills ? sp.fraction : 0} color={color} label={`${a.area.name}: progress to ${a.score + 1}`} />
+                    <span className="sk-ability-sub small muted">
+                      {a.top && a.xp > 0 ? `${a.top.icon} ${a.top.name} · level ${a.top.level}` : dnd || a.area.description || "No skills yet"}
+                    </span>
                   </button>
                 );
               })}
             </div>
+          </section>
+
+          <section className="sk-card">
+            <header className="sk-card-head">
+              <h3>Ability scores</h3>
+            </header>
+            <Radar areas={sheet.areas} dark={dark} onPick={onShowArea} />
           </section>
 
           <section className="sk-card">

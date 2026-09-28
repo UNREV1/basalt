@@ -1156,48 +1156,96 @@
   padding: 24px;
   text-align: center;
 }
-.sk-area-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+.sk-radar-shape.base {
+  fill-opacity: 0.04;
+  stroke: var(--text-faint);
+  stroke-dasharray: 4 3;
 }
-.sk-area-row {
-  display: flex;
+
+/* Ability boxes, like the stat column of a D&D character sheet. */
+.sk-card-wide {
+  grid-column: 1 / -1;
+}
+.sk-abilities {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.sk-ability {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "abbr score"
+    "mod mod"
+    "name name"
+    "bar bar"
+    "sub sub";
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 7px 8px;
-  border: none;
+  gap: 2px 8px;
+  min-width: 0;
+  padding: 10px 12px 11px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--c);
   border-radius: var(--radius);
-  background: transparent;
+  background: var(--bg-soft);
+  color: var(--text);
+  font: inherit;
   text-align: left;
   cursor: pointer;
-  color: var(--text);
 }
-.sk-area-row:hover {
+.sk-ability:hover {
   background: var(--bg-hover);
 }
-.sk-area-icon {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  flex-shrink: 0;
-  font-size: 18px;
+.sk-ability:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
-.sk-area-name {
-  display: block;
+.sk-ability-abbr {
+  grid-area: abbr;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--c);
+}
+.sk-ability-score {
+  grid-area: score;
+  min-width: 30px;
+  padding: 1px 7px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.sk-ability-mod {
+  grid-area: mod;
+  font-size: 26px;
+  font-weight: 650;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+}
+.sk-ability-name {
+  grid-area: name;
+  font-size: 13px;
   font-weight: 500;
 }
-.sk-area-row .sk-xpbar {
+.sk-ability .sk-xpbar {
+  grid-area: bar;
   height: 4px;
-  margin: 5px 0 4px;
+  margin: 4px 0 2px;
 }
-.sk-area-level {
-  min-width: 30px;
-  text-align: right;
-  font-size: 16px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+.sk-ability-sub {
+  grid-area: sub;
+  display: -webkit-box;
+  min-height: 2.7em;
+  overflow: hidden;
+  line-height: 1.35;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.sk-area-hint {
+  line-height: 1.4;
 }
 
 /* ---- empty state & templates --------------------------------------------------- */

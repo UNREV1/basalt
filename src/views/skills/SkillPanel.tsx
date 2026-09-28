@@ -300,11 +300,11 @@ export function SkillPanel({
             onCommit={(v) => v.trim() && updateSkill(doc, skill.id, { name: v.trim() })}
           />
           <div className="row">
-            <label className="sk-area-pick" title="Life area">
+            <label className="sk-area-pick" title="Ability">
               <span className="sk-dot-c" aria-hidden />
               {area ? area.name : skill.category || "Other"}
               <Icon name="down" size={12} />
-              <select value={skill.category} aria-label="Life area" onChange={(e) => updateSkill(doc, skill.id, { category: e.target.value })}>
+              <select value={skill.category} aria-label="Ability" onChange={(e) => updateSkill(doc, skill.id, { category: e.target.value })}>
                 {!area && <option value={skill.category}>{skill.category || "Other"}</option>}
                 {data.areas.map((a) => (
                   <option key={a.id} value={a.id}>

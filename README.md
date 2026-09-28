@@ -154,15 +154,23 @@ A little glass pebble lives on top of the app (rename it in Settings → Assista
 
 It uses Claude with your own API key (Settings → Assistant & AI), requests go straight from your device to Anthropic.
 
-### Your life as a skill tree
-Real life, with the progression mechanics of an RPG (but none of the video-game look):
+### Your life as a D&D character
+Real life, with the progression mechanics of D&D (but none of the video-game look):
 
+- **Six abilities**, as on a D&D character sheet, read as real life:
+  - **Strength**: athletics, lifting, climbing.
+  - **Dexterity**: mobility, hand skills like instruments and drawing.
+  - **Constitution**: endurance, sleep, nutrition and concentration.
+  - **Intelligence**: academics and memory techniques, such as spaced repetition, memory palaces and mnemonics.
+  - **Wisdom**: mindfulness, insight, health know-how, survival and money sense.
+  - **Charisma**: persuasion, performance, presence and leadership.
+
+  Every skill trains one ability. An ability's **score** (10 = an average person, 20 = years of practice) and **modifier** grow with the XP of its skills. Your strongest abilities decide your **class**, for example Wizard, Fighter or Paladin.
 - **Every skill is a page** (type *Skill*, under *Skills* in the sidebar): the top shows its level, XP, quests, practice log and prerequisites; below is ordinary notes. Rename the page and the skill follows. Give any page the *Skill* type to add it to the tree; move it to the trash to take it out. Opening *Skills* shows the tree.
-- **Skills across nine life areas** — Body, Mind, Craft & Career, Wealth, Social, Heart, Creativity, Home & Life, Adventure (rename them or add your own).
 - **Levels, XP and ranks** (Novice → Apprentice → Journeyman → Adept → Expert → Master → Grandmaster). XP comes from real activity: practice you log, daily/weekly **quests** you check off, and lessons you master in linked courses.
 - **Prerequisites** unlock advanced skills once their foundations reach a level; **streaks** reward consistency.
-- **Overview** shows your character level and a *life balance* chart across areas.
-- Start from templates (whole life, fitness, programming, languages, music, art, math…) or describe any goal and let Claude generate a tree.
+- **Overview** is your character sheet: level, rank and class, the six ability scores and a hexagon of them.
+- Start from templates or describe any goal and let Claude generate a tree. The *D&D character* template has every D&D skill as a real-life skill; the others are Memory & study, fitness, programming, languages, music, art, math, money, social skills, mindfulness and cooking. Skills from before abilities moved to the closest one, for example Mind → Intelligence.
 
 ### Liquid Glass design
 Basalt's default look is inspired by Apple's Liquid Glass — on **every** platform, because it's the same web app on Windows, Android, macOS, iOS and Linux. The glass really **refracts**: each floating surface (sidebar, menus, toolbars, dialogs, the phone tab bar, whiteboard tools) bends what's behind it at its edges like the rim of a lens, with a lit specular edge, then frosts it. Refraction runs in Chromium — the desktop app, Chrome, Edge and Android; Safari and Firefox show frosted glass.

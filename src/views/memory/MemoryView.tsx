@@ -165,13 +165,18 @@ export default function MemoryView({ ws }: { ws: Workspace }) {
   // otherwise, a Basalt checkout at the folder typed below.
   const mcpArgs = (l: string) =>
     launch ? [...launch.args, ...(launch.cacheDir ? ["--local", launch.cacheDir] : []), "--link", l] : [entry, "--link", l];
+  // The link and cache go in --env so nothing after the command starts with
+  // "-": PowerShell swallows the "--" separator when claude is an npm
+  // script, and Claude Code would then take --link for one of its own flags.
   const claudeCmd = (l: string) => {
-    if (!launch) return `claude mcp add --scope user basalt -- node ${shellQuote(entry)} --link "${l}"`;
-    const env = Object.entries(launch.env ?? {})
-      .map(([k, v]) => `--env ${k}=${v} `)
-      .join("");
-    const arg = (a: string) => (/^--[a-z-]+$/.test(a) ? a : pathQuote(a));
-    return `claude mcp add ${env}--scope user basalt -- ${[launch.command, ...mcpArgs(l)].map(arg).join(" ")}`;
+    const env: [string, string][] = [
+      ...Object.entries(launch?.env ?? {}),
+      ...(launch?.cacheDir ? [["BASALT_LOCAL", launch.cacheDir] as [string, string]] : []),
+      ["BASALT_LINK", l],
+    ];
+    const flags = env.map(([k, v]) => `--env ${/^\w+$/.test(v) ? `${k}=${v}` : pathQuote(`${k}=${v}`)}`).join(" ");
+    const command = launch ? [launch.command, ...launch.args].map(pathQuote) : ["node", shellQuote(entry)];
+    return `claude mcp add ${flags} --scope user basalt ${command.join(" ")}`;
   };
   const desktopJson = (l: string) =>
     JSON.stringify(

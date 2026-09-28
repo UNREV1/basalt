@@ -2,7 +2,7 @@
 // tree from foundations to mastery, preview it, then add it.
 
 import { useEffect, useRef, useState } from "react";
-import { createSkillsFromPlan, type SkillArea, type SkillPlanItem } from "../../../shared/skills.ts";
+import { ABILITY_SKILLS, createSkillsFromPlan, type SkillArea, type SkillPlanItem } from "../../../shared/skills.ts";
 import { aiErrorMessage, generateJson } from "../../lib/ai.ts";
 import { useApp } from "../../lib/hooks.ts";
 import type { Workspace } from "../../lib/workspace.ts";
@@ -92,7 +92,7 @@ Rules:
 - Realistic prerequisites: only add a parent when it is genuinely needed first. Use 1-3 parents; skills may combine several branches.
 - requiredLevel is the level each parent needs to unlock the skill: 2-4 for early steps, 5-10 for intermediate, 10-15 for advanced capstones.
 - Build an arc from beginner to expert: the deepest skills should reach expert, professional or research level for the goal.
-- Assign every skill to the life area that fits it best. Life areas (use the id): ${areas.map((a) => `${a.id} = ${a.name} (${a.description ?? ""})`).join("; ")}. Holistic goals may span several areas (for example a marathon needs Body skills but also sleep, nutrition and mental resilience).
+- Like a D&D character, every skill trains one ability. Assign each skill the ability that fits it best (use the id): ${areas.map((a) => `${a.id} = ${a.name} (${a.description ?? ""}${ABILITY_SKILLS[a.id] ? `; D&D skills: ${ABILITY_SKILLS[a.id].map((s) => `${s.name} = ${s.meaning}`).join(", ")}` : ""})`).join("; ")}. Intelligence is academics and memory techniques. Holistic goals span several abilities (a marathon is mostly Constitution, but also Wisdom for recovery know-how and Strength for supporting lifts). Where it fits naturally, a D&D skill name can be a skill (for example "Investigation" for research methods).
 - key: a short unique slug like "cardio-base". parentKeys reference other keys in this tree.
 - icon: exactly one emoji that fits the skill. name: 1-4 words, title case. description: one sentence about what mastery looks like.
 - quests: recurring habits that build the skill. Give 4-8 skills in total one quest each (the most habit-like ones) and leave the rest empty. Daily quests are small (xp 15-40, target 1); weekly quests are bigger (xp 40-120, target 1-4). Titles are concrete actions like "Run 5 km" or "Read 20 minutes".

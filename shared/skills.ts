@@ -1,6 +1,12 @@
 // Real-life skill tree ("life RPG"): skills with prerequisites, XP, levels,
-// ranks, life areas and recurring quests. Pure and Node-safe so both the app
+// ranks, abilities and recurring quests. Pure and Node-safe so both the app
 // and the MCP server (Claude) can read and manage the tree.
+//
+// Like a D&D character, every skill trains one of six abilities (Strength,
+// Dexterity, Constitution, Intelligence, Wisdom, Charisma), read as real
+// life: Intelligence is academics and memory techniques, Wisdom is awareness
+// and judgment, and so on. Internally an ability is an "area" (the model
+// predates them), and custom areas still work alongside the six.
 //
 //   doc.getMap("skills")      skillId -> Skill (plain JSON, replaced as a whole on edit)
 //   doc.getMap("skillXp")     skillId -> Y.Array<XpEntry> (append-only log, merges under concurrency)
@@ -56,7 +62,7 @@ export interface Skill {
   /** Emoji. */
   icon: string;
   description: string;
-  /** Life area id (see listAreas). */
+  /** Ability (area) id (see listAreas). */
   category: string;
   /** Optional color override (hex); defaults to the area color. */
   color?: string;
@@ -131,17 +137,106 @@ export function themedColor(hex: string, dark: boolean): string {
   return hit ? hit.dark : hex;
 }
 
+/** The six abilities, in character-sheet order. The archetype is the D&D class it leads to. */
 export const DEFAULT_AREAS: SkillArea[] = [
-  { id: "body", name: "Body", icon: "💪", color: AREA_PALETTE[0].light, attribute: "VIT", archetype: "Athlete", description: "Health, fitness, sleep and nutrition", order: 0 },
-  { id: "mind", name: "Mind", icon: "🧠", color: AREA_PALETTE[1].light, attribute: "INT", archetype: "Scholar", description: "Learning, focus and knowledge", order: 1 },
-  { id: "craft", name: "Craft & Career", icon: "🛠️", color: AREA_PALETTE[2].light, attribute: "SKL", archetype: "Artisan", description: "Professional skills and your work", order: 2 },
-  { id: "social", name: "Social", icon: "🤝", color: AREA_PALETTE[3].light, attribute: "CHA", archetype: "Diplomat", description: "Relationships, communication and leadership", order: 3 },
-  { id: "wealth", name: "Wealth", icon: "💰", color: AREA_PALETTE[4].light, attribute: "FOR", archetype: "Merchant", description: "Money, saving and investing", order: 4 },
-  { id: "heart", name: "Heart", icon: "🌿", color: AREA_PALETTE[5].light, attribute: "SPI", archetype: "Sage", description: "Emotional wellbeing and mindfulness", order: 5 },
-  { id: "creativity", name: "Creativity", icon: "🎨", color: AREA_PALETTE[6].light, attribute: "CRE", archetype: "Bard", description: "Art, music and writing", order: 6 },
-  { id: "adventure", name: "Adventure", icon: "🧭", color: AREA_PALETTE[7].light, attribute: "EXP", archetype: "Explorer", description: "Travel, languages and the outdoors", order: 7 },
-  { id: "home", name: "Home & Life", icon: "🏡", color: AREA_PALETTE[8].light, attribute: "RES", archetype: "Homesteader", description: "Cooking, repairs and organization", order: 8 },
+  { id: "str", name: "Strength", icon: "💪", color: AREA_PALETTE[0].light, attribute: "STR", archetype: "Fighter", description: "Power and athletics: strength training, climbing, swimming, sport and physical work", order: 0 },
+  { id: "dex", name: "Dexterity", icon: "🤸", color: AREA_PALETTE[7].light, attribute: "DEX", archetype: "Rogue", description: "Agility and skilled hands: mobility, balance, dance, instruments, drawing, crafts and typing", order: 1 },
+  { id: "con", name: "Constitution", icon: "🛡️", color: AREA_PALETTE[4].light, attribute: "CON", archetype: "Barbarian", description: "Health and endurance: cardio, sleep, nutrition, recovery and staying power", order: 2 },
+  { id: "int", name: "Intelligence", icon: "🧠", color: AREA_PALETTE[1].light, attribute: "INT", archetype: "Wizard", description: "Academics and memory: study and memory techniques, science, math, history, languages and research", order: 3 },
+  { id: "wis", name: "Wisdom", icon: "🦉", color: AREA_PALETTE[5].light, attribute: "WIS", archetype: "Cleric", description: "Awareness and judgment: mindfulness, self-knowledge, health know-how, money sense and the outdoors", order: 4 },
+  { id: "cha", name: "Charisma", icon: "🎭", color: AREA_PALETTE[3].light, attribute: "CHA", archetype: "Bard", description: "Presence and influence: conversation, public speaking, persuasion, leadership and performing", order: 5 },
 ];
+
+/**
+ * The D&D 5e skills under each ability, read as real-life skills (the
+ * templates, the tree generator and Claude use them). Constitution has no
+ * skills in D&D; its entries are this app's.
+ */
+export const ABILITY_SKILLS: Record<string, { name: string; meaning: string }[]> = {
+  str: [{ name: "Athletics", meaning: "strength training, climbing, swimming and sport" }],
+  dex: [
+    { name: "Acrobatics", meaning: "mobility, balance, yoga and dance" },
+    { name: "Sleight of Hand", meaning: "hand skills: instruments, drawing, crafts and typing" },
+    { name: "Stealth", meaning: "moving quietly and unseen: hiking, wildlife watching and online privacy" },
+  ],
+  con: [
+    { name: "Endurance", meaning: "cardio, running and cycling" },
+    { name: "Vitality", meaning: "sleep, nutrition and recovery" },
+    { name: "Concentration", meaning: "holding deep focus under pressure" },
+  ],
+  int: [
+    { name: "Memory", meaning: "memory techniques: spaced repetition, memory palaces and mnemonics" },
+    { name: "Arcana", meaning: "science, math and technology" },
+    { name: "History", meaning: "history, humanities and current events" },
+    { name: "Investigation", meaning: "research and problem solving" },
+    { name: "Nature", meaning: "biology, ecology and the natural sciences" },
+    { name: "Religion", meaning: "philosophy, religion and mythology" },
+  ],
+  wis: [
+    { name: "Animal Handling", meaning: "pets, animals and plants" },
+    { name: "Insight", meaning: "reading people and yourself: empathy and journaling" },
+    { name: "Medicine", meaning: "health know-how and first aid" },
+    { name: "Perception", meaning: "mindfulness and noticing what others miss" },
+    { name: "Survival", meaning: "self-reliance: the outdoors, cooking and money sense" },
+  ],
+  cha: [
+    { name: "Deception", meaning: "acting, improv and a good poker face" },
+    { name: "Intimidation", meaning: "presence, assertiveness and holding boundaries" },
+    { name: "Performance", meaning: "public speaking, music and the stage" },
+    { name: "Persuasion", meaning: "negotiation, sales and leadership" },
+  ],
+};
+
+/** The life areas from before abilities, and the ability each one became. */
+const LEGACY_AREAS: Record<string, string> = {
+  body: "con",
+  mind: "int",
+  craft: "int",
+  career: "int",
+  social: "cha",
+  wealth: "wis",
+  money: "wis",
+  heart: "wis",
+  creativity: "cha",
+  adventure: "wis",
+  home: "wis",
+};
+
+const legacyArea = (id: string): string | undefined => (Object.hasOwn(LEGACY_AREAS, id) ? LEGACY_AREAS[id] : undefined);
+
+/** D&D classes led by two strong abilities (keys sorted), after the single-ability archetypes. */
+const CLASS_PAIRS: Record<string, string> = {
+  "cha+str": "Paladin",
+  "con+str": "Barbarian",
+  "str+wis": "Ranger",
+  "dex+wis": "Monk",
+  "con+wis": "Druid",
+  "con+int": "Artificer",
+  "cha+con": "Sorcerer",
+  "cha+wis": "Warlock",
+};
+
+/** An ability score for an ability's level: 10 is an average person, 20 is years of practice, 26 is the top (level 50). */
+export function abilityScore(level: number): number {
+  return Math.min(30, 10 + Math.floor(Math.max(0, level) / 3));
+}
+
+/** The D&D modifier for a score: 10–11 → +0, 14 → +2, 8 → −1. */
+export function abilityModifier(score: number): number {
+  return Math.floor((score - 10) / 2);
+}
+
+export const formatModifier = (mod: number) => (mod < 0 ? `−${-mod}` : `+${mod}`);
+
+/** An ability's score from its XP, and how far it is toward the next point (next: null at the top). */
+export function scoreProgress(xp: number): { score: number; fraction: number; next: number | null } {
+  const score = abilityScore(xp > 0 ? levelForXp(xp) : 0);
+  const nextLevel = (score - 9) * 3;
+  if (nextLevel > MAX_LEVEL) return { score, fraction: 1, next: null };
+  const from = xpForLevel((score - 10) * 3);
+  const next = xpForLevel(nextLevel);
+  return { score, fraction: clamp((xp - from) / (next - from), 0, 1), next };
+}
 
 export interface Rank {
   id: string;
@@ -227,7 +322,8 @@ export function listAreas(doc: Y.Doc, opts: { includeDeleted?: boolean } = {}): 
     out.push(o ? { ...def, ...o, id: def.id } : def);
   }
   stored.forEach((a, id) => {
-    if (!DEFAULT_AREAS.some((d) => d.id === id) && a && typeof a === "object") out.push({ ...a, id });
+    // Edits of the old built-in areas are left behind: their skills moved to abilities.
+    if (!DEFAULT_AREAS.some((d) => d.id === id) && !legacyArea(id) && a && typeof a === "object") out.push({ ...a, id });
   });
   return out
     .filter((a) => opts.includeDeleted || !a.deleted)
@@ -279,16 +375,22 @@ export function deleteArea(doc: Y.Doc, id: string, moveTo?: string) {
   }, SKILLS_ORIGIN);
 }
 
-/** Find an area by id, name or attribute (case-insensitive). */
+/**
+ * Find an area by id, name or attribute (case-insensitive), a D&D skill
+ * ("Arcana" → Intelligence) or an old life area ("mind" → Intelligence).
+ */
 export function resolveAreaId(doc: Y.Doc, nameOrId: string | undefined | null): string | undefined {
   if (!nameOrId) return undefined;
   const q = nameOrId.trim().toLowerCase();
   if (!q) return undefined;
   const areas = listAreas(doc);
+  const live = (id: string | undefined) => (id && areas.some((a) => a.id === id) ? id : undefined);
   return (
     areas.find((a) => a.id.toLowerCase() === q)?.id ??
     areas.find((a) => a.name.toLowerCase() === q)?.id ??
     areas.find((a) => a.attribute?.toLowerCase() === q)?.id ??
+    live(Object.keys(ABILITY_SKILLS).find((id) => ABILITY_SKILLS[id].some((s) => s.name.toLowerCase() === q))) ??
+    live(legacyArea(q)) ??
     areas.find((a) => a.name.toLowerCase().split(/\s*&\s*|\s+/).includes(q))?.id
   );
 }
@@ -317,7 +419,7 @@ export function normalizeSkill(raw: Partial<Skill> & { id: string }): Skill {
     name: typeof raw.name === "string" ? raw.name : "",
     icon: typeof raw.icon === "string" && raw.icon ? raw.icon : "⭐",
     description: typeof raw.description === "string" ? raw.description : "",
-    category: typeof raw.category === "string" ? raw.category : "",
+    category: typeof raw.category === "string" ? (legacyArea(raw.category) ?? raw.category) : "",
     parents: Array.isArray(raw.parents) ? uniq(raw.parents).filter((p) => p !== raw.id) : [],
     requiredLevel: clamp(Math.round(Number(raw.requiredLevel) || 1), 1, MAX_LEVEL),
     courseIds: Array.isArray(raw.courseIds) ? uniq(raw.courseIds) : [],
@@ -985,6 +1087,9 @@ export interface AreaStats {
   xp: number;
   /** 0 when the area has no skills yet. */
   level: number;
+  /** Ability score (10 = average) and its modifier, as on a D&D sheet. */
+  score: number;
+  modifier: number;
   skills: number;
   top: { id: string; name: string; icon: string; level: number } | null;
 }
@@ -1009,7 +1114,8 @@ export function characterSheet(doc: Y.Doc, now = Date.now(), stats?: Map<string,
   const skills = listSkills(doc);
   const st = stats ?? computeSkillStats(doc, now, skills);
   const areas = listAreas(doc);
-  const areaStats = new Map<string, AreaStats>(areas.map((a) => [a.id, { area: a, xp: 0, level: 0, skills: 0, top: null }]));
+  const blank = (area: SkillArea): AreaStats => ({ area, xp: 0, level: 0, score: 10, modifier: 0, skills: 0, top: null });
+  const areaStats = new Map<string, AreaStats>(areas.map((a) => [a.id, blank(a)]));
   let xp = 0;
   let totalLevel = 0;
   let topLevel = 0;
@@ -1022,7 +1128,7 @@ export function characterSheet(doc: Y.Doc, now = Date.now(), stats?: Map<string,
     let a = areaStats.get(s.category);
     if (!a) {
       const area = areaOf(doc, s, areas);
-      a = { area, xp: 0, level: 0, skills: 0, top: null };
+      a = blank(area);
       areaStats.set(area.id, a);
     }
     a.xp += ss.xp;
@@ -1031,13 +1137,21 @@ export function characterSheet(doc: Y.Doc, now = Date.now(), stats?: Map<string,
       a.top = { id: s.id, name: s.name, icon: s.icon, level: ss.level };
     }
   }
-  for (const a of areaStats.values()) a.level = a.skills ? levelForXp(a.xp) : 0;
+  for (const a of areaStats.values()) {
+    a.level = a.skills ? levelForXp(a.xp) : 0;
+    a.score = abilityScore(a.level);
+    a.modifier = abilityModifier(a.score);
+  }
   const progress = levelProgress(xp);
   const rank = rankForLevel(progress.level);
   const ranked = [...areaStats.values()].filter((a) => a.xp > 0).sort((a, b) => b.xp - a.xp);
   let archetype = "Adventurer";
   if (ranked.length >= 4 && ranked[3].xp >= ranked[0].xp * 0.6) archetype = "Polymath";
-  else if (ranked.length) archetype = ranked[0].area.archetype || ranked[0].area.name;
+  else if (ranked.length) {
+    // Two close abilities make a hybrid class: Strength + Charisma is a Paladin.
+    const pair = ranked.length >= 2 && ranked[1].xp >= ranked[0].xp * 0.7 ? [ranked[0].area.id, ranked[1].area.id].sort().join("+") : "";
+    archetype = (Object.hasOwn(CLASS_PAIRS, pair) ? CLASS_PAIRS[pair] : "") || ranked[0].area.archetype || ranked[0].area.name;
+  }
   return {
     level: progress.level,
     xp,
@@ -1114,7 +1228,7 @@ export function createSkillsFromPlan(doc: Y.Doc, plan: SkillPlanItem[]): Map<str
 
 const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
-/** Compact outline of the whole tree, grouped by life area. */
+/** Compact outline of the whole tree, grouped by ability. */
 export function skillTreeSummary(doc: Y.Doc, now = Date.now()): string {
   const skills = listSkills(doc);
   const stats = computeSkillStats(doc, now, skills);
@@ -1125,15 +1239,11 @@ export function skillTreeSummary(doc: Y.Doc, now = Date.now()): string {
   );
   if (!skills.length) {
     lines.push("No skills yet.");
-    lines.push(`Areas: ${listAreas(doc).map((a) => `${a.icon} ${a.name} [${a.id}]`).join(", ")}`);
+    lines.push(`Abilities: ${listAreas(doc).map((a) => `${a.icon} ${a.name} [${a.id}]`).join(", ")}`);
     return lines.join("\n");
   }
-  lines.push(
-    `Areas: ${sheet.areas
-      .filter((a) => a.skills > 0)
-      .map((a) => `${a.area.icon} ${a.area.name} L${a.level}`)
-      .join(" · ")}`,
-  );
+  const score = (a: AreaStats) => `${a.area.attribute ?? a.area.name} ${a.score} (${formatModifier(a.modifier)})`;
+  lines.push(`Abilities: ${sheet.areas.map(score).join(" · ")}`);
   const byId = new Map(skills.map((s) => [s.id, s]));
   const printed = new Set<string>();
   const describe = (s: Skill): string => {
@@ -1182,7 +1292,8 @@ export function skillTreeSummary(doc: Y.Doc, now = Date.now()): string {
     const list = groups.get(areaId);
     if (!list?.length) continue;
     const area = areaOf(doc, { category: areaId }, areas);
-    lines.push("", `${area.icon} ${area.name} [area ${area.id}]`);
+    const st = sheet.areas.find((a) => a.area.id === area.id);
+    lines.push("", `${area.icon} ${area.name}${st ? ` · ${score(st)}, level ${st.level}` : ""} [area ${area.id}]`);
     for (const r of list) walk(r, 0);
   }
   // Skills only reachable through a cycle (should not happen) still get listed.

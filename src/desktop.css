@@ -14,8 +14,8 @@ html[data-desktop] :is(.topbar, .sidebar-top) :is(button, a, input, select, text
   -webkit-app-region: no-drag;
 }
 
-/* The gap above the floating glass panes is draggable too. */
-html[data-desktop][data-glass] body::before {
+/* macOS: the gap above the floating glass panes is draggable too. */
+html[data-desktop="darwin"][data-glass] body::before {
   content: "";
   position: fixed;
   inset: 0 0 auto;
@@ -24,10 +24,46 @@ html[data-desktop][data-glass] body::before {
   -webkit-app-region: drag;
 }
 
-/* Windows / Linux: keep top-bar buttons clear of minimize / maximize / close.
-   Uses the window-controls-overlay area when the browser reports it. */
+/* Windows / Linux: minimize / maximize / close are drawn by the system at the
+   top right, over Basalt. So the panes go edge to edge like any Windows app
+   (no floating gaps for the buttons to half-cover), the sidebar header and
+   the top bar are exactly as tall as the buttons (TITLE_BAR_HEIGHT in
+   desktop/main.cjs), and the top bar keeps its own buttons clear of them. */
+html[data-desktop]:not([data-desktop="darwin"]) {
+  --titlebar-h: 44px;
+  --topbar-h: var(--titlebar-h);
+}
 html[data-desktop]:not([data-desktop="darwin"]) .topbar {
-  padding-right: max(150px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 150px))));
+  padding-right: max(146px, calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, calc(100vw - 146px))));
+}
+html[data-desktop]:not([data-desktop="darwin"]) .sidebar-top {
+  height: var(--titlebar-h);
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+}
+html[data-desktop]:not([data-desktop="darwin"])[data-glass] .app {
+  padding: 0;
+  gap: 0;
+}
+html[data-desktop]:not([data-desktop="darwin"])[data-glass] :is(.sidebar, .main) {
+  border-radius: 0 !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
+}
+html[data-desktop]:not([data-desktop="darwin"])[data-glass] .sidebar {
+  border-right: 1px solid var(--glass-edge-soft) !important;
+}
+html[data-desktop]:not([data-desktop="darwin"]) .topbar {
+  height: var(--titlebar-h);
+  border-bottom: 1px solid var(--border);
+}
+html[data-desktop]:not([data-desktop="darwin"])[data-glass] .topbar {
+  border-bottom-color: var(--glass-edge-soft);
+}
+/* Floating panels pinned to the top right start below the buttons. */
+html[data-desktop]:not([data-desktop="darwin"]) .as-panel {
+  top: calc(var(--titlebar-h) + 8px);
 }
 
 /* macOS: room for the traffic lights in the sidebar, or in the top bar when

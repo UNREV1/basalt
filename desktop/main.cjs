@@ -4,7 +4,7 @@
 // relays end-to-end encrypted sync — inside the app, then shows it in a
 // native window. Other devices on the same Wi-Fi can join through it.
 
-const { app, BrowserWindow, Menu, nativeTheme, shell, dialog } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, nativeTheme, shell, dialog } = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
@@ -125,10 +125,44 @@ function saveWindowState() {
   }
 }
 
+/** Must match --titlebar-h in src/desktop.css: the top bars are this tall. */
+const TITLE_BAR_HEIGHT = 44;
+
 function overlayColors() {
+  // Transparent: the buttons sit on Basalt's own top bar. The app re-colors
+  // the symbols to match its theme once it has loaded (basalt:title-bar).
   return nativeTheme.shouldUseDarkColors
-    ? { color: "#00000000", symbolColor: "#f5f5f7", height: 44 }
-    : { color: "#00000000", symbolColor: "#1d1d1f", height: 44 };
+    ? { color: "#00000000", symbolColor: "#f5f5f7", height: TITLE_BAR_HEIGHT }
+    : { color: "#00000000", symbolColor: "#1d1d1f", height: TITLE_BAR_HEIGHT };
+}
+
+/** Requests from the web app (desktop/preload.cjs); only from Basalt's own page. */
+function registerIpc() {
+  const fromApp = (event) => {
+    const url = event.senderFrame?.url ?? "";
+    return !!appUrl && (url === appUrl || url.startsWith(`${appUrl}/`));
+  };
+  const color = (v) => (typeof v === "string" && /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(v) ? v : null);
+  ipcMain.handle("basalt:version", (e) => (fromApp(e) ? app.getVersion() : null));
+  ipcMain.on("basalt:title-bar", (e, colors) => {
+    if (!fromApp(e) || !win || process.platform === "darwin" || !colors) return;
+    const symbolColor = color(colors.symbolColor);
+    if (!symbolColor) return;
+    try {
+      win.setTitleBarOverlay({ color: color(colors.color) ?? "#00000000", symbolColor, height: TITLE_BAR_HEIGHT });
+    } catch {
+      // Not supported on this system; the default colors stay.
+    }
+  });
+  ipcMain.handle("basalt:check-updates", (e) => (fromApp(e) ? updater.check(true) : undefined));
+  ipcMain.handle("basalt:get-auto-update", (e) => (fromApp(e) ? updater.isAutomatic() : null));
+  ipcMain.handle("basalt:set-auto-update", (e, on) => {
+    if (!fromApp(e)) return null;
+    updater.setAutomatic(Boolean(on));
+    buildMenu();
+    return updater.isAutomatic();
+  });
+  ipcMain.handle("basalt:open-data-folder", (e) => (fromApp(e) ? shell.openPath(app.getPath("userData")) : undefined));
 }
 
 function createWindow() {
@@ -143,7 +177,7 @@ function createWindow() {
     minHeight: 520,
     title: "Basalt",
     show: false,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#0b1020" : "#eef2ff",
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#17171a" : "#f6f6f8",
     icon: path.join(__dirname, "app", "dist", "icon-512.png"),
     // Frameless look: native window buttons float over Basalt's glass top bar.
     titleBarStyle: mac ? "hiddenInset" : "hidden",
@@ -153,6 +187,7 @@ function createWindow() {
       contextIsolation: true,
       sandbox: true,
       spellcheck: true,
+      preload: path.join(__dirname, "preload.cjs"),
     },
   });
 
@@ -238,12 +273,10 @@ async function start() {
     app.quit();
     return;
   }
+  registerIpc();
   buildMenu();
   createWindow();
   updater.start();
-  nativeTheme.on("updated", () => {
-    if (win && process.platform !== "darwin") win.setTitleBarOverlay(overlayColors());
-  });
   app.on("activate", () => {
     if (!win) createWindow();
   });

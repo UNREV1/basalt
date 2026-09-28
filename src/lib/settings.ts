@@ -1,5 +1,6 @@
 // Per-device settings and identity, kept in localStorage.
 
+import { syncTitleBar } from "./desktop.ts";
 import { useSyncExternalStore } from "react";
 import { resolveDark } from "./appearance.ts";
 
@@ -241,6 +242,7 @@ export function defaultSyncUrl(): string {
 export function applyTheme(theme: Settings["theme"]) {
   const dark = resolveDark(theme, current.appearance.preset);
   document.documentElement.dataset.theme = dark ? "dark" : "light";
+  syncTitleBar();
 }
 
 export function isDark(): boolean {

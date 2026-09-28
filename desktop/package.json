@@ -28,6 +28,7 @@
     },
     "files": [
       "main.cjs",
+      "preload.cjs",
       "updater.cjs",
       "package.json",
       "app/**/*"

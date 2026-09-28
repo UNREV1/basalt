@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useApp } from "../lib/hooks.ts";
 import { COLORS, updateSettings, useSettings } from "../lib/settings.ts";
 import { MODELS } from "../lib/ai.ts";
@@ -7,7 +7,8 @@ import { navigate } from "../lib/router.ts";
 import { ImportExportPanel, Lazy } from "../views/registry.tsx";
 import { AppearanceSettings } from "./customize/AppearanceSettings.tsx";
 import { AssistantSettings } from "../assistant/AssistantSettings.tsx";
-import { Avatar, EmojiPicker, Icon, Modal, type Anchor } from "./ui.tsx";
+import { desktop } from "../lib/desktop.ts";
+import { Avatar, EmojiPicker, Icon, Modal, Toggle, type Anchor } from "./ui.tsx";
 
 const TABS = [
   ["profile", "Profile"],
@@ -194,13 +195,14 @@ export function SettingsDialog({ onClose, initialTab = "profile" }: { onClose: (
           {tab === "about" && (
             <div className="col small" style={{ gap: 10 }}>
               <strong style={{ fontSize: 16 }}>Basalt</strong>
+              {desktop && <DesktopUpdates />}
               <span className="muted">
                 A free, open-source, local-first workspace: pages, databases, whiteboards, painting, notebooks,
                 flashcards, courses and a Claude assistant — with end-to-end encrypted realtime collaboration on any device.
               </span>
               <span className="muted">
                 Your data lives on your devices (IndexedDB) and works offline. Install it as an app from your browser’s
-                menu: “Add to Home Screen” on iPhone/iPad, “Add to Dock” in Safari on Mac, or “Install app” in Chrome/Edge.
+                menu: “Add to Home Screen” on iPhone/iPad, or “Install app” in Chrome/Edge.
               </span>
               <div className="col" style={{ gap: 4 }}>
                 <strong>Keyboard shortcuts</strong>
@@ -215,5 +217,51 @@ export function SettingsDialog({ onClose, initialTab = "profile" }: { onClose: (
         </div>
       </div>
     </Modal>
+  );
+}
+
+/** Desktop app: version, updates and the data folder (the window has no menu bar on Windows). */
+function DesktopUpdates() {
+  const [version, setVersion] = useState<string | null>(null);
+  const [auto, setAuto] = useState<boolean | null>(null);
+  const [checking, setChecking] = useState(false);
+  useEffect(() => {
+    desktop?.version().then(setVersion);
+    desktop?.getAutoUpdate().then(setAuto);
+  }, []);
+  if (!desktop) return null;
+  return (
+    <div className="card col" style={{ gap: 10, padding: 14 }}>
+      <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+        <span className="grow">
+          Desktop app{version ? <> · version <strong>{version}</strong></> : null}
+        </span>
+        <button
+          className="btn btn-sm btn-primary"
+          disabled={checking}
+          onClick={async () => {
+            setChecking(true);
+            try {
+              await desktop!.checkForUpdates();
+            } finally {
+              setChecking(false);
+            }
+          }}
+        >
+          {checking ? "Checking…" : "Check for updates"}
+        </button>
+        <button className="btn btn-sm" onClick={() => desktop!.openDataFolder()}>
+          <Icon name="open" size={14} /> Data folder
+        </button>
+      </div>
+      {auto !== null && (
+        <Toggle
+          label="Update automatically"
+          hint="Downloads new versions in the background and installs them when you restart Basalt"
+          checked={auto}
+          onChange={async (on) => setAuto(await desktop!.setAutoUpdate(on))}
+        />
+      )}
+    </div>
   );
 }

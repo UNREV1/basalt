@@ -5,6 +5,7 @@
 // variables on <html>. The compiled CSS is cached in localStorage so the
 // inline bootstrap in index.html can apply it before first paint.
 
+import { syncTitleBar } from "./desktop.ts";
 import type { Appearance, Settings, UiFont } from "./settings.ts";
 import { setLiquidGlass } from "./liquidGlass.ts";
 
@@ -575,6 +576,8 @@ export function applyAppearance(settings: Settings) {
   } catch {
     // Storage full or blocked: the app still applies it at startup, just after first paint.
   }
+
+  syncTitleBar();
 
   // Browser chrome (PWA title bar, mobile status bar) follows the page background.
   const style = getComputedStyle(root);

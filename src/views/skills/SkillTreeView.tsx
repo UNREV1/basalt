@@ -19,9 +19,10 @@ import { SkillPanel } from "./SkillPanel.tsx";
 import { fmt, plural, useSkillTree } from "./useSkillData.ts";
 import type { SkillTemplate } from "./templates.ts";
 import { takeSkillFocus } from "./focus.ts";
+import { SkillGraphView } from "./graph/SkillGraph.tsx";
 import "./skills.css";
 
-type Tab = "tree" | "overview";
+type Tab = "graph" | "tree" | "overview";
 
 interface Remembered {
   tab?: Tab;
@@ -58,7 +59,8 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
   const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const remembered = useMemo(() => loadRemembered(ws.id), [ws.id]);
 
-  const [tab, setTabState] = useState<Tab>(remembered.tab === "overview" ? "overview" : "tree");
+  const [tab, setTabState] = useState<Tab>(remembered.tab === "overview" || remembered.tab === "tree" ? remembered.tab : "graph");
+  const map = tab === "graph" || tab === "tree";
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
@@ -144,8 +146,8 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
     return set;
   }, [search, areaFilter, data.skills]);
 
-  const panelOpen = !!selectedId && tab === "tree";
-  const questStrip = tab === "tree" && data.quests.length > 0;
+  const panelOpen = !!selectedId && map;
+  const questStrip = map && data.quests.length > 0;
   const insets = useMemo(
     () => ({
       top: questStrip ? 56 : 12,
@@ -179,7 +181,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
   const select = (id: string | null) => {
     setSelectedId(id);
     if (id) {
-      if (tab !== "tree") setTab("tree");
+      if (!map) setTab("graph");
       queueCamera({ reveal: id });
     }
   };
@@ -196,7 +198,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
   };
 
   const afterCreate = (ids: string[]) => {
-    setTab("tree");
+    if (!map) setTab("graph");
     setSelectedId(null);
     setAreaFilter("");
     if (ids.length) queueCamera({ fit: data.skills.length ? ids : "all" });
@@ -210,7 +212,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
 
   const showArea = (areaId: string) => {
     setAreaFilter(areaId);
-    setTab("tree");
+    if (!map) setTab("graph");
     const ids = data.skills.filter((s) => s.category === areaId).map((s) => s.id);
     if (ids.length) queueCamera({ fit: ids });
   };
@@ -242,8 +244,12 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
     <div className="sk-root">
       <div className="sk-toolbar">
         <div className="tabs sk-tabs" role="tablist" aria-label="Skill views">
-          <button role="tab" aria-selected={tab === "tree"} className={`tab${tab === "tree" ? " active" : ""}`} onClick={() => setTab("tree")}>
+          <button role="tab" aria-selected={tab === "graph"} className={`tab${tab === "graph" ? " active" : ""}`} onClick={() => setTab("graph")}>
             <Icon name="graph" size={15} />
+            Graph
+          </button>
+          <button role="tab" aria-selected={tab === "tree"} className={`tab${tab === "tree" ? " active" : ""}`} onClick={() => setTab("tree")}>
+            <Icon name="tree" size={15} />
             Tree
           </button>
           <button role="tab" aria-selected={tab === "overview"} className={`tab${tab === "overview" ? " active" : ""}`} onClick={() => setTab("overview")}>
@@ -251,7 +257,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
             Character
           </button>
         </div>
-        {tab === "tree" && !empty && (
+        {map && !empty && (
           <div className="sk-filters">
             <label className="sk-search">
               <Icon name="search" size={14} />
@@ -334,6 +340,20 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
           />
         ) : (
           <>
+            {tab === "graph" ? (
+              <SkillGraphView
+                ws={ws}
+                data={data}
+                dark={dark}
+                selectedId={selectedId}
+                onSelect={select}
+                onAbility={showArea}
+                matches={matches}
+                effects={effects}
+                insets={insets}
+                apiRef={apiRef}
+              />
+            ) : (
             <SkillCanvas
               skills={data.skills}
               stats={data.stats}
@@ -353,6 +373,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
               onViewChange={onViewChange}
               reduceMotion={reduceMotion}
             />
+            )}
             {questStrip && (
               <div className="sk-quest-strip" role="group" aria-label="Today's quests">
                 <span className="sk-quest-strip-label">
@@ -366,7 +387,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
                 ))}
               </div>
             )}
-            {!(phone && panelOpen) && (
+            {tab === "tree" && !(phone && panelOpen) && (
               <div className="sk-controls" role="toolbar" aria-label="Canvas controls">
                 <button className="icon-btn" aria-label="Zoom out" onClick={() => apiRef.current?.zoomBy(0.8)}>
                   <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
@@ -388,7 +409,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
                 </button>
               </div>
             )}
-            {legend && !(phone && panelOpen) && <Legend onClose={() => setLegend(false)} />}
+            {tab === "tree" && legend && !(phone && panelOpen) && <Legend onClose={() => setLegend(false)} />}
             {selected && (
               <SkillPanel
                 ws={ws}
@@ -416,7 +437,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
           defaultArea={areaFilter || undefined}
           onClose={() => setAdding(null)}
           onCreated={(id) => {
-            setTab("tree");
+            if (!map) setTab("graph");
             setSelectedId(id);
             queueCamera(empty ? { fit: [id] } : { reveal: id });
           }}

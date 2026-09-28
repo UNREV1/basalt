@@ -181,9 +181,16 @@ Real life, with the progression mechanics of D&D (but none of the video-game loo
   - **Charisma**: persuasion, performance, presence and leadership.
 
   Every skill trains one ability. An ability's **score** (10 = an average person, 20 = years of practice) and **modifier** grow with the XP of its skills. Your strongest abilities decide your **class**, for example Wizard, Fighter or Paladin.
-- **Every skill is a page** (type *Skill*, under *Skills* in the sidebar): the top shows its level, XP, quests, practice log and prerequisites; below is ordinary notes. Rename the page and the skill follows. Give any page the *Skill* type to add it to the tree; move it to the trash to take it out. Opening *Skills* shows the tree.
+- **Every skill is a page** (type *Skill*, under *Skills* in the sidebar): the top shows its level, XP, quests, practice log and prerequisites; below is ordinary notes. Rename the page and the skill follows. Give any page the *Skill* type to add it to the tree; move it to the trash to take it out. Opening *Skills* shows the graph.
 - **Levels, XP and ranks** (Novice → Apprentice → Journeyman → Adept → Expert → Master → Grandmaster). XP comes from real activity: practice you log, daily/weekly **quests** you check off, and lessons you master in linked courses.
 - **Prerequisites** unlock advanced skills once their foundations reach a level; **streaks** reward consistency.
+- **Graph** (the default view of Character) maps every skill at once. Each skill is a circle: bigger means a higher level, the color is its ability and a ring fills toward the next level. Arrows run from a prerequisite to what it unlocks, and locked skills are dashed. Courses hang off the skills they train. Each path Claude mapped for you is a colored road, named where it starts. Hover or click a skill to light up everything it needs and everything it leads to; double-click to open it. There are three layouts:
+  - **Clusters**: skills gather around their ability.
+  - **Flow**: a column per ability, with tiers from foundations down to advanced.
+  - **Rings**: your abilities in the middle, each skill further out the deeper it is.
+
+  You can filter to unlocked, locked, goal or path skills, pick one path, search, pinch or scroll to zoom, and use the keyboard (arrows, + and −, F to fit, Esc).
+- **Tree** is the classic top-down tree, where you can drag skills wherever you like.
 - **Overview** is your character sheet: level, rank and class, the six ability scores and a hexagon of them.
 - Start from templates or describe any goal and let Claude generate a tree. The *D&D character* template has every D&D skill as a real-life skill; the others are Memory & study, fitness, programming, languages, music, art, math, money, social skills, mindfulness and cooking. Skills from before abilities moved to the closest one, for example Mind → Intelligence.
 

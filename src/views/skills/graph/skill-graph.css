@@ -1,0 +1,201 @@
+/* The skill graph (SkillGraph.tsx). */
+
+.sg-root {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.sg-canvas {
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+.sg-canvas:active {
+  cursor: grabbing;
+}
+.sg-canvas:focus {
+  outline: none;
+}
+.sg-canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.sg-tools {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100% - 180px);
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--glass-solid, var(--bg));
+  -webkit-backdrop-filter: var(--glass-blur, none);
+  backdrop-filter: var(--glass-blur, none);
+  box-shadow: var(--shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+  z-index: 5;
+}
+.sg-seg {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--bg-hover);
+}
+.sg-seg button {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.sg-seg button.on {
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.sg-select {
+  height: 28px;
+  font-size: 12.5px;
+}
+.sg-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.sg-tip {
+  position: absolute;
+  z-index: 6;
+  transform: translate(14px, 14px);
+  max-width: 280px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--glass-solid, var(--bg));
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.16));
+  pointer-events: none;
+  font-size: 13px;
+}
+.sg-tip-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.sg-tip-icon {
+  font-size: 18px;
+}
+.sg-tip-line {
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.sg-legend {
+  position: absolute;
+  left: 12px;
+  bottom: 64px;
+  z-index: 6;
+  width: min(360px, calc(100% - 24px));
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 14px);
+  background: var(--glass-solid, var(--bg));
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.16));
+  font-size: 13px;
+}
+.sg-legend ul {
+  list-style: none;
+  margin: 8px 0;
+  padding: 0;
+  display: grid;
+  gap: 7px;
+  color: var(--text-muted);
+}
+.sg-legend li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  line-height: 1.4;
+}
+.sg-key {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 50%;
+}
+.sg-key.disc {
+  background: var(--accent);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--accent);
+  transform: scale(0.8);
+}
+.sg-key.dashed {
+  border: 2px dashed var(--accent);
+}
+.sg-key.gold {
+  border: 2px solid #e0a100;
+}
+.sg-key.arrow {
+  border-radius: 0;
+  height: 2px;
+  margin-top: 9px;
+  background: var(--text-muted);
+  position: relative;
+}
+.sg-key.hub {
+  border: 2px solid var(--accent);
+  background: var(--accent-soft);
+}
+.sg-key.course {
+  border-radius: 4px;
+  border: 1.5px solid var(--accent);
+  transform: scale(0.8);
+}
+.sg-key.road {
+  height: 12px;
+  margin-top: 4px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+}
+.sg-key.tier {
+  border-radius: 0;
+  height: 0;
+  margin-top: 9px;
+  border-top: 1.5px dashed var(--text-muted);
+  opacity: 0.6;
+}
+.sg-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
+}
+.sg-zoom .icon-btn {
+  width: 28px;
+  height: 28px;
+}
+@media (max-width: 720px) {
+  .sg-tools {
+    max-width: calc(100% - 24px);
+  }
+  .sg-legend {
+    top: 60px;
+    bottom: auto;
+    max-height: calc(100% - 200px);
+    overflow: auto;
+  }
+  .sg-toggle:nth-of-type(2) {
+    display: none;
+  }
+}

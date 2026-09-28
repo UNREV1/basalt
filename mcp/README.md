@@ -30,7 +30,7 @@ config with your real paths and share link filled in; copy, paste, done.
 - **Desktop app:** nothing else to install. The app keeps the connector in its
   data folder and Claude runs it through `Basalt.exe` itself
   (`ELECTRON_RUN_AS_NODE=1`), so no Node.js is needed. Use the installed app
-  (`Basalt-Setup.exe`, the `.dmg` or the AppImage); after an update, restart
+  (`Basalt-Setup.exe` or the AppImage); after an update, restart
   Claude so it picks up the new connector.
 - **From source:** the commands point at this checkout's `mcp/index.ts` and
   your Node.js.

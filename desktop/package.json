@@ -12,7 +12,6 @@
     "start": "node build.mjs && electron .",
     "dist": "node build.mjs && electron-builder",
     "dist:win": "node build.mjs && electron-builder --win",
-    "dist:mac": "node build.mjs && electron-builder --mac",
     "dist:linux": "node build.mjs && electron-builder --linux"
   },
   "devDependencies": {
@@ -68,20 +67,6 @@
     },
     "portable": {
       "artifactName": "Basalt-Portable.${ext}"
-    },
-    "mac": {
-      "category": "public.app-category.productivity",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "universal"
-          ]
-        }
-      ],
-      "artifactName": "Basalt-mac.${ext}",
-      "identity": "-",
-      "hardenedRuntime": false
     },
     "linux": {
       "target": [

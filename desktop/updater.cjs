@@ -3,9 +3,8 @@
 //
 //   Windows (installed) and Linux AppImage: updates download in the
 //   background and install on restart — Basalt asks whether to restart now.
-//   macOS and the portable Windows .exe can't replace themselves (unsigned
-//   Mac apps can't self-update), so Basalt says a new version is out and
-//   opens the download page.
+//   The portable Windows .exe can't replace itself, so Basalt says a new
+//   version is out and opens the download page.
 
 const { app, dialog, net, shell } = require("electron");
 const fs = require("node:fs");

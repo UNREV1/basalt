@@ -1,7 +1,7 @@
 name: desktop
 
-# Builds the desktop app (Windows installer + portable .exe, macOS .dmg, Linux
-# AppImage) on every push to main and publishes it as the latest GitHub
+# Builds the desktop app (Windows installer + portable .exe, Linux AppImage)
+# on every push to main and publishes it as the latest GitHub
 # release. Installed apps update themselves from it (desktop/updater.cjs), so
 # each release gets a higher version: <major>.<minor> from
 # desktop/package.json plus the workflow run number.
@@ -44,9 +44,6 @@ jobs:
               desktop/release/Basalt-Setup.exe.blockmap
               desktop/release/Basalt-Portable.exe
               desktop/release/latest.yml
-          - os: macos-latest
-            target: mac
-            files: desktop/release/Basalt-mac.dmg
           - os: ubuntu-latest
             target: linux
             files: |
@@ -78,7 +75,6 @@ jobs:
         run: |
           case "${{ matrix.target }}" in
             win) exe=release/win-unpacked/Basalt.exe ;;
-            mac) exe=$(ls -d release/mac*/Basalt.app/Contents/MacOS/Basalt | head -1) ;;
             linux) exe=release/linux-unpacked/basalt-desktop ;;
           esac
           "$exe" app/mcp.cjs --help 2>&1 | tee connector-help.txt
@@ -110,8 +106,6 @@ jobs:
           cat > notes.md <<'NOTES'
           **Windows:** `Basalt-Setup.exe` installs Basalt and keeps it updated automatically. `Basalt-Portable.exe` runs without installing (it tells you when there's a new version).
           Windows may say *"Windows protected your PC"* because the app isn't code-signed → **More info → Run anyway**. Allow Basalt on **private networks** so devices on your Wi-Fi can sync.
-
-          **Mac:** open `Basalt-mac.dmg` and drag Basalt to Applications; the first time, right-click Basalt → **Open**. Basalt tells you when a new version is out.
 
           **Linux:** `chmod +x Basalt-x86_64.AppImage` and run it — it updates itself.
           NOTES

@@ -21,7 +21,7 @@ Everything is **free and open source**, works **offline**, and syncs **end-to-en
 
 ---
 
-## Get the desktop app (Windows .exe, Mac, Linux)
+## Get the desktop app (Windows .exe, Linux)
 
 These links always download the newest version:
 
@@ -29,7 +29,6 @@ These links always download the newest version:
 | --- | --- | --- |
 | **Windows 10/11** | **[Basalt-Setup.exe](https://github.com/UNREV1/basalt/releases/latest/download/Basalt-Setup.exe)** | Run it and follow the installer. Basalt appears in the Start menu and on your desktop, and **updates itself**. |
 | **Windows (no install)** | [Basalt-Portable.exe](https://github.com/UNREV1/basalt/releases/latest/download/Basalt-Portable.exe) | Double-click it — it runs straight away (e.g. from a USB stick) and tells you when there's a new version. |
-| **macOS** | [Basalt-mac.dmg](https://github.com/UNREV1/basalt/releases/latest/download/Basalt-mac.dmg) | Open it and drag Basalt into Applications. It tells you when there's a new version. |
 | **Linux** | [Basalt-x86_64.AppImage](https://github.com/UNREV1/basalt/releases/latest/download/Basalt-x86_64.AppImage) | `chmod +x Basalt-*.AppImage`, then run it. It updates itself. |
 
 All versions: [Releases](https://github.com/UNREV1/basalt/releases).
@@ -38,11 +37,10 @@ First launch, once:
 
 - **Windows** may show *"Windows protected your PC"* because the app isn't code-signed (that costs money) → click **More info → Run anyway**.
 - **Windows Firewall** asks whether Basalt may use networks → allow **Private networks**, so your phone and other devices on the same Wi-Fi can sync.
-- **Mac** says the app is from an unidentified developer → right-click Basalt in Applications → **Open** → **Open**.
 
 The desktop app is the full Basalt with its sync server built in: your notes live on your computer (Help → *Show data folder*), it works offline, and **Share** gives phones and tablets on your Wi-Fi an invite link / QR code to join. For access from anywhere, see *Put it on the internet for free* below.
 
-**Updates:** Basalt checks for a new version a few seconds after it starts and every few hours. The installed Windows app and the Linux AppImage download it in the background and ask to restart (or update when you next quit); the portable .exe and the Mac app show a *Download* prompt. *Help → Check for updates…* checks right away, and *Help → Update automatically* turns it off. Your notes are never touched by an update.
+**Updates:** Basalt checks for a new version a few seconds after it starts and every few hours. The installed Windows app and the Linux AppImage download it in the background and ask to restart (or update when you next quit); the portable .exe shows a *Download* prompt. *Help → Check for updates…* checks right away, and *Help → Update automatically* turns it off. Your notes are never touched by an update.
 
 **Build the .exe yourself** (on Windows; Node.js 22.18+):
 
@@ -52,7 +50,7 @@ cd desktop && npm install
 npm run dist:win     # → desktop/release/Basalt-Setup.exe and Basalt-Portable.exe
 ```
 
-`npm run dist:mac` / `npm run dist:linux` build the other platforms (each on its own OS), and `npm start` in `desktop/` opens the app without packaging it. Every push to `main` runs the `desktop` GitHub Actions workflow, which builds all three and publishes them as the latest release — that is what installed apps update from.
+`npm run dist:linux` builds the Linux AppImage (on Linux), and `npm start` in `desktop/` opens the app without packaging it. Every push to `main` runs the `desktop` GitHub Actions workflow, which builds both and publishes them as the latest release — that is what installed apps update from.
 
 ## Quick start (run it in your browser)
 
@@ -75,17 +73,15 @@ Open the app, create a workspace, and you're done. For development with hot relo
 
 On a phone, use your browser's **Add to Home Screen / Install app** to get an app icon (it's a PWA).
 
-### iPhone, iPad and Mac
+### iPhone and iPad
 
-Basalt is a web app built to feel native on Apple devices:
+Basalt is a web app built to feel native on iPhone and iPad (iOS / iPadOS 16.4 and later):
 
-- **iPhone / iPad:** open your Basalt address (or scan the invite QR code) in Safari → **Share → Add to Home Screen**. It then opens full-screen with its own icon, works offline, and Safari keeps its data (plain Safari tabs can lose website data after a week without use). Supports iOS / iPadOS 16.4 and later.
+- **Get it on the Home Screen:** in the desktop app, click **Share** and scan the QR code with the iPhone/iPad camera (both on the same Wi-Fi), open the link in Safari → **Join workspace** → **Share → Add to Home Screen**. It opens full-screen with its own icon, and Safari keeps its data (plain Safari tabs can lose website data after a week without use).
+- **Over your home Wi-Fi** (an `http://192.168…` address) Safari won't let web apps work offline, so Basalt opens on the iPhone/iPad only while your PC is on and you're on the same Wi-Fi. Your notes are still stored on the device. For offline use and syncing from anywhere, give Basalt an HTTPS address (*Put it on the internet for free*, below) and add that one to the Home Screen instead.
 - **Apple Pencil:** the Paint studio reads pressure and tilt, ignores your palm once it has seen the Pencil, and uses two fingers to pan, zoom and rotate. Two- and three-finger taps undo and redo.
-- **Mac:** in Safari choose **File → Add to Dock** (or install from Chrome/Edge) for a standalone app window; shortcuts use ⌘ (⌘K search, ⌘\ sidebar).
 - **Importing an Obsidian vault on iPhone/iPad:** Safari can't pick folders, so compress the vault in the Files app (long-press → Compress) and choose the `.zip` in Settings → Import & export.
 - **Sharing:** the invite dialog uses the system share sheet (AirDrop, Messages, Mail…).
-- **Run the server on a Mac:** `brew install node`, then `npm install && npm run build && npm start`. Other Apple devices on your Wi-Fi can open `http://<your-mac-name>.local:8787`; for access from anywhere, `brew install cloudflared` and run `cloudflared tunnel --url http://localhost:8787`.
-- **Claude Desktop for Mac:** open *More → Claude memory* in Basalt and copy the config it shows into `~/Library/Application Support/Claude/claude_desktop_config.json` (details in [`mcp/README.md`](mcp/README.md)).
 
 ### Put it on the internet for free
 

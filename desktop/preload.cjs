@@ -18,4 +18,15 @@ contextBridge.exposeInMainWorld("basaltDesktop", {
   claudeCodeStatus: (link) => ipcRenderer.invoke("basalt:claude-code-status", String(link)),
   /** Add Basalt to Claude Code for this workspace (runs `claude mcp add`). */
   addToClaudeCode: (link) => ipcRenderer.invoke("basalt:claude-code-add", String(link)),
+  /** Claude in the app, through Claude Code (no API key). */
+  claude: {
+    available: () => ipcRenderer.invoke("basalt:claude-available"),
+    run: (opts) => ipcRenderer.invoke("basalt:claude-run", opts),
+    cancel: (id) => ipcRenderer.invoke("basalt:claude-cancel", String(id)),
+    onEvent: (cb) => {
+      const listener = (_e, ev) => cb(ev);
+      ipcRenderer.on("basalt:claude-event", listener);
+      return () => ipcRenderer.removeListener("basalt:claude-event", listener);
+    },
+  },
 });

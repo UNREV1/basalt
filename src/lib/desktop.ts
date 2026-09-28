@@ -11,7 +11,34 @@ export interface DesktopBridge {
   /** null when the link isn't a workspace link. */
   claudeCodeStatus?(link: string): Promise<ClaudeCodeStatus | null>;
   addToClaudeCode?(link: string): Promise<{ ok: boolean; message: string } | null>;
+  /** Claude in the app through Claude Code (desktop/claude-run.cjs). */
+  claude?: {
+    available(): Promise<{ installed: boolean } | null>;
+    run(opts: ClaudeRunOptions): Promise<{ id?: string; error?: string } | null>;
+    cancel(id: string): Promise<boolean>;
+    onEvent(cb: (ev: ClaudeRunEvent) => void): () => void;
+  };
 }
+
+export interface ClaudeRunOptions {
+  prompt: string;
+  /** Appended to Claude Code's system prompt. */
+  system?: string;
+  /** Continue a conversation (Claude Code session id). */
+  resume?: string;
+  /** Allow web search and fetch (for research). */
+  web?: boolean;
+  /** The workspace's share link: the connector joins it. */
+  link: string;
+}
+
+export type ClaudeRunEvent = { id: string } & (
+  | { type: "init"; sessionId: string | null; connected: boolean }
+  | { type: "turn" }
+  | { type: "text"; text: string }
+  | { type: "tool"; name: string; input: unknown }
+  | { type: "done"; ok: boolean; result?: string; error?: string; cancelled?: boolean; sessionId: string | null }
+);
 
 export interface ClaudeCodeStatus {
   /** The claude CLI was found on this computer. */

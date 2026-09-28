@@ -10,6 +10,7 @@ const http = require("node:http");
 const path = require("node:path");
 const { createUpdater } = require("./updater.cjs");
 const claudeSetup = require("./claude-setup.cjs");
+const claudeRun = require("./claude-run.cjs");
 
 // The web app's storage (IndexedDB) is tied to its address, so always prefer
 // the same local port; only fall back when something else is using it.
@@ -176,6 +177,32 @@ function registerIpc() {
     if (!claudeSetup.validLink(link)) return { ok: false, message: "That isn't a workspace link." };
     return claudeSetup.add(link, claudeLaunch);
   });
+  // Claude in the app: background Claude Code runs with Basalt's connector (desktop/claude-run.cjs).
+  ipcMain.handle("basalt:claude-available", (e) => (fromApp(e) ? { installed: !!claudeSetup.findClaude() } : null));
+  ipcMain.handle("basalt:claude-run", (e, opts) => {
+    if (!fromApp(e) || !opts || typeof opts !== "object") return null;
+    const { prompt, system, resume, web, link } = opts;
+    if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 200_000) return { error: "Nothing to ask." };
+    if (system !== undefined && (typeof system !== "string" || system.length > 50_000)) return { error: "Bad request." };
+    if (resume !== undefined && !/^[0-9a-f-]{36}$/i.test(String(resume))) return { error: "Bad request." };
+    if (!claudeSetup.validLink(link)) return { error: "This workspace needs sync turned on for Claude to reach it." };
+    const sender = e.sender;
+    const cwd = claudeRun.defaultCwd(app.getPath("userData"));
+    let id = null;
+    const queued = [];
+    const send = (ev) => {
+      if (sender.isDestroyed()) return;
+      if (id === null) queued.push(ev);
+      else sender.send("basalt:claude-event", { id, ...ev });
+    };
+    const res = claudeRun.start({ prompt, system, resume, web: !!web, link, cwd }, claudeLaunch, send);
+    if (res.id) {
+      id = res.id;
+      for (const ev of queued.splice(0)) send(ev);
+    }
+    return res;
+  });
+  ipcMain.handle("basalt:claude-cancel", (e, id) => (fromApp(e) ? claudeRun.cancel(id) : false));
 }
 
 function createWindow() {
@@ -300,5 +327,6 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
+  claudeRun.cancelAll();
   relay?.close();
 });

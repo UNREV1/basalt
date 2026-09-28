@@ -6,6 +6,7 @@ import { Icon } from "../components/ui.tsx";
 import { useApp } from "../lib/hooks.ts";
 import { useSettings } from "../lib/settings.ts";
 import { NoKeyPanel, useAiAvailable } from "../views/tutor/ai-ui.tsx";
+import { claudeBridge } from "../lib/claude.ts";
 import { statusLine } from "./AssistantPanel.tsx";
 import { ChatThread, Composer } from "./ChatThread.tsx";
 import { newChat, useAssistant } from "./store.ts";
@@ -15,7 +16,8 @@ export default function DockedAssistant() {
   const { ws, openPage } = useApp();
   const s = useAssistant();
   const name = useSettings().assistant.name;
-  const available = useAiAvailable();
+  // Claude Code (desktop app) or an API key.
+  const available = useAiAvailable() || !!claudeBridge;
   const [seed, setSeed] = useState<{ text: string; n: number } | null>(null);
   if (!available) {
     return (

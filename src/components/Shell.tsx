@@ -11,7 +11,7 @@ import {
   LearnView,
   MemoryView,
   SkillTreeView,
-  TodayView,
+  LearnHome,
   TypesView,
 } from "../views/registry.tsx";
 import { PageView } from "./PageView.tsx";
@@ -27,15 +27,16 @@ import { TabBar } from "./TabBar.tsx";
 import { Companion } from "../assistant/Companion.tsx";
 import { openAssistant, toggleAssistant, useAssistant } from "../assistant/store.ts";
 import { updateSettings } from "../lib/settings.ts";
+import { usePlayer } from "../views/lessons/player.ts";
 
 // The chat panel (and the agent behind it) loads the first time it opens.
 const AssistantPanel = lazy(() => import("../assistant/AssistantPanel.tsx"));
 
 const VIEW_TITLES: Record<ViewName, string> = {
-  home: "Today",
+  home: "Learn",
   graph: "Graph",
   learn: "Flashcards",
-  skills: "Skill tree",
+  skills: "Character",
   trash: "Trash",
   types: "Types",
   memory: "Claude memory",
@@ -51,7 +52,7 @@ function useToasts() {
   return { toasts, toast };
 }
 
-function ViewBody({ view, ws, onShare, deck }: { view: ViewName; ws: Workspace; onShare: () => void; deck?: string }) {
+function ViewBody({ view, ws, deck }: { view: ViewName; ws: Workspace; deck?: string }) {
   let body: ReactNode;
   switch (view) {
     case "graph":
@@ -72,13 +73,26 @@ function ViewBody({ view, ws, onShare, deck }: { view: ViewName; ws: Workspace; 
     case "trash":
       return <TrashView />;
     default:
-      body = <TodayView ws={ws} onShare={onShare} />;
+      body = <LearnHome ws={ws} />;
   }
   const fill = view === "graph" || view === "skills";
   return (
     <div className={fill ? "page-canvas" : "main-scroll"}>
       <Lazy>{body}</Lazy>
     </div>
+  );
+}
+
+const LessonPlayerHost = lazy(() => import("../views/lessons/LessonPlayer.tsx").then((m) => ({ default: m.PlayerHost })));
+
+/** The full-screen lesson player, loaded when a lesson is first opened. */
+function PlayerMount({ ws }: { ws: Workspace }) {
+  const target = usePlayer();
+  if (!target) return null;
+  return (
+    <Suspense fallback={null}>
+      <LessonPlayerHost ws={ws} />
+    </Suspense>
   );
 }
 
@@ -277,7 +291,7 @@ export function Shell({ ws, route }: { ws: Workspace; route: Route }) {
           />
           <div className="main-body">
             <div className="main-content">
-              {pageId ? <PageView key={pageId} pageId={pageId} /> : <ViewBody view={view} ws={ws} deck={route.name === "view" ? route.deck : undefined} onShare={() => setShare(true)} />}
+              {pageId ? <PageView key={pageId} pageId={pageId} /> : <ViewBody view={view} ws={ws} deck={route.name === "view" ? route.deck : undefined} />}
             </div>
             <RightDock mobile={mobile} onSearch={openSwitcher} onOpenSettings={openSettings} onNavigate={closeRightOnPhone} />
           </div>
@@ -294,6 +308,7 @@ export function Shell({ ws, route }: { ws: Workspace; route: Route }) {
       {share && <ShareDialog onClose={() => setShare(false)} />}
       <AssistantMount />
       <Companion />
+      <PlayerMount ws={ws} />
       {settingsTab && <SettingsDialog initialTab={settingsTab} onClose={() => setSettingsTab(null)} />}
       <div className="toast-stack">
         {toasts.map((t) => (

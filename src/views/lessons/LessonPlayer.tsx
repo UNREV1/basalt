@@ -1,0 +1,718 @@
+// The lesson player: full screen, one step at a time, like Brilliant. Every
+// question gets instant feedback and an explanation; misses go to the error
+// log (with why they happened); finishing a lesson earns XP in its skill,
+// schedules spaced reviews, and lets Claude write the next lessons ahead.
+
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { getCurriculum, getProgress, allLessons } from "../../../shared/course.ts";
+import {
+  explainMistake,
+  logMistake,
+  MISTAKE_WHY,
+  recordReview,
+  reviewSession,
+  scheduleReview,
+  type MistakeWhy,
+} from "../../../shared/learning.ts";
+import {
+  getLessonContent,
+  PHASE_LABEL,
+  SKILL_LOOP,
+  starsFor,
+  SUBJECT_LOOP,
+  type LessonStep,
+  type Phase,
+} from "../../../shared/lesson.ts";
+import { displayTitle, getPage, pageMeta } from "../../../shared/model.ts";
+import {
+  abilityModifier,
+  abilityScore,
+  addXp,
+  areaOf,
+  formatModifier,
+  LESSON_MASTERED_XP,
+  levelForXp,
+  listSkills,
+  logPractice,
+  totalXp,
+  type Skill,
+} from "../../../shared/skills.ts";
+import { Icon } from "../../components/ui.tsx";
+import type { Workspace } from "../../lib/workspace.ts";
+import { writeProgress } from "../course/model.ts";
+import { Markdown } from "../tutor/ai-ui.tsx";
+import { keepAhead } from "./plan.ts";
+import { closePlayer, openLesson, touchSession, usePlayer, type PlayerTarget } from "./player.ts";
+import {
+  answerTexts,
+  ChoiceAnswer,
+  initialAnswer,
+  Inline,
+  InputAnswer,
+  isAnswered,
+  isAnswerStep,
+  isRight,
+  MatchAnswer,
+  OrderAnswer,
+  PracticeView,
+  SliderAnswer,
+  solved,
+  TeachView,
+  type Answer,
+  type PracticeState,
+  type TeachState,
+} from "./steps.tsx";
+import { Figure, WidgetView } from "./widgets.tsx";
+import "./lessons.css";
+
+export function PlayerHost({ ws }: { ws: Workspace }) {
+  const target = usePlayer();
+  if (!target) return null;
+  return <Player key={target.nonce} ws={ws} target={target} />;
+}
+
+interface SessionStep {
+  step: LessonStep;
+  courseId: string;
+  lessonId: string;
+}
+
+interface Session {
+  title: string;
+  subtitle: string;
+  loop: Phase[] | null;
+  steps: SessionStep[];
+  review: boolean;
+}
+
+function buildSession(ws: Workspace, target: PlayerTarget): Session | null {
+  if (target.mode === "review") {
+    const items = reviewSession(ws.doc);
+    if (!items.length) return null;
+    return {
+      title: "Review",
+      subtitle: `${items.length} question${items.length === 1 ? "" : "s"} from lessons due for review`,
+      loop: null,
+      review: true,
+      steps: items.map((it) => ({ step: { ...it.step, phase: "recall" as const }, courseId: it.courseId, lessonId: it.lessonId })),
+    };
+  }
+  const page = getPage(ws.doc, target.courseId);
+  const content = page ? getLessonContent(page, target.lessonId) : undefined;
+  const c = page ? getCurriculum(page) : null;
+  const ref = c ? allLessons(c).find((l) => l.lesson.id === target.lessonId) : undefined;
+  if (!page || !content || !ref) return null;
+  const skillLike = content.steps.some((s) => s.type === "practice");
+  const hasPhases = content.steps.some((s) => s.phase);
+  return {
+    title: ref.lesson.title,
+    subtitle: displayTitle(pageMeta(page)) || c!.topic,
+    loop: hasPhases ? (skillLike ? SKILL_LOOP : SUBJECT_LOOP) : null,
+    review: false,
+    steps: content.steps.map((step) => ({ step, courseId: target.courseId, lessonId: target.lessonId })),
+  };
+}
+
+type Status = "idle" | "right" | "wrong" | "shown";
+
+const PRAISE = ["Correct!", "Exactly.", "Nice work.", "Spot on.", "That's it."];
+
+function Player({ ws, target }: { ws: Workspace; target: PlayerTarget }) {
+  const session = useMemo(() => buildSession(ws, target), [ws, target]);
+  const [i, setI] = useState(0);
+  const [answers, setAnswers] = useState<Record<number, Answer>>({});
+  const [status, setStatus] = useState<Record<number, Status>>({});
+  const [attempts, setAttempts] = useState<Record<number, number>>({});
+  const [firstTry, setFirstTry] = useState<Record<number, boolean>>({});
+  const [missAt, setMissAt] = useState<Record<number, number>>({});
+  const [why, setWhy] = useState<Record<number, MistakeWhy>>({});
+  const [revealed, setRevealed] = useState<Record<number, boolean>>({});
+  const [teach, setTeach] = useState<Record<number, TeachState>>({});
+  const [practice, setPractice] = useState<Record<number, PracticeState>>({});
+  const [finished, setFinished] = useState<Result | null>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    touchSession();
+    const prev = document.activeElement as HTMLElement | null;
+    return () => prev?.focus?.();
+  }, []);
+
+  const total = session?.steps.length ?? 0;
+  const cur = session?.steps[i];
+  const step = cur?.step;
+  const st: Status = status[i] ?? "idle";
+  const answer = step && isAnswerStep(step) ? (answers[i] ?? initialAnswer(step)) : undefined;
+  const setAnswer = (a: Answer) => {
+    setAnswers((m) => ({ ...m, [i]: a }));
+    if (st === "wrong") setStatus((m) => ({ ...m, [i]: "idle" }));
+  };
+  const teachState = teach[i] ?? { text: "", compared: false, covered: [] };
+  const practiceState = practice[i] ?? { seconds: 0, running: false, done: false, rating: 0, change: "", focusHit: [] };
+  const setTeachState = useCallback((s: TeachState) => setTeach((m) => ({ ...m, [i]: s })), [i]);
+  const setPracticeState = useCallback((s: PracticeState) => setPractice((m) => ({ ...m, [i]: s })), [i]);
+
+  const check = () => {
+    if (!step || !isAnswerStep(step) || !answer || !isAnswered(answer)) return;
+    const n = (attempts[i] ?? 0) + 1;
+    setAttempts((m) => ({ ...m, [i]: n }));
+    if (isRight(step, answer)) {
+      setStatus((m) => ({ ...m, [i]: "right" }));
+      if (n === 1) setFirstTry((m) => ({ ...m, [i]: true }));
+      return;
+    }
+    if (n === 1) {
+      // The error log: what was asked, what they said, and (next) why.
+      const page = getPage(ws.doc, cur!.courseId);
+      const at = Date.now();
+      if (page) logMistake(page, { lessonId: cur!.lessonId, prompt: step.prompt, ...answerTexts(step, answer), at });
+      setMissAt((m) => ({ ...m, [i]: at }));
+    }
+    if (n >= 2) show();
+    else setStatus((m) => ({ ...m, [i]: "wrong" }));
+  };
+  const show = () => {
+    if (!step || !isAnswerStep(step) || !answer) return;
+    setAnswers((m) => ({ ...m, [i]: solved(step, answer) }));
+    setStatus((m) => ({ ...m, [i]: "shown" }));
+  };
+  const noteWhy = (w: MistakeWhy) => {
+    setWhy((m) => ({ ...m, [i]: w }));
+    const page = cur ? getPage(ws.doc, cur.courseId) : undefined;
+    if (page && step && isAnswerStep(step) && missAt[i]) explainMistake(page, missAt[i], step.prompt, w);
+  };
+
+  const next = () => {
+    touchSession();
+    if (i < total - 1) {
+      setI(i + 1);
+      bodyRef.current?.scrollTo({ top: 0 });
+      return;
+    }
+    setFinished(finish(ws, target, session!, { firstTry, practice }));
+  };
+
+  // What the big button does right now.
+  let primary: { label: string; run: () => void; disabled?: boolean } = { label: "Continue", run: next };
+  let secondary: { label: string; run: () => void } | null = null;
+  if (step) {
+    if (isAnswerStep(step)) {
+      if (st === "idle") primary = { label: "Check", run: check, disabled: !answer || !isAnswered(answer) };
+      else if (st === "wrong") {
+        primary = { label: "Try again", run: () => setStatus((m) => ({ ...m, [i]: "idle" })) };
+        secondary = { label: "Show answer", run: show };
+      }
+    } else if (step.type === "reveal" && !revealed[i]) {
+      primary = { label: "Show answer", run: () => setRevealed((m) => ({ ...m, [i]: true })) };
+    } else if (step.type === "teach" && !teachState.compared) {
+      primary = { label: "Compare", run: () => setTeachState({ ...teachState, compared: true }), disabled: teachState.text.trim().length < 15 };
+      secondary = { label: "I can't explain it yet", run: () => setTeachState({ ...teachState, compared: true }) };
+    } else if (step.type === "practice" && !practiceState.done) {
+      primary = { label: "Continue", run: next, disabled: true };
+      secondary = { label: "Practise later", run: next };
+    }
+  }
+
+  // Keyboard: Enter for the big button, number keys for options.
+  useEffect(() => {
+    if (finished) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        closePlayer();
+        return;
+      }
+      const t = e.target as HTMLElement;
+      const typing = t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && (t as HTMLInputElement).type !== "range");
+      if (e.key === "Enter" && !typing && !e.defaultPrevented && !(t.tagName === "BUTTON" && t.closest(".lp-body"))) {
+        if (!primary.disabled) {
+          e.preventDefault();
+          primary.run();
+        }
+      }
+      if (!typing && step?.type === "choice" && st !== "right" && st !== "shown" && /^[1-9]$/.test(e.key)) {
+        const n = Number(e.key) - 1;
+        if (n < step.options.length && answer?.kind === "choice") {
+          const multi = step.answer.length > 1;
+          const sel = multi ? (answer.selected.includes(n) ? answer.selected.filter((x) => x !== n) : [...answer.selected, n]) : [n];
+          setAnswer({ kind: "choice", selected: sel });
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  if (!session) {
+    return (
+      <PlayerFrame onClose={closePlayer} progress={0} counter="">
+        <div className="lp-empty">
+          <h2>{target.mode === "review" ? "Nothing to review right now" : "This lesson isn’t written yet"}</h2>
+          <p>{target.mode === "review" ? "Lessons come back for review 1 day, 3 days, a week and a month after you finish them." : "Claude writes lessons ahead of you; check back in a minute."}</p>
+          <button className="btn btn-primary" onClick={closePlayer}>
+            Back
+          </button>
+        </div>
+      </PlayerFrame>
+    );
+  }
+
+  if (finished) {
+    return (
+      <PlayerFrame onClose={closePlayer} progress={1} counter="">
+        <Completion ws={ws} target={target} session={session} result={finished} />
+      </PlayerFrame>
+    );
+  }
+
+  const phase = step?.phase;
+  return (
+    <PlayerFrame
+      onClose={closePlayer}
+      progress={(i + (st === "right" || st === "shown" ? 1 : 0)) / total}
+      counter={`${i + 1} / ${total}`}
+      loop={session.loop}
+      phase={phase}
+    >
+      <div className="lp-body" ref={bodyRef}>
+        <div className="lp-column" key={i}>
+          {i === 0 && (
+            <div className="lp-lesson-head">
+              <span>{session.subtitle}</span>
+              <h1>{session.title}</h1>
+            </div>
+          )}
+          {step && <Figure step={step} />}
+          {step && <StepBody step={step} index={i} answer={answer} setAnswer={setAnswer} status={st} check={check} revealed={!!revealed[i]} teach={teachState} setTeach={setTeachState} practice={practiceState} setPractice={setPracticeState} />}
+        </div>
+      </div>
+      <FeedbackBar
+        step={step}
+        status={st}
+        attempts={attempts[i] ?? 0}
+        why={why[i]}
+        onWhy={missAt[i] ? noteWhy : undefined}
+        primary={primary}
+        secondary={secondary}
+      />
+    </PlayerFrame>
+  );
+}
+
+function PlayerFrame({
+  children,
+  onClose,
+  progress,
+  counter,
+  loop,
+  phase,
+}: {
+  children: ReactNode;
+  onClose: () => void;
+  progress: number;
+  counter: string;
+  loop?: Phase[] | null;
+  phase?: Phase;
+}) {
+  return (
+    <div className="lp-root" role="dialog" aria-modal="true" aria-label="Lesson">
+      <div className="lp-top">
+        <button className="icon-btn lp-close" aria-label="Close lesson" onClick={onClose}>
+          <Icon name="x" size={18} />
+        </button>
+        <div className="lp-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)}>
+          <span style={{ width: `${Math.max(2, progress * 100)}%` }} />
+        </div>
+        <span className="lp-counter">{counter}</span>
+      </div>
+      {loop && (
+        <div className="lp-loop" aria-label="Learning loop">
+          {loop.map((p, n) => {
+            const at = phase ? loop.indexOf(phase) : -1;
+            return (
+              <span key={p} className={`lp-loop-chip${p === phase ? " on" : n < at ? " done" : ""}`}>
+                {PHASE_LABEL[p]}
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {children}
+    </div>
+  );
+}
+
+function StepBody({
+  step,
+  answer,
+  setAnswer,
+  status,
+  check,
+  revealed,
+  teach,
+  setTeach,
+  practice,
+  setPractice,
+}: {
+  step: LessonStep;
+  index: number;
+  answer: Answer | undefined;
+  setAnswer: (a: Answer) => void;
+  status: Status;
+  check: () => void;
+  revealed: boolean;
+  teach: TeachState;
+  setTeach: (s: TeachState) => void;
+  practice: PracticeState;
+  setPractice: (s: PracticeState) => void;
+}) {
+  const locked = status === "right" || status === "shown";
+  const checked = status !== "idle";
+  const [explore, setExplore] = useState(step.type === "explore" ? (step.start ?? step.min) : 0);
+  switch (step.type) {
+    case "explain":
+      return (
+        <div className="lp-text">
+          {step.title && <h2>{step.title}</h2>}
+          <Markdown md={step.body} />
+        </div>
+      );
+    case "explore":
+      return (
+        <div className="lp-text">
+          {step.title && <h2>{step.title}</h2>}
+          <Markdown md={step.body} />
+          <WidgetView w={step} value={explore} onChange={setExplore} />
+        </div>
+      );
+    case "reveal":
+      return (
+        <div className="lp-text">
+          <div className="lp-prompt">
+            <Markdown md={step.prompt} />
+          </div>
+          {revealed ? (
+            <div className="lp-revealed">
+              <Markdown md={step.body} />
+            </div>
+          ) : (
+            <p className="lp-think">Think about it first, then reveal the answer.</p>
+          )}
+        </div>
+      );
+    case "teach":
+      return (
+        <div className="lp-text">
+          <div className="lp-kicker">Explain it in your own words</div>
+          <div className="lp-prompt">
+            <Markdown md={step.prompt} />
+          </div>
+          <TeachView step={step} state={teach} setState={setTeach} />
+        </div>
+      );
+    case "practice":
+      return (
+        <div className="lp-text">
+          <div className="lp-kicker">Practice · {step.minutes} min</div>
+          <div className="lp-prompt">
+            <Markdown md={step.prompt} />
+          </div>
+          <PracticeView step={step} state={practice} setState={setPractice} />
+        </div>
+      );
+    default: {
+      if (!answer) return null;
+      return (
+        <div className="lp-text">
+          <div className="lp-prompt">
+            <Markdown md={step.prompt} />
+          </div>
+          {step.type === "choice" && answer.kind === "choice" && <ChoiceAnswer step={step} answer={answer} setAnswer={setAnswer} locked={locked} checked={checked} />}
+          {step.type === "input" && answer.kind === "input" && (
+            <InputAnswer step={step} answer={answer} setAnswer={setAnswer} locked={locked} checked={checked} onSubmit={check} />
+          )}
+          {step.type === "slider" && answer.kind === "slider" && <SliderAnswer step={step} answer={answer} setAnswer={setAnswer} locked={locked} checked={checked} />}
+          {step.type === "order" && answer.kind === "order" && <OrderAnswer step={step} answer={answer} setAnswer={setAnswer} locked={locked} checked={checked} />}
+          {step.type === "match" && answer.kind === "match" && <MatchAnswer step={step} answer={answer} setAnswer={setAnswer} locked={locked} checked={checked} />}
+        </div>
+      );
+    }
+  }
+}
+
+function FeedbackBar({
+  step,
+  status,
+  attempts,
+  why,
+  onWhy,
+  primary,
+  secondary,
+}: {
+  step: LessonStep | undefined;
+  status: Status;
+  attempts: number;
+  why?: MistakeWhy;
+  onWhy?: (w: MistakeWhy) => void;
+  primary: { label: string; run: () => void; disabled?: boolean };
+  secondary: { label: string; run: () => void } | null;
+}) {
+  const interactive = step && isAnswerStep(step);
+  const tone = !interactive || status === "idle" ? "" : status === "right" ? " right" : status === "wrong" ? " wrong" : " shown";
+  const praise = useMemo(() => PRAISE[Math.floor(Math.random() * PRAISE.length)], [status]);
+  return (
+    <div className={`lp-bottom${tone}`}>
+      <div className="lp-bottom-inner">
+        {interactive && status !== "idle" && (
+          <div className="lp-feedback" role="status" aria-live="polite">
+            <div className="lp-feedback-title">
+              <Icon name={status === "right" ? "check" : status === "wrong" ? "x" : "eye"} size={18} stroke={2.6} />
+              {status === "right" ? praise : status === "wrong" ? "Not quite." : "Here’s the answer."}
+            </div>
+            {status === "wrong" && (
+              <div className="lp-feedback-text">
+                {attempts === 1 && step.hint ? (
+                  <>
+                    <strong>Hint:</strong> <Inline md={step.hint} />
+                  </>
+                ) : (
+                  "Have another look, then try again."
+                )}
+              </div>
+            )}
+            {(status === "right" || status === "shown") && step.explain && (
+              <div className="lp-feedback-text">
+                <Markdown md={step.explain} />
+              </div>
+            )}
+            {status === "shown" && onWhy && (
+              <div className="lp-why" role="radiogroup" aria-label="Why did you miss it?">
+                <span>Why did you miss it?</span>
+                {(Object.keys(MISTAKE_WHY) as MistakeWhy[]).map((w) => (
+                  <button key={w} role="radio" aria-checked={why === w} className={`lp-why-chip${why === w ? " on" : ""}`} onClick={() => onWhy(w)}>
+                    {MISTAKE_WHY[w]}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        <div className="lp-actions">
+          {secondary && (
+            <button className="btn lp-secondary" onClick={secondary.run}>
+              {secondary.label}
+            </button>
+          )}
+          <button className="btn btn-primary lp-primary" disabled={primary.disabled} onClick={primary.run}>
+            {primary.label}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---- finishing ------------------------------------------------------------------------------------
+
+interface Result {
+  right: number;
+  total: number;
+  stars: 1 | 2 | 3;
+  firstTime: boolean;
+  skill: Skill | null;
+  xpBefore: number;
+  gained: number;
+  practiceMinutes: number;
+  minutesLearning: number;
+  reviewed?: { right: number; total: number };
+}
+
+function finish(
+  ws: Workspace,
+  target: PlayerTarget,
+  session: Session,
+  s: { firstTry: Record<number, boolean>; practice: Record<number, PracticeState> },
+): Result {
+  const doc = ws.doc;
+  const answerIdx = session.steps.map((x, n) => (isAnswerStep(x.step) ? n : -1)).filter((n) => n >= 0);
+  const right = answerIdx.filter((n) => s.firstTry[n]).length;
+  const minutesLearning = touchSession();
+  if (target.mode === "review") {
+    // Right first time: the next, longer interval. Wrong: back to tomorrow.
+    let gained = 0;
+    for (const n of answerIdx) {
+      const { courseId, lessonId } = session.steps[n];
+      const page = getPage(doc, courseId);
+      if (!page) continue;
+      recordReview(page, lessonId, !!s.firstTry[n]);
+      const skill = listSkills(doc).find((k) => k.courseIds.includes(courseId));
+      if (skill && s.firstTry[n]) {
+        addXp(doc, skill.id, { amount: 10, source: "quiz", note: "Review" });
+        gained += 10;
+      }
+    }
+    return { right, total: answerIdx.length, stars: starsFor(right, answerIdx.length), firstTime: false, skill: null, xpBefore: 0, gained, practiceMinutes: 0, minutesLearning, reviewed: { right, total: answerIdx.length } };
+  }
+  const page = getPage(doc, target.courseId)!;
+  const prev = getProgress(page, target.lessonId);
+  const firstTime = prev.status !== "mastered";
+  const score = answerIdx.length ? right / answerIdx.length : 1;
+  const skill = listSkills(doc).find((k) => k.courseIds.includes(target.courseId)) ?? null;
+  const xpBefore = skill ? totalXp(doc, skill.id) : 0;
+  writeProgress(page, target.lessonId, {
+    status: "mastered",
+    mastery: Math.max(prev.mastery, score),
+    quizzes: [...prev.quizzes, { at: Date.now(), score }],
+  });
+  if (firstTime) scheduleReview(page, target.lessonId);
+  // Practice time: the timer if they used it, otherwise the planned minutes they said they practised.
+  let practiceMinutes = 0;
+  for (const [n, p] of Object.entries(s.practice)) {
+    const step = session.steps[Number(n)]?.step;
+    if (p.done && step?.type === "practice") practiceMinutes += p.seconds >= 60 ? Math.round(p.seconds / 60) : step.minutes;
+  }
+  if (skill && practiceMinutes) logPractice(doc, skill.id, practiceMinutes, `Practice · ${session.title}`);
+  // Keep the next lessons (and the path) ready before the learner gets there.
+  keepAhead(ws, target.courseId);
+  const gained = skill ? totalXp(doc, skill.id) - xpBefore : firstTime ? LESSON_MASTERED_XP : 0;
+  return { right, total: answerIdx.length, stars: starsFor(right, answerIdx.length), firstTime, skill, xpBefore, gained, practiceMinutes, minutesLearning };
+}
+
+function Completion({ ws, target, session, result }: { ws: Workspace; target: PlayerTarget; session: Session; result: Result }) {
+  const [roll, setRoll] = useState<number | null>(null);
+  const [rolling, setRolling] = useState<number | null>(null);
+  const [bonus, setBonus] = useState(0);
+  const doc = ws.doc;
+  const skill = result.skill;
+
+  const rollD20 = () => {
+    if (!skill || roll !== null || rolling !== null) return;
+    let n = 0;
+    const final = 1 + Math.floor(Math.random() * 20);
+    const tick = () => {
+      n++;
+      if (n < 14) {
+        setRolling(1 + Math.floor(Math.random() * 20));
+        window.setTimeout(tick, 40 + n * 12);
+      } else {
+        setRolling(null);
+        setRoll(final);
+        const amount = final === 20 ? 40 : final;
+        addXp(doc, skill.id, { amount, source: "lesson", note: `d20 bonus · ${session.title}` });
+        setBonus(amount);
+      }
+    };
+    tick();
+  };
+
+  const xpNow = skill ? totalXp(doc, skill.id) : 0;
+  const levelBefore = levelForXp(result.xpBefore);
+  const levelNow = levelForXp(xpNow);
+  const area = skill ? areaOf(doc, skill) : null;
+  // The ability's score from all its skills.
+  const abilityXp = (extra: number) =>
+    skill ? listSkills(doc).filter((k) => k.category === skill.category).reduce((sum, k) => sum + totalXp(doc, k.id), 0) - extra : 0;
+  const scoreNow = abilityScore(levelForXp(abilityXp(0)));
+  const scoreBefore = abilityScore(levelForXp(abilityXp(xpNow - result.xpBefore)));
+
+  // The next lesson in the course, if there is one.
+  const nextLesson = useMemo(() => {
+    if (target.mode !== "lesson") return null;
+    const page = getPage(doc, target.courseId);
+    const c = page ? getCurriculum(page) : null;
+    if (!page || !c) return null;
+    const list = allLessons(c).map((l) => l.lesson);
+    const at = list.findIndex((l) => l.id === target.lessonId);
+    const n = list.slice(at + 1).find((l) => getProgress(page, l.id).status !== "mastered");
+    return n ? { id: n.id, title: n.title, ready: !!getLessonContent(page, n.id) } : null;
+  }, [doc, target]);
+
+  const breakDue = result.minutesLearning >= 25;
+  return (
+    <div className="lp-body">
+      <div className="lp-column lp-done">
+        <div className="lp-stars" aria-label={`${result.stars} of 3 stars`}>
+          {[1, 2, 3].map((n) => (
+            <span key={n} className={n <= result.stars ? "on" : ""}>
+              <Icon name="star" size={40} stroke={n <= result.stars ? 0 : 1.6} />
+            </span>
+          ))}
+        </div>
+        <h1>{result.reviewed ? "Review done" : "Lesson complete"}</h1>
+        <p className="lp-done-sub">
+          {result.total
+            ? `${result.right} of ${result.total} right on the first try${result.reviewed ? ". The ones you missed come back tomorrow; the rest move to a longer gap." : "."}`
+            : session.title}
+        </p>
+
+        {!result.reviewed && skill && area && (
+          <div className="lp-reward">
+            <div className="lp-reward-row">
+              <Icon name="bolt" size={16} />
+              <span className="grow">
+                {result.firstTime ? "Lesson" : "Replay"} · {skill.icon} {skill.name}
+              </span>
+              <strong>+{Math.max(0, result.gained)} XP</strong>
+            </div>
+            {result.practiceMinutes > 0 && (
+              <div className="lp-reward-row sub">
+                <span className="grow">Including {result.practiceMinutes} min of practice</span>
+              </div>
+            )}
+            {result.firstTime && (
+              <div className="lp-reward-row">
+                <Icon name="dice" size={16} />
+                <span className="grow">
+                  {roll === null ? (rolling !== null ? "Rolling…" : "Roll a d20 for bonus XP") : roll === 20 ? "Natural 20! Critical: double bonus" : roll === 1 ? "Natural 1. Better luck next time" : `You rolled ${roll}`}
+                </span>
+                {roll === null ? (
+                  <button className={`btn btn-sm lp-d20${rolling !== null ? " rolling" : ""}`} onClick={rollD20} disabled={rolling !== null}>
+                    {rolling ?? "d20"}
+                  </button>
+                ) : (
+                  <strong>+{bonus} XP</strong>
+                )}
+              </div>
+            )}
+            <div className="lp-level">
+              <span>
+                {skill.name} · level {levelNow}
+                {levelNow > levelBefore && <em> up from {levelBefore}!</em>}
+              </span>
+              <span>
+                {area.attribute ?? area.name} {scoreNow} ({formatModifier(abilityModifier(scoreNow))})
+                {scoreNow > scoreBefore && <em> +1 {area.attribute ?? area.name}!</em>}
+              </span>
+            </div>
+          </div>
+        )}
+        {result.reviewed && result.gained > 0 && (
+          <div className="lp-reward">
+            <div className="lp-reward-row">
+              <Icon name="bolt" size={16} />
+              <span className="grow">Remembered</span>
+              <strong>+{result.gained} XP</strong>
+            </div>
+          </div>
+        )}
+
+        {breakDue && (
+          <div className="lp-break">
+            <Icon name="clock" size={16} /> You’ve been learning for {Math.round(result.minutesLearning)} minutes. A 5-minute break now helps it stick.
+          </div>
+        )}
+
+        <div className="lp-done-actions">
+          {nextLesson?.ready && (
+            <button className="btn btn-primary" onClick={() => openLesson((target as { courseId: string }).courseId, nextLesson.id)}>
+              Next: {nextLesson.title}
+            </button>
+          )}
+          {nextLesson && !nextLesson.ready && <p className="lp-done-sub">Claude is preparing “{nextLesson.title}”.</p>}
+          <button className={`btn${nextLesson?.ready ? "" : " btn-primary"}`} onClick={closePlayer}>
+            {target.mode === "lesson" ? "Back to the course" : "Done"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

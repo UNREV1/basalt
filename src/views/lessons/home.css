@@ -1,0 +1,486 @@
+/* Learn home (LearnHome.tsx). */
+
+.lh-root {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 28px 90px;
+}
+.lh-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.lh-head h1 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: -0.02em;
+}
+.lh-sub {
+  margin: 4px 0 0;
+  color: var(--text-muted);
+}
+.lh-stats {
+  display: flex;
+  gap: 8px;
+}
+.lh-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-soft);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.lh-stat.hot {
+  color: #eb6834;
+  border-color: color-mix(in srgb, #eb6834 40%, transparent);
+}
+.lh-stat.done {
+  color: var(--success);
+  border-color: color-mix(in srgb, var(--success) 40%, transparent);
+}
+.lh-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: start;
+}
+.lh-main,
+.lh-side {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+.lh-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 14px);
+  background: var(--bg-soft);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  min-width: 0;
+}
+button.lh-card {
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    transform 0.08s;
+}
+button.lh-card:hover {
+  border-color: var(--border-strong);
+}
+button.lh-card:active {
+  transform: scale(0.995);
+}
+.lh-card h2 {
+  margin: 0;
+  font-size: 19px;
+  letter-spacing: -0.01em;
+}
+.lh-h2 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 650;
+}
+.lh-kicker {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--accent);
+}
+.lh-muted {
+  display: block;
+  font-size: 13.5px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+.lh-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Continue */
+.lh-hero {
+  gap: 12px;
+  padding: 20px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 10%, var(--bg-soft)), var(--bg-soft));
+}
+.lh-hero.empty {
+  padding: 24px;
+}
+.lh-hero-course {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lh-hero-course strong {
+  display: block;
+  font-size: 20px;
+}
+.lh-hero-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex: none;
+  border-radius: 14px;
+  background: var(--bg);
+  font-size: 28px;
+}
+.lh-hero-next {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.lh-hero-next strong {
+  display: block;
+  font-size: 16px;
+}
+.lh-go {
+  height: 44px;
+  padding: 0 20px;
+  font-size: 15px;
+}
+.lh-bar {
+  display: block;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+.lh-bar.small {
+  height: 5px;
+  margin-top: 6px;
+}
+.lh-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+/* Review */
+.lh-review {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+}
+.lh-review strong {
+  display: block;
+  font-size: 16px;
+}
+.lh-review-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* Reflection */
+.lh-reflect label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+
+/* Ask */
+.lh-ask-form {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lh-ask-form .input {
+  flex: 1;
+  min-width: 200px;
+  height: 42px;
+  font-size: 15px;
+}
+.lh-ask-form .btn {
+  height: 42px;
+}
+.lh-job {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 13.5px;
+}
+.lh-job.error {
+  background: var(--danger-soft);
+}
+
+/* Branches */
+.lh-branch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.lh-branch-head strong {
+  font-size: 17px;
+}
+.lh-branch-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.lh-step {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+}
+.lh-step + .lh-step::before {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: -8px;
+  height: 16px;
+  border-left: 2px solid var(--border-strong);
+}
+.lh-step-dot {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  background: var(--bg);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.lh-step.done .lh-step-dot {
+  border-color: var(--c);
+  background: var(--c);
+  color: #fff;
+}
+.lh-step.next .lh-step-dot {
+  border-color: var(--c);
+  color: var(--c);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 18%, transparent);
+}
+.lh-step-icon {
+  font-size: 20px;
+}
+.lh-step-text {
+  min-width: 0;
+}
+.lh-step-name {
+  display: block;
+  font-weight: 600;
+}
+.lh-step-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lh-attr {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--c, var(--accent));
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  vertical-align: 1px;
+}
+
+/* Courses */
+.lh-courses {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+.lh-course {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+}
+.lh-course strong,
+.lh-course .lh-muted {
+  display: block;
+}
+.lh-course-icon {
+  font-size: 26px;
+}
+
+/* Library */
+.lh-lib-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.lh-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.lh-filter button {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.lh-filter button.on {
+  background: var(--text);
+  color: var(--bg);
+  border-color: var(--text);
+}
+.lh-library {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.lh-lib {
+  gap: 6px;
+  border-top: 3px solid var(--c);
+}
+.lh-lib strong {
+  font-size: 16px;
+}
+.lh-lib-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.lh-lib-icon {
+  font-size: 30px;
+}
+.lh-lib-blurb {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.lh-lib-foot {
+  margin-top: auto;
+  font-size: 12.5px;
+  color: var(--text-faint);
+}
+
+/* Side */
+.lh-character strong {
+  font-size: 16px;
+}
+.lh-abilities {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 4px;
+}
+.lh-ability {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 4px;
+  border-radius: var(--radius);
+  border-top: 3px solid var(--c);
+  background: var(--bg);
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.lh-ability b {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--c);
+}
+.lh-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lh-row:hover {
+  background: var(--bg-hover);
+}
+.lh-quests {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lh-method ol {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+  font-size: 13.5px;
+  color: var(--text-muted);
+}
+.lh-method strong {
+  color: var(--text);
+}
+
+@media (max-width: 900px) {
+  .lh-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lh-root {
+    padding: 18px 14px 100px;
+  }
+  .lh-go {
+    width: 100%;
+  }
+}
+.lh-quests .sk-qchip {
+  width: 100%;
+  min-width: 0;
+}
+.lh-quests .sk-qchip-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -31,6 +31,7 @@ import { Placement } from "./Placement.tsx";
 import { Roadmap } from "./Roadmap.tsx";
 import { CourseSetup, CurriculumProgress, saveCourseOptions } from "./Setup.tsx";
 import { TutorChat } from "./TutorChat.tsx";
+import { CoursePath } from "../lessons/CoursePath.tsx";
 import "./course.css";
 
 type Mode = { name: "roadmap" } | { name: "lesson"; lessonId: string } | { name: "placement" };
@@ -55,6 +56,11 @@ function writePref(key: string, value: string | null) {
 }
 
 export default function CourseView(props: PageViewProps) {
+  const course = courseMap(props.page) as Y.Map<any> | undefined;
+  useY(course);
+  // Interactive courses (Brilliant-style lessons) are a path to walk; older
+  // AI-tutor courses keep their roadmap and written lessons.
+  if (course?.get("format") === "interactive") return <CoursePath key={props.pageId} ws={props.ws} pageId={props.pageId} page={props.page} />;
   return <CourseBody key={props.pageId} {...props} />;
 }
 

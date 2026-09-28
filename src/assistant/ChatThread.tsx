@@ -16,10 +16,10 @@ import { sendMessage, setMood, stopAssistant, useAssistant } from "./store.ts";
 import { canListen, listen } from "./voice.ts";
 
 const VIEW_NAMES: Record<ViewName, string> = {
-  home: "Today",
+  home: "Learn",
   graph: "Graph",
   learn: "Flashcards",
-  skills: "Skill tree",
+  skills: "Character",
   trash: "Trash",
   types: "Types",
   memory: "Claude memory",

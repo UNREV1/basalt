@@ -125,4 +125,4 @@ async function add(link, launch) {
   return { ok: true, message: "Added Basalt to Claude Code." };
 }
 
-module.exports = { status, add, validLink };
+module.exports = { status, add, validLink, findClaude };

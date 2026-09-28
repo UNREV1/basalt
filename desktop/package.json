@@ -31,6 +31,7 @@
       "preload.cjs",
       "updater.cjs",
       "claude-setup.cjs",
+      "claude-run.cjs",
       "package.json",
       "app/**/*"
     ],

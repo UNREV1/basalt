@@ -5,6 +5,7 @@
 import { useSyncExternalStore } from "react";
 import { getPage } from "../../shared/model.ts";
 import { aiErrorMessage } from "../lib/ai.ts";
+import { claudeBridge } from "../lib/claude.ts";
 import { getSettings } from "../lib/settings.ts";
 import type { Workspace } from "../lib/workspace.ts";
 import type { AgentStep, ViewContext } from "./agent.ts";
@@ -148,27 +149,44 @@ export async function sendMessage(ws: Workspace, text: string, context: ViewCont
     setSoon({ draft, ...extra });
   };
   try {
-    // The agent (tools, markdown converter) loads on first use.
-    const { runAgent } = await import("./agent.ts");
-    const result = await runAgent({
-      ws,
-      history,
-      message,
-      context,
-      signal,
-      events: {
+    const onStep = (step: AgentStep) => {
+      const steps = [...draft.steps];
+      const i = steps.findIndex((s) => s.id === step.id);
+      if (i === -1) steps.push(step);
+      else steps[i] = { ...steps[i], ...step, title: step.title || steps[i].title };
+      update({ steps }, step.state === "running" ? { mood: "working" } : {});
+    };
+    let result: { text: string; actions: string[] };
+    if (claudeBridge) {
+      // Desktop app: Claude Code with the user's own sign-in, no API key.
+      const { replyWithClaudeCode } = await import("./claude-code.ts");
+      signal.addEventListener("abort", () => void import("./claude-code.ts").then((m) => m.cancelClaudeCodeReply()));
+      result = await replyWithClaudeCode({
+        ws,
+        chatId: id,
+        message,
+        context,
         onText: (full) => update({ text: full }, { mood: "talking" }),
-        onThinking: (t) => update({ thinking: t }, { mood: "thinking" }),
-        onStep: (step) => {
-          const steps = [...draft.steps];
-          const i = steps.findIndex((s) => s.id === step.id);
-          if (i === -1) steps.push(step);
-          else steps[i] = { ...steps[i], ...step, title: step.title || steps[i].title };
-          update({ steps }, step.state === "running" ? { mood: "working" } : {});
+        onStep,
+        onActivity: (text) => setSoon({ activity: { text, at: Date.now() }, mood: "working" }),
+      });
+    } else {
+      // The agent (tools, markdown converter) loads on first use.
+      const { runAgent } = await import("./agent.ts");
+      result = await runAgent({
+        ws,
+        history,
+        message,
+        context,
+        signal,
+        events: {
+          onText: (full) => update({ text: full }, { mood: "talking" }),
+          onThinking: (t) => update({ thinking: t }, { mood: "thinking" }),
+          onStep,
+          onActivity: (a) => setSoon({ activity: { text: a.activity, pageId: a.pageId, at: Date.now() }, mood: "working" }),
         },
-        onActivity: (a) => setSoon({ activity: { text: a.activity, pageId: a.pageId, at: Date.now() }, mood: "working" }),
-      },
-    });
+      });
+    }
     appendMessage(ws.doc, id, { role: "assistant", text: result.text, actions: result.actions });
     set({ running: false, draft: null });
     settleMood("happy");

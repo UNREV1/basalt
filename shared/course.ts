@@ -57,6 +57,8 @@ export interface LessonProgress {
   lessonPageId?: string;
   quizzes: { at: number; score: number }[];
   updatedAt: number;
+  /** Spaced review: which interval comes next and when it's due (see shared/learning.ts). */
+  review?: { stage: number; due: number };
 }
 
 export interface ChatMessage {

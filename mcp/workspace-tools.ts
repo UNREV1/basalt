@@ -32,6 +32,8 @@ import {
   setProgress,
   type Curriculum,
 } from "../shared/course.ts";
+import { LESSON_STYLE, PHASES, STEP_TYPES, lessonProblems, setLessonContent } from "../shared/lesson.ts";
+import { courseAhead, learnerStats } from "../shared/learning.ts";
 import { WIKILINK_RE } from "../shared/markdown.ts";
 import {
   applyProps,
@@ -101,6 +103,45 @@ const LEVEL = z.object({
   summary: z.string().default(""),
   modules: z.array(MODULE).min(1),
 });
+/** One interactive lesson step (flat: each type uses its own fields; see shared/lesson.ts). */
+const STEP = z.object({
+  type: z.enum(STEP_TYPES),
+  title: z.string().optional().describe("explain: optional heading"),
+  body: z.string().optional().describe("explain / reveal: markdown ($math$ allowed)"),
+  prompt: z.string().optional().describe("choice / input / order / match / reveal: the question"),
+  options: z.array(z.string()).optional().describe("choice: 2–5 options"),
+  answer: z
+    .union([z.array(z.number().int()), z.number()])
+    .optional()
+    .describe("choice: indexes of every correct option (several = select all that apply); slider: the right value"),
+  answers: z.array(z.string()).optional().describe("input: every accepted answer"),
+  tolerance: z.number().optional().describe("input / slider: allowed numeric error"),
+  placeholder: z.string().optional(),
+  items: z.array(z.string()).optional().describe("order: the items in the CORRECT order (the app shuffles them)"),
+  pairs: z.array(z.object({ left: z.string(), right: z.string() })).optional().describe("match: 3–5 correct pairs"),
+  explain: z.string().optional().describe("interactive steps: why the answer is right"),
+  hint: z.string().optional(),
+  figure: z.string().optional().describe('any step: an inline SVG diagram ("<svg viewBox=…>…</svg>") or an https image URL, shown above the text'),
+  caption: z.string().optional(),
+  min: z.number().optional().describe("explore / slider: slider range"),
+  max: z.number().optional(),
+  step: z.number().optional(),
+  start: z.number().optional(),
+  label: z.string().optional().describe("explore / slider: what the slider controls"),
+  unit: z.string().optional(),
+  plot: z.string().optional().describe('explore / slider: live graph, y in terms of x and slider value v, e.g. "v*x^2"'),
+  xMin: z.number().optional(),
+  xMax: z.number().optional(),
+  readout: z.string().optional().describe('explore / slider: a number computed from v, e.g. "v^2/2"'),
+  readoutLabel: z.string().optional(),
+  phase: z.enum(PHASES).optional().describe("Which part of the learning loop this step is"),
+  keyPoints: z.array(z.string()).optional().describe("teach: 3–5 points a good explanation covers"),
+  model: z.string().optional().describe("teach: a short plain-language model explanation"),
+  minutes: z.number().optional().describe("practice: how long to practise"),
+  focus: z.array(z.string()).optional().describe("practice: what to pay attention to"),
+  goal: z.string().optional().describe('practice: how to know it went well, e.g. "10 catches in a row"'),
+});
+
 const CURRICULUM = z.object({
   overview: z.string().default("").describe("2-4 sentences: what the learner will be able to do at the end"),
   levels: z.array(LEVEL).min(1),
@@ -585,7 +626,7 @@ export function registerWorkspaceTools(tool: ToolFn, ctx: WorkspaceToolContext) 
     {
       title: "Create course",
       description:
-        "Create an AI-tutor course page with a leveled curriculum (levels → modules → lessons with objectives). Returns the outline with lesson ids for write_lesson / record_quiz. For a from-scratch-to-PhD course use the six levels Foundations, Beginner, Intermediate, Advanced, Graduate, PhD / Research frontier.",
+        "Create a course page with a leveled curriculum (levels → modules → lessons with objectives). Returns the outline with lesson ids. Then write the first lessons with write_interactive_lesson, and link the course to the D&D skill it trains with link_to_skill (add_skills first if the skill doesn't exist). Keep lessons short (5–8 minutes each); for a long path use the levels Foundations, Beginner, Intermediate, Advanced, Graduate, PhD / Research frontier, and it's fine to start with the first level or two and extend_course later as the learner progresses.",
       input: {
         topic: z.string().min(1),
         goal: z.string().optional().describe("What the learner wants to achieve"),
@@ -603,6 +644,8 @@ export function registerWorkspaceTools(tool: ToolFn, ctx: WorkspaceToolContext) 
         const page = getPage(doc, id)!;
         initCourse(page, { topic: topic.trim(), goal, startLevel: start_level });
         setCurriculum(page, { topic: topic.trim(), ...(curriculum as Omit<Curriculum, "topic">) });
+        // Lessons are written as interactive steps (write_interactive_lesson) and played in the app.
+        (page.get("course") as Y.Map<any>).set("format", "interactive");
         page.set("updatedAt", Date.now());
         return id;
       });
@@ -680,6 +723,72 @@ export function registerWorkspaceTools(tool: ToolFn, ctx: WorkspaceToolContext) 
         page.set("updatedAt", Date.now());
       });
       return `Wrote lesson "${lesson.title}" (${level.name} › ${module.title}) to ${ref(pageMeta(getPage(doc, lessonPageId)!))}. Status: ${progress.status === "mastered" ? "mastered" : "in progress"}.${linkReport(markdown)}`;
+    },
+  );
+
+  tool(
+    "write_interactive_lesson",
+    {
+      title: "Write interactive lesson",
+      description: `Write (or rewrite) a lesson as interactive steps, played in the app like a Brilliant lesson: short explanations and questions with instant feedback. Finishing it earns the learner XP in the linked skill. Keep lessons written ahead of the learner (get_course shows how many and which to write next).
+
+Step types: explain {title?, body} · explore {body, min, max, step?, start?, label?, unit?, plot?, readout?} · choice {prompt, options, answer: [correct indexes], explain, hint?} · input {prompt, answers: [accepted], tolerance?, explain, hint?} · slider {prompt, min, max, step?, answer, tolerance?, plot?, readout?, explain, hint?} · order {prompt, items in the correct order, explain, hint?} · match {prompt, pairs: [{left, right}], explain, hint?} · reveal {prompt, body}. teach {prompt, keyPoints, model} · practice {prompt, minutes, focus, goal?}. Any step can add figure (SVG or https image), caption and phase.
+
+${LESSON_STYLE}`,
+      input: {
+        course: z.string().describe("Course id or title"),
+        lesson_id: z.string().describe("Lesson id (or exact lesson title) from get_course"),
+        steps: z.array(STEP).min(3).max(30),
+      },
+    },
+    ({ course, lesson_id, steps }) => {
+      const { meta, page } = requireCourse(course);
+      const { lesson } = findLesson(page, lesson_id);
+      const problems = lessonProblems(steps);
+      if (problems.length) throw new ToolError(`The lesson wasn't saved. Fix and call again:\n- ${problems.join("\n- ")}`);
+      presence(meta.id, `Writing lesson “${lesson.title}”`);
+      tx(() => {
+        setLessonContent(page, lesson.id, steps, "claude");
+        (page.get("course") as Y.Map<any>).set("format", "interactive");
+        page.set("updatedAt", Date.now());
+      });
+      const ahead = courseAhead(page, learnerStats(doc).aheadTarget);
+      return `Wrote "${lesson.title}" (${steps.length} steps). Lessons ready ahead of the learner: ${ahead.written}.${
+        ahead.toWrite.length ? ` Still to write: ${ahead.toWrite.map((l) => `"${l.title}" (${l.id})`).join(", ")}.` : ""
+      }${ahead.nearEnd ? " The course is close to its end: consider extend_course." : ""}`;
+    },
+  );
+
+  tool(
+    "extend_course",
+    {
+      title: "Extend course",
+      description:
+        "Add a module of new lessons to a course, without touching existing lessons or progress: the next stretch of the learner's path. Adds a new level when `level` doesn't exist yet. Then write the new lessons with write_interactive_lesson.",
+      input: {
+        course: z.string().describe("Course id or title"),
+        level: z.string().describe("Existing level name to add to, or a new level name (added at the end)"),
+        module: MODULE.describe("The new module and its lessons (omit ids)"),
+      },
+    },
+    ({ course, level, module }) => {
+      const { meta, page } = requireCourse(course);
+      const c = getCurriculum(page);
+      if (!c) throw new ToolError(`${ref(meta)} has no curriculum yet. Use update_course to create one.`);
+      const levels = c.levels.map((l) => ({ ...l, modules: [...l.modules] }));
+      let target = levels.find((l) => l.name.trim().toLowerCase() === level.trim().toLowerCase());
+      if (!target) {
+        target = { id: "", name: level.trim(), summary: "", modules: [] };
+        levels.push(target);
+      }
+      target.modules.push({ id: "", title: module.title, summary: module.summary ?? "", lessons: module.lessons.map((l: Args) => ({ id: "", title: l.title, objectives: l.objectives ?? [] })) });
+      tx(() => {
+        setCurriculum(page, { ...c, levels });
+        page.set("updatedAt", Date.now());
+      });
+      presence(meta.id, `Extending course “${displayTitle(meta)}”`);
+      const added = getCurriculum(page)!.levels.find((l) => l.name === target!.name)!.modules.at(-1)!;
+      return `Added "${added.title}" to ${target.name} in ${ref(meta)}: ${added.lessons.map((l) => `"${l.title}" (lesson_id: ${l.id})`).join(", ")}.`;
     },
   );
 

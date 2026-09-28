@@ -19,7 +19,7 @@ const loaders = import.meta.glob<{ default: ComponentType<any> }>([
   "./skills/SkillTreeView.tsx",
   "./types/TypesView.tsx",
   "./memory/MemoryView.tsx",
-  "./today/TodayView.tsx",
+  "./lessons/LearnHome.tsx",
   "./skills/SkillHeader.tsx",
 ]);
 
@@ -104,7 +104,7 @@ export function pageViewFor(kind: PageKind): ComponentType<PageViewProps> {
 /** Canvas kinds fill the viewport and hide the document header. */
 export const CANVAS_KINDS: PageKind[] = ["board", "paint"];
 
-export const TodayView = load<{ ws: Workspace; onShare: () => void }>("./today/TodayView.tsx", "Today");
+export const LearnHome = load<{ ws: Workspace }>("./lessons/LearnHome.tsx", "Learn");
 export const GraphView = load<{ ws: Workspace; focusPageId?: string; compact?: boolean }>("./graph/GraphView.tsx", "Graph");
 export const LearnView = load<{ ws: Workspace; deckPageId?: string }>("./learn/LearnView.tsx", "Learn");
 export const SkillTreeView = load<{ ws: Workspace }>("./skills/SkillTreeView.tsx", "Skill tree");

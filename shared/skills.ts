@@ -83,6 +83,8 @@ export interface Skill {
   quests?: Quest[];
   /** The skill's page (type "skill"). Missing on skills made before pages. */
   pageId?: string;
+  /** The learning path this skill belongs to, e.g. "Play guitar" (skills Claude mapped for one goal). */
+  branch?: string;
 }
 
 export interface SkillArea {
@@ -433,6 +435,7 @@ export function normalizeSkill(raw: Partial<Skill> & { id: string }): Skill {
   if (raw.pos && Number.isFinite(raw.pos.x) && Number.isFinite(raw.pos.y)) out.pos = { x: raw.pos.x, y: raw.pos.y };
   if (quests.length) out.quests = quests;
   if (typeof raw.pageId === "string" && raw.pageId) out.pageId = raw.pageId;
+  if (typeof raw.branch === "string" && raw.branch.trim()) out.branch = raw.branch.trim().slice(0, 120);
   return out;
 }
 
@@ -594,6 +597,7 @@ export interface SkillInput {
   createdAt?: number;
   /** An existing page to be this skill's page (otherwise one is created). */
   pageId?: string;
+  branch?: string;
 }
 
 export function createSkill(doc: Y.Doc, input: SkillInput): Skill {
@@ -622,6 +626,7 @@ export function createSkill(doc: Y.Doc, input: SkillInput): Skill {
       createdAt: now,
       updatedAt: now,
       pageId: input.pageId,
+      branch: input.branch,
     });
     skillsMap(doc).set(id, clone(skill));
     // Created together with the skill so no other client ever races to create it.
@@ -1181,6 +1186,8 @@ export interface SkillPlanItem {
   requiredLevel?: number;
   goalLevel?: number;
   quests?: QuestInput[];
+  /** The learning path the skill belongs to (see Skill.branch). */
+  branch?: string;
 }
 
 /**
@@ -1205,6 +1212,7 @@ export function createSkillsFromPlan(doc: Y.Doc, plan: SkillPlanItem[]): Map<str
         requiredLevel: item.requiredLevel,
         goalLevel: item.goalLevel,
         quests: item.quests,
+        branch: item.branch,
       });
       ids.set(item.key, s.id);
     }

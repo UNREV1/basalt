@@ -7,6 +7,7 @@ import { Icon } from "../components/ui.tsx";
 import { useApp, useMediaQuery, usePages } from "../lib/hooks.ts";
 import { updateSettings, useSettings } from "../lib/settings.ts";
 import { NoKeyPanel, useAiAvailable } from "../views/tutor/ai-ui.tsx";
+import { claudeBridge } from "../lib/claude.ts";
 import { CHATS_SYSTEM } from "./chats.ts";
 import { ChatThread, Composer } from "./ChatThread.tsx";
 import { Pebble } from "./Pebble.tsx";
@@ -30,7 +31,8 @@ export default function AssistantPanel() {
   const s = useAssistant();
   const settings = useSettings();
   const a = settings.assistant;
-  const available = useAiAvailable();
+  // Claude Code (desktop app) or an API key.
+  const available = useAiAvailable() || !!claudeBridge;
   const phone = useMediaQuery("(max-width: 800px)");
   const [history, setHistory] = useState(false);
   const [seed, setSeed] = useState<{ text: string; n: number } | null>(null);

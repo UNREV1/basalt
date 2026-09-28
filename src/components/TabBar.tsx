@@ -23,7 +23,7 @@ export function TabBar({ active, onSearch }: { active: ViewName | null; onSearch
   );
   return (
     <nav className="tabbar" aria-label="Main">
-      {tab("home", "home", "Today", due)}
+      {tab("home", "cap", "Learn", due)}
       <button className="tabbar-item" onClick={onSearch} aria-label="Search">
         <span className="tabbar-icon">
           <Icon name="search" size={20} />
@@ -46,7 +46,7 @@ export function TabBar({ active, onSearch }: { active: ViewName | null; onSearch
         </span>
         <span className="tabbar-label">Ask</span>
       </button>
-      {tab("skills", "tree", "Skills")}
+      {tab("skills", "tree", "Character")}
     </nav>
   );
 }

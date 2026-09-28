@@ -452,8 +452,8 @@ export const ACCENT_PRESETS: { name: string; color: string }[] = [
 
 /** Sidebar navigation entries that can be hidden per device. */
 export const SIDEBAR_NAV: { id: string; label: string; icon: string }[] = [
-  { id: "assistant", label: "Assistant", icon: "sparkle" },
-  { id: "skills", label: "Skill tree", icon: "tree" },
+  { id: "assistant", label: "Ask Claude", icon: "sparkle" },
+  { id: "skills", label: "Character", icon: "tree" },
   { id: "learn", label: "Flashcards", icon: "cards" },
   // Under "More":
   { id: "graph", label: "Graph", icon: "graph" },

@@ -40,7 +40,7 @@ function Miniature({ design, dark }: { design: Design; dark: boolean }) {
         <i style={{ background: t["--text-faint"], width: "62%" }} />
       </span>
       <span className="dg-main" style={{ ...pane(glass ? t["--glass-sheet"] : t["--bg"]), gap }}>
-        <span className="dg-title">Today</span>
+        <span className="dg-title">Learn</span>
         <i style={{ background: t["--text-muted"], width: "85%" }} />
         <i style={{ background: t["--text-muted"], width: "60%" }} />
         <span className="dg-card" style={{ background: glass ? t["--glass-lens"] : t["--bg-soft"], borderColor: t["--border"], borderRadius: radius - 2 }}>

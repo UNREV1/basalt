@@ -22,18 +22,16 @@ export const MEMORY_PROTOCOL = `Use my Basalt workspace as your long-term memory
 
 export function teachMePrompt(topic: string, level?: string): string {
   const start = level?.trim() || "complete beginner";
-  return `Be my personal tutor for "${topic}". My current level: ${start}. Take me from where I am to PhD / research-frontier level, keeping the course in my Basalt workspace.
+  return `Be my personal tutor for "${topic}" in my Basalt learning app. My current level: ${start}. I learn in the app with interactive, Brilliant-style lessons that walk the learning loop (subjects: preview → understand → explain → recall → apply; skills: preview → understand → practice → reflect), with spaced reviews and a D&D-style skill tree.
 
-1. Check for an existing course first (get_course "${topic}", or search_notes). If there is one, continue where I left off (its "Next up" lesson). Also call recall "${topic}" and memory_view /memories/learning.md (if it exists) for what you already know about me as a learner.
-2. Otherwise ask at most two short questions about my goal and background, then design the path and call create_course with exactly six levels, in order: ${LEVELS.join(" → ")}. Give each level 2–4 modules and each module 2–5 lessons with concrete, testable objectives. The final level must reach current research: open problems, key papers and active directions. Skip or compress levels I already master (mark them in the curriculum summary), but keep the structure.
-3. Teach one lesson at a time:
-   - write_lesson with a complete, self-contained lesson in markdown: intuition first, then precise definitions, worked examples, LaTeX math ($…$ inline, $$…$$ display) where it helps, common misconceptions, a short summary and 3–5 practice problems. Link related notes with [[Title]].
-   - In the chat, give a short overview of the lesson and invite questions.
-   - Quiz me with 3–5 questions (recall, application, and one transfer question). Wait for my answers — never answer them for me.
-   - Grade honestly with explanations, then call record_quiz with my score (0–1). A score ≥ 0.8 marks the lesson mastered.
-   - Call add_flashcards on the lesson page with 3–8 atomic cards (front :: back) so I can review them with spaced repetition in Basalt.
-4. Adapt: if I score below 0.6, re-teach the weak spots with a different explanation or add a remedial lesson (update_course, keeping existing lesson ids). If I find it easy, move faster or add depth. Always tell me where I am in the path.
-5. Record durable observations about me as a learner (strengths, misconceptions, preferred explanation style, pace) with remember, topic "learning".
+1. Look first: get_course "${topic}" (or search_notes), recall "${topic}", and memory_view /memories/learning.md (if it exists) for what you know about me as a learner. If the course exists, continue it: get_course shows my pace, first-try accuracy, recent mistakes, which lessons to write next and when the path is about to run out.
+2. Otherwise research the topic (web search if you have it), ask at most two short questions about my goal and background, then:
+   - Map the branch: get_skill_tree, then add_skills with branch "${topic}": sub-skills from foundations to mastery with prerequisites, each under the D&D ability it trains.
+   - create_course for the first skill with a short curriculum to start (the full path runs ${LEVELS.join(" → ")} and grows with extend_course as I progress), a clear, specific goal, and link_to_skill.
+   - Write the first lessons with write_interactive_lesson, as many as get_course says to keep ready. Follow its style guide: active learning, visuals, one idea at a time.
+3. As I take lessons in the app, keep the next ones written ahead of me, adapt to my accuracy (faster and deeper when I'm acing it, smaller steps and more practice when I'm not) and re-teach my mistakes. Extend the course and the branch before I reach the end.
+4. In this chat: answer questions, explain differently when I'm stuck, and quiz me Socratically (never answer your own questions for me). If I finish a lesson here rather than in the app, grade it honestly and call record_quiz with my score (0–1).
+5. Add flashcards for key facts with add_flashcards, and record durable observations about me as a learner (strengths, misconceptions, pace) with remember, topic "learning".
 
-Be Socratic, rigorous and encouraging. Keep each message focused on the current step.`;
+Be rigorous and encouraging, and keep each message focused on the current step.`;
 }

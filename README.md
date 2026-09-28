@@ -1,6 +1,11 @@
 # 🪨 Basalt
 
-**One free, private workspace for everything you think, draw, build and learn** — with realtime collaboration on any device.
+**Learn anything by doing, like Brilliant, and level up like a D&D character.** Plus notes and canvases for everything else, free and private, on every device.
+
+- **Interactive lessons:** one idea at a time, with questions, sliders, live graphs, diagrams and hands-on practice, and instant feedback on every answer.
+- **A method that works:** every lesson walks the learning loop (preview → understand → explain in your own words → recall → apply), skills add deliberate practice with feedback, and what you learn comes back for spaced review after 1 day, 3 days, a week and a month.
+- **Claude, with your own Claude subscription (no API key):** ask for any skill or topic and Claude researches it, maps the branch you'll follow in your skill tree, builds its courses and keeps lessons written ahead of you at your pace.
+- **A D&D character sheet:** six abilities, scores and modifiers that grow with every lesson, a class, a d20 roll for bonus XP.
 
 Basalt combines:
 
@@ -12,7 +17,7 @@ Basalt combines:
 | **Excalidraw + Krita** | One infinite canvas: shapes, diagrams and text *and* pressure-sensitive painting (brush engine, layers with blend modes, stabilizer, symmetry), with live cursors and links to pages |
 | **Jupyter notebooks** | Runnable JavaScript & Python (Pyodide) cells with shared outputs |
 | **Anki** | Spaced repetition (FSRS) from `Question :: Answer` and `{{c1::cloze}}` lines in any page |
-| **A private tutor** | AI courses from *scratch to PhD level*: curriculum, lessons, quizzes, mastery tracking, Socratic chat |
+| **Brilliant** | Interactive, hands-on lessons with instant feedback, diagrams, sliders and live graphs; a built-in course library, and Claude writes new courses on anything |
 | **An RPG — for real life** | A skill tree across every area of life: levels, XP, ranks, habit quests, streaks and unlockable skills — in a calm, non-gamey design |
 | **Jarvis** | Your own assistant — Claude with tools, living in the app as a little animated character: it searches, writes and organizes pages, plans skills and quests, builds courses and flashcards, remembers things and looks things up on the web. Talk to it by voice. |
 | **Claude memory** | An MCP server so Claude (Desktop / Code) can use your workspace as long-term memory and knowledge vault |
@@ -110,8 +115,18 @@ The relay is a tiny append-only log of encrypted blobs. If it loses its data (e.
 
 ## Features in depth
 
-### Today
-The home screen. Ask your assistant anything, tick off today's quests, see how many flashcards are due, pick up the course lesson you're on, and open today's daily note. The sidebar stays short: Search, Today, the assistant, Skill tree, Flashcards, your pages, and *More* (Graph, Types, Claude memory, Trash).
+### Learn
+The home screen. *Continue* picks up your next lesson; *Review* brings back what's due; once a week it asks how your learning went. Type any skill or topic into *What do you want to learn?* and (in the desktop app with Claude Code) Claude researches it, maps the branch to follow in your skill tree, builds the first course and writes its lessons. *Explore courses* has ready-made courses that work with no AI at all: Memory Palace, Learning How to Learn, Thinking in Probabilities, Cognitive Biases, The Art of Persuasion, The Science of Sleep, Strength Training 101 and Three-Ball Juggling.
+
+**How a lesson works.** Lessons open full screen, one step at a time: a short explanation, then something to do (pick an answer, type one, drag a slider on a live graph, put steps in order, match pairs). Every answer gets instant feedback and the reason why; a miss gives a hint, then the answer, and asks *why* you missed it (didn't know it, misread, slipped, mixed it up), which goes into the course's error log.
+- **Subjects** walk *preview → understand → explain → recall → apply*: you predict before you're taught, explain the idea in your own words and compare it with a model answer (Feynman), recall it with no hints, then apply it to something new.
+- **Skills** walk *preview → understand → practice → reflect*: a clear goal, just enough technique, a timed practice session with focus points, then honest feedback and one thing to change next time.
+- **Review later:** finished lessons come back after 1 day, 3 days, a week, a month and three months, mixed across courses (interleaving). Questions you got wrong come first; a miss starts the gaps over.
+- **Rewards:** stars for first-try accuracy, XP in the skill the course trains (and so your ability score), a d20 roll for bonus XP (a natural 20 doubles it), and a nudge to take a break after 25 minutes.
+
+**Claude keeps your path ready.** After each lesson Claude writes the next ones ahead of you, about three days' worth at your pace, adjusted to how often you get things right the first time, what you got wrong, and your weekly reflection. It also extends the course, and your branch of the skill tree, before you reach the end. This runs through Claude Code with your own Claude sign-in: no API key. Turn it off in the course path. Outside the desktop app, the same requests can be copied into Claude Code or Claude Desktop with Basalt connected.
+
+The sidebar stays short: Search, Learn, *Ask Claude* (your assistant), Character (the skill tree), Flashcards, then your notes and canvases, and *More* (Graph, Types, Claude memory, Trash). In the desktop app, *Ask Claude* also runs through Claude Code with your own sign-in: no API key.
 
 ### Your layout
 Everything around the page is made of panels in two docks: the sidebar on the left and a right dock (the ⊟ button in the top bar). Panels: Navigate, Favorites, Pages, Outline, Backlinks, Local graph, Quests and the Assistant. Drag a panel by its header to reorder it or move it to the other side, click the header to collapse it, and use its ⋯ menu to move it up/down, across, or hide it (handy on iPad). *Add panel* brings hidden ones back and *Reset layout* restores the default; drag the right dock's edge to resize it. Put the Assistant in a dock and `Ctrl/⌘ J` opens it there instead of the floating chat. The layout is saved per device.
@@ -123,7 +138,7 @@ Everything around the page is made of panels in two docks: the sidebar on the le
 - **Types & properties** (Anytype-style): give any page a type and fill in its properties; manage types in *Types*.
 - **Databases** show every object of a type (or only the database's children) as a table, kanban board, gallery, list or calendar, with filters, sorting and grouping.
 - **Graph view** of all links, with a local graph mode.
-- **Daily notes**: *Today’s note* on the Today screen.
+- **Daily notes**: *Today’s note* from `Ctrl/⌘ K`.
 - **Search & commands**: `Ctrl/⌘ K`.
 
 ### Canvas: draw, diagram and paint in one place
@@ -138,7 +153,7 @@ Run **JavaScript** (in a sandboxed worker) and **Python** (Pyodide, with numpy/p
 
 ### Learning
 - **Flashcards anywhere**: write `Front :: Back`, `Front ::: Back` (both directions) or `{{c1::cloze}}` in any page. *Flashcards* schedules them with FSRS and shows streaks, a heatmap and a forecast.
-- **Courses**: create a *Course* page (or *Learn something new* on Today), type any topic → Claude builds a six-level curriculum (Foundations → Beginner → Intermediate → Advanced → Graduate → PhD / research frontier), writes each lesson as a page (with math, worked examples and flashcards that feed your reviews), quizzes you, tracks mastery, and tutors you Socratically.
+- **Courses**: see *Learn* above. Older AI-tutor courses (lessons written as pages, with quizzes) still open as before.
 - **Questions about your notes** go to the assistant, which searches and reads your pages and links the ones it used.
 
 The AI features use your own Anthropic API key (Settings → AI; stored only on your device). Everything else is free and works without one. You can also let **Claude Desktop / Claude Code** do the teaching for free-with-your-subscription through the MCP bridge below.

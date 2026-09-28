@@ -126,9 +126,13 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
           )
           .min(1)
           .max(60),
+        branch: z
+          .string()
+          .optional()
+          .describe('The learning path these skills make up, e.g. "Play guitar": the app shows it as one branch to follow, in order'),
       },
     },
-    ({ skills }) => {
+    ({ skills, branch }) => {
       const ids = tx(() =>
         createSkillsFromPlan(
           doc,
@@ -142,6 +146,7 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
             requiredLevel: s.required_level,
             goalLevel: s.goal_level,
             quests: s.quests,
+            branch,
           })),
         ),
       );

@@ -341,6 +341,66 @@ test("learning: courses, lessons, quizzes and flashcards", async () => {
   await claude.close();
 });
 
+test("interactive lessons: Claude writes steps, extends the path and maps a branch", async () => {
+  const { getLessonContent } = await import("../shared/lesson.ts");
+  const { listSkills, totalXp } = await import("../shared/skills.ts");
+  const key = generateKey();
+  const claude = await claudeSession(key);
+  const created = await claude.call("create_course", {
+    topic: "Juggling",
+    curriculum: { overview: "Three balls.", levels: [{ name: "Foundations", modules: [{ title: "Basics", lessons: [{ title: "One ball" }, { title: "Two balls" }] }] }] },
+  });
+  const lessonId = created.match(/One ball \(lesson_id: (\w+)\)/)![1];
+  const course = listPages(claude.doc).find((p) => p.kind === "course")!;
+  const page = getPage(claude.doc, course.id)!;
+  assert.equal((page.get("course") as Y.Map<unknown>).get("format"), "interactive");
+
+  // A broken lesson is refused with what to fix.
+  const bad = await claude.callRaw("write_interactive_lesson", { course: "Juggling", lesson_id: lessonId, steps: [{ type: "explain", body: "Hi" }, { type: "choice", prompt: "?", options: ["a"], answer: [0] }, { type: "explain", body: "x" }] });
+  assert.equal(bad.isError, true);
+  assert.match(bad.text, /step 2/);
+
+  const wrote = await claude.call("write_interactive_lesson", {
+    course: "Juggling",
+    lesson_id: lessonId,
+    steps: [
+      { type: "explain", body: "Throw at eye height.", phase: "understand", figure: '<svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>' },
+      { type: "choice", prompt: "Where should the ball peak?", options: ["Eye height", "Knee height"], answer: [0], explain: "Eye height gives time.", phase: "recall" },
+      { type: "slider", prompt: "Set the height", min: 0, max: 2, answer: 0.5, tolerance: 0.1, plot: "2*sqrt(2*x/9.81)", explain: "About half a metre." },
+      { type: "practice", prompt: "Throw one ball", minutes: 5, focus: ["Eye height"], goal: "10 in a row" },
+    ],
+  });
+  assert.match(wrote, /Wrote "One ball" \(4 steps\)/);
+  assert.match(wrote, /Still to write: "Two balls"/);
+  const content = getLessonContent(page, lessonId)!;
+  assert.equal(content.source, "claude");
+  assert.equal(content.steps[2].type, "slider");
+
+  const outline = await claude.call("get_course", { id_or_title: "Juggling" });
+  assert.match(outline, /One ball \(lesson_id: \w+ · interactive, 4 steps\)/);
+  assert.match(outline, /Learner: 0\.0 lessons\/day/);
+  assert.match(outline, /Write next \(write_interactive_lesson\): "Two balls"/);
+  assert.match(outline, /about to run out: add the next module with extend_course/);
+
+  const extended = await claude.call("extend_course", { course: "Juggling", level: "Beginner", module: { title: "Three balls", lessons: [{ title: "The cascade" }] } });
+  assert.match(extended, /Added "Three balls" to Beginner/);
+  assert.match(await claude.call("get_course", { id_or_title: "Juggling" }), /## Beginner[\s\S]*The cascade/);
+
+  // A branch: skills Claude maps for one goal, shown together in the app.
+  await claude.call("add_skills", {
+    branch: "Juggle five balls",
+    skills: [
+      { key: "three", name: "Three-ball cascade", area: "Sleight of Hand" },
+      { key: "four", name: "Four-ball fountain", area: "dex", prerequisites: ["three"] },
+    ],
+  });
+  const branch = listSkills(claude.doc).filter((s) => s.branch === "Juggle five balls");
+  assert.deepEqual(branch.map((s) => s.category), ["dex", "dex"]);
+  await claude.call("link_to_skill", { skill: "Three-ball cascade", page: course.id });
+  assert.equal(totalXp(claude.doc, branch[0].id), 0);
+  await claude.close();
+});
+
 test("skill tree: Claude plans skills, logs practice, awards XP and completes quests", async () => {
   const { listSkills, totalXp, skillsMap } = await import("../shared/skills.ts");
   const key = generateKey();

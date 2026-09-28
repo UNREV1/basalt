@@ -145,8 +145,10 @@ bullets, no trailing spaces); `memory_str_replace` matches against exactly what
 | --- | --- |
 | `create_course(topic, goal?, start_level?, curriculum, parent?)` | Course page with levels → modules → lessons (ids assigned). |
 | `update_course(course, curriculum?, goal?)` | Revise the path; keep lesson ids to keep progress. |
-| `get_course(id_or_title)` | Outline with lesson ids, status, best quiz score, next lesson. |
-| `write_lesson(course, lesson_id, markdown)` | Create/update the lesson sub-page; marks it in progress. |
+| `get_course(id_or_title)` | Outline with lesson ids, status, best score, next lesson, the learner's pace and accuracy, which lessons to write next, and whether the path is about to run out. |
+| `write_interactive_lesson(course, lesson_id, steps[])` | A Brilliant-style lesson the app plays step by step: explain, explore (slider + live graph), choice, input, slider, order, match, reveal, teach (explain it in your own words) and practice (timed, with self-feedback). Any step can have an SVG or image `figure` and a learning-loop `phase`. Invalid lessons are refused with what to fix. |
+| `extend_course(course, level, module)` | Add the next module of lessons without touching progress. |
+| `write_lesson(course, lesson_id, markdown)` | Older courses: the lesson as a sub-page. |
 | `record_quiz(course, lesson_id, score)` | Score 0–1 (or %); best ≥ 0.8 → mastered. |
 | `add_flashcards(page, cards[])` | Appends a `## Flashcards` section of `front :: back` lines for spaced repetition. |
 
@@ -155,8 +157,8 @@ bullets, no trailing spaces); `memory_str_replace` matches against exactly what
 | Tool | Purpose |
 | --- | --- |
 | `get_skill_tree()` | Every skill with level, rank, XP, streak, lock state, prerequisites and quests, plus today's quests. |
-| `list_life_areas()` | Areas (Body, Mind, Craft & Career, Wealth, Social, Heart, Creativity, Home & Life, Adventure, custom). |
-| `add_skills(skills[])` | Add a whole plan at once; prerequisites reference keys in the call or existing skills. |
+| `list_life_areas()` | The six abilities (Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, plus custom ones) and the D&D skills under each. |
+| `add_skills(skills[], branch?)` | Add a whole plan at once; prerequisites reference keys in the call or existing skills. `branch` groups them as one learning path the app shows in order. |
 | `update_skill(skill, …)` | Rename, change area/icon/goal, set prerequisites, archive. |
 | `log_practice(skill, minutes, note?)` | Practice time → XP (10 XP/min); reports level-ups. |
 | `award_xp(skill, amount, reason)` | XP for milestones that aren't timed practice (max 1000). |
@@ -167,10 +169,10 @@ bullets, no trailing spaces); `memory_str_replace` matches against exactly what
 
 - `memory_protocol` — load memory at the start of the conversation, record
   durable facts and preferences, keep memory organized, never store secrets.
-- `teach_me(topic, level?)` — act as a tutor from scratch to PhD level: a
-  six-level course (Foundations → Beginner → Intermediate → Advanced → Graduate
-  → PhD / Research frontier), one lesson at a time with `write_lesson`, a quiz
-  graded with `record_quiz`, flashcards, and adaptation to the learner.
+- `teach_me(topic, level?)` — act as a tutor: research the topic, map the
+  branch in the skill tree, build the first course and write interactive
+  lessons ahead of the learner, adapting to their pace, accuracy and mistakes,
+  and extending the path (up to PhD / research frontier) as they go.
 - `level_up_my_life(goal?)` — act as a life coach: design or extend the skill
   tree for any goal, set realistic habit quests, link courses, and log what
   you report doing as XP.

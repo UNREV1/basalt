@@ -80,24 +80,11 @@ export function NoKeyPanel({
       <div className="ai-nokey-options">
         <div className="ai-nokey-option">
           <div className="ai-nokey-option-title">
-            <span aria-hidden>🔑</span> Use your Anthropic API key
-          </div>
-          <ol className="ai-nokey-steps">
-            <li>Create a key at console.anthropic.com.</li>
-            <li>Paste it in Settings → AI.</li>
-            <li>That's it. The key stays on this device; requests go straight from your browser to Anthropic.</li>
-          </ol>
-          <button type="button" className="btn btn-primary btn-sm" onClick={openAiSettings}>
-            Open Settings → AI
-          </button>
-        </div>
-        <div className="ai-nokey-option">
-          <div className="ai-nokey-option-title">
-            <span aria-hidden>💬</span> Free: use the Claude app
+            <span aria-hidden>💬</span> Recommended: your Claude subscription, no API key
           </div>
           <p>
-            Connect Claude Desktop or Claude Code to this workspace with the Basalt MCP server (setup is on the Claude
-            memory page), then ask Claude. {appHint}
+            In the Basalt desktop app with Claude Code installed, Claude works right here. Anywhere else, connect Claude
+            Code or Claude Desktop to this workspace (setup is on the Claude memory page), then ask Claude. {appHint}
           </p>
           {claudePrompt && (
             <div className="ai-nokey-say">
@@ -110,6 +97,19 @@ export function NoKeyPanel({
           )}
           <button type="button" className="btn btn-sm" onClick={() => openMemoryPage(ws)}>
             Set up the MCP connection →
+          </button>
+        </div>
+        <div className="ai-nokey-option">
+          <div className="ai-nokey-option-title">
+            <span aria-hidden>🔑</span> Or: an Anthropic API key
+          </div>
+          <ol className="ai-nokey-steps">
+            <li>Create a key at console.anthropic.com.</li>
+            <li>Paste it in Settings → AI.</li>
+            <li>That's it. The key stays on this device; requests go straight from your browser to Anthropic.</li>
+          </ol>
+          <button type="button" className="btn btn-primary btn-sm" onClick={openAiSettings}>
+            Open Settings → AI
           </button>
         </div>
       </div>

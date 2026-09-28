@@ -13,6 +13,8 @@ import {
   type PageMeta,
 } from "../shared/model.ts";
 import { allLessons, courseMap, getCurriculum, getProgress } from "../shared/course.ts";
+import { courseAhead, learnerStats } from "../shared/learning.ts";
+import { getLessonContent } from "../shared/lesson.ts";
 import { readSceneFromBoard, sceneText } from "../shared/excalidraw-md.ts";
 import { normalizeLinkTarget, notebookOutputText, pagePropEntries, propDisplayValue } from "../shared/vault.ts";
 
@@ -181,6 +183,14 @@ export function courseOutline(doc: Y.Doc, page: Y.Map<any>): string {
   );
   const next = progress.find((l) => l.p.status === "in-progress") ?? progress.find((l) => l.p.status === "not-started");
   if (next) out.push(`Next up: "${next.lesson.title}" (lesson_id: ${next.lesson.id}) — ${next.level.name} › ${next.module.title}`);
+  // How far ahead lessons are written, for keeping the path ready at the learner's pace.
+  const stats = learnerStats(doc);
+  const ahead = courseAhead(page, stats.aheadTarget);
+  out.push(
+    `Learner: ${stats.pace.toFixed(1)} lessons/day over 14 days${stats.accuracy === null ? "" : `, ${Math.round(stats.accuracy * 100)}% right first try lately`}${stats.streak ? `, ${stats.streak}-day streak` : ""}. Keep ${stats.aheadTarget} lessons written ahead; ${ahead.written} ready.`,
+  );
+  if (ahead.toWrite.length) out.push(`Write next (write_interactive_lesson): ${ahead.toWrite.map((l) => `"${l.title}" (${l.id})`).join(", ")}`);
+  if (ahead.nearEnd) out.push("The path is about to run out: add the next module with extend_course.");
   if (curriculum.overview) out.push("", curriculum.overview);
   for (const level of curriculum.levels) {
     out.push("", `## ${level.name}${level.summary ? ` — ${level.summary}` : ""}`);
@@ -191,6 +201,8 @@ export function courseOutline(doc: Y.Doc, page: Y.Map<any>): string {
         const mark = p.status === "mastered" ? "[x]" : p.status === "in-progress" ? "[~]" : p.status === "skipped" ? "[-]" : "[ ]";
         const bits = [`lesson_id: ${lesson.id}`];
         if (p.status !== "not-started") bits.push(p.status);
+        const content = getLessonContent(page, lesson.id);
+        if (content) bits.push(`interactive, ${content.steps.length} steps`);
         if (p.quizzes.length) bits.push(`best quiz ${Math.round(p.mastery * 100)}% over ${p.quizzes.length} quiz${p.quizzes.length === 1 ? "" : "zes"}`);
         const lessonPage = p.lessonPageId ? getPage(doc, p.lessonPageId) : undefined;
         if (lessonPage && !lessonPage.get("deletedAt")) bits.push(`page: ${ref(pageMeta(lessonPage))}`);

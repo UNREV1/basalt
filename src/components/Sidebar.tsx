@@ -385,7 +385,7 @@ export function NavPanel() {
         <span className="grow">Search</span>
         <span className="kbd">{MOD} K</span>
       </button>
-      {navItem("home", "home", "Today")}
+      {navItem("home", "cap", "Learn")}
       {!hidden.has("assistant") && (
         <button
           className={`nav-item${assistant.open ? " active" : ""}`}

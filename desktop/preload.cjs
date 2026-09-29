@@ -21,8 +21,23 @@ contextBridge.exposeInMainWorld("basaltDesktop", {
   /** Claude in the app, through Claude Code (no API key). */
   claude: {
     available: () => ipcRenderer.invoke("basalt:claude-available"),
-    /** Open a terminal with Claude Code, to sign in. */
+    /** Sign in to Claude Code (`claude auth login`, run by Basalt): the browser opens. */
     signIn: () => ipcRenderer.invoke("basalt:claude-signin"),
+    /** The code the sign-in page shows, if the browser couldn't hand it back. */
+    signInCode: (code) => ipcRenderer.invoke("basalt:claude-signin-code", String(code)),
+    signInCancel: () => ipcRenderer.invoke("basalt:claude-signin-cancel"),
+    /** Open the sign-in page Claude Code printed. */
+    signInPage: () => ipcRenderer.invoke("basalt:claude-signin-page"),
+    /** The fallback: a terminal with `claude` running. */
+    signInTerminal: () => ipcRenderer.invoke("basalt:claude-signin-terminal"),
+    onSignIn: (cb) => {
+      const handler = (_e, ev) => cb(ev);
+      ipcRenderer.on("basalt:claude-signin-event", handler);
+      return () => ipcRenderer.removeListener("basalt:claude-signin-event", handler);
+    },
+    /** Repair Claude Code's settings file (or move it aside), keeping the original. */
+    fixSettings: () => ipcRenderer.invoke("basalt:claude-settings-fix"),
+    showSettings: () => ipcRenderer.invoke("basalt:claude-settings-show"),
     run: (opts) => ipcRenderer.invoke("basalt:claude-run", opts),
     cancel: (id) => ipcRenderer.invoke("basalt:claude-cancel", String(id)),
     onEvent: (cb) => {

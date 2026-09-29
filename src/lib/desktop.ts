@@ -13,10 +13,22 @@ export interface DesktopBridge {
   addToClaudeCode?(link: string): Promise<{ ok: boolean; message: string } | null>;
   /** Claude in the app through Claude Code (desktop/claude-run.cjs). */
   claude?: {
-    /** account: the Claude account Claude Code is signed in with, if any. */
-    available(): Promise<{ installed: boolean; account?: string | null } | null>;
-    /** Open a terminal with Claude Code running, to sign in. */
+    /**
+     * account: the Claude account Claude Code is signed in with, if any.
+     * settings: what's wrong with Claude Code's settings file, if anything.
+     */
+    available(): Promise<{ installed: boolean; account?: string | null; settings?: ClaudeSettingsProblem | null } | null>;
+    /** Sign in (`claude auth login`, run by Basalt): the browser opens; events follow on onSignIn. */
     signIn?(): Promise<{ ok: boolean; message?: string } | null>;
+    signInCode?(code: string): Promise<boolean>;
+    signInCancel?(): Promise<boolean>;
+    /** Open the sign-in page Claude Code printed (it shows a code to paste back). */
+    signInPage?(): Promise<boolean>;
+    /** The fallback: a terminal window with `claude` running. */
+    signInTerminal?(): Promise<{ ok: boolean; message?: string } | null>;
+    onSignIn?(cb: (ev: ClaudeSignInEvent) => void): () => void;
+    fixSettings?(): Promise<{ ok: boolean; message: string; fixed?: "repaired" | "moved"; backup?: string } | null>;
+    showSettings?(): Promise<boolean>;
     run(opts: ClaudeRunOptions): Promise<{ id?: string; error?: string } | null>;
     cancel(id: string): Promise<boolean>;
     onEvent(cb: (ev: ClaudeRunEvent) => void): () => void;
@@ -51,6 +63,17 @@ export type ClaudeRunEvent = { id: string } & (
       sessionId: string | null;
     }
 );
+
+/** Claude Code's settings file doesn't parse: where and why (never its contents). */
+export interface ClaudeSettingsProblem {
+  file: string;
+  message: string;
+  where: string;
+}
+
+export type ClaudeSignInEvent =
+  | { type: "url"; url: string }
+  | { type: "done"; ok: boolean; account?: string | null; error?: string; cancelled?: boolean; fallback?: boolean };
 
 export interface ClaudeCodeStatus {
   /** The claude CLI was found on this computer. */

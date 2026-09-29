@@ -178,9 +178,32 @@ function registerIpc() {
     return claudeSetup.add(link, claudeLaunch);
   });
   // Claude in the app: background Claude Code runs with Basalt's connector (desktop/claude-run.cjs).
-  ipcMain.handle("basalt:claude-available", (e) => (fromApp(e) ? { installed: !!claudeSetup.findClaude(), account: claudeSetup.authInfo().account } : null));
-  // Sign in to Claude Code: a terminal with `claude` running.
-  ipcMain.handle("basalt:claude-signin", (e) => (fromApp(e) ? claudeSetup.openSignIn() : null));
+  ipcMain.handle("basalt:claude-available", (e) =>
+    fromApp(e) ? { installed: !!claudeSetup.findClaude(), account: claudeSetup.authInfo().account, settings: claudeSetup.settingsCheck() } : null,
+  );
+  // Sign in to Claude Code without a terminal (`claude auth login`); a terminal is the fallback.
+  ipcMain.handle("basalt:claude-signin", (e) => {
+    if (!fromApp(e)) return null;
+    const sender = e.sender;
+    return claudeSetup.startSignIn((ev) => {
+      if (!sender.isDestroyed()) sender.send("basalt:claude-signin-event", ev);
+    });
+  });
+  ipcMain.handle("basalt:claude-signin-code", (e, code) => (fromApp(e) && typeof code === "string" ? claudeSetup.sendSignInCode(code) : false));
+  ipcMain.handle("basalt:claude-signin-cancel", (e) => (fromApp(e) ? claudeSetup.cancelSignIn() : false));
+  ipcMain.handle("basalt:claude-signin-page", (e) => {
+    const url = fromApp(e) ? claudeSetup.signInUrl() : null;
+    if (url) shell.openExternal(url);
+    return !!url;
+  });
+  ipcMain.handle("basalt:claude-signin-terminal", (e) => (fromApp(e) ? claudeSetup.openSignIn() : null));
+  // Claude Code's settings file: fix it, or show it in its folder.
+  ipcMain.handle("basalt:claude-settings-fix", (e) => (fromApp(e) ? claudeSetup.fixSettings() : null));
+  ipcMain.handle("basalt:claude-settings-show", (e) => {
+    if (!fromApp(e)) return false;
+    shell.showItemInFolder(claudeSetup.settingsFile());
+    return true;
+  });
   ipcMain.handle("basalt:claude-run", (e, opts) => {
     if (!fromApp(e) || !opts || typeof opts !== "object") return null;
     const { prompt, system, resume, web, link } = opts;

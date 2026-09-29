@@ -4,7 +4,17 @@
 
 import { useState } from "react";
 import { Icon } from "../../components/ui.tsx";
-import { claudeBridge, retryClaudeJob, signInToClaude, type ClaudeJob } from "../../lib/claude.ts";
+import {
+  cancelSignIn,
+  claudeBridge,
+  openSignInPage,
+  retryClaudeJob,
+  sendSignInCode,
+  signInInTerminal,
+  signInToClaude,
+  useClaudeSignIn,
+  type ClaudeJob,
+} from "../../lib/claude.ts";
 import { useApp } from "../../lib/hooks.ts";
 import type { ClaudeRequest } from "./plan.ts";
 import "./path.css";
@@ -53,7 +63,6 @@ export function ClaudeJobLine({
   onClose?: () => void;
   className?: string;
 }) {
-  const { toast } = useApp();
   const failed = job?.status === "error";
   const auth = failed && job?.errorCode === "auth";
   const retry = onRetry ?? (job ? () => void retryClaudeJob(job.key) : undefined);
@@ -66,26 +75,18 @@ export function ClaudeJobLine({
           {failed ? job?.error : job?.status === "running" ? `${job.activity}…` : job?.status === "done" ? "Done." : "Starting…"}
           {!failed && note ? ` ${note}` : ""}
         </span>
-        {failed && (
-          <span className="cj-actions">
-            {auth && claudeBridge?.signIn && (
-              <button
-                className="btn btn-sm btn-primary"
-                onClick={async () => {
-                  const res = await signInToClaude();
-                  toast(res.ok ? "Sign in in the terminal window, then press Try again" : (res.message ?? "Open a terminal and run `claude` to sign in."));
-                }}
-              >
-                Sign in to Claude Code
-              </button>
-            )}
-            {retry && (
-              <button className={`btn btn-sm${auth ? "" : " btn-primary"}`} onClick={retry}>
-                Try again
-              </button>
-            )}
-          </span>
-        )}
+        {failed &&
+          (auth && claudeBridge?.signIn ? (
+            <ClaudeSignInPanel onRetry={retry} />
+          ) : (
+            retry && (
+              <span className="cj-actions">
+                <button className="btn btn-sm btn-primary" onClick={retry}>
+                  Try again
+                </button>
+              </span>
+            )
+          ))}
       </span>
       {onClose && (
         <button className="icon-btn" aria-label={failed ? "Dismiss" : "Stop waiting"} onClick={onClose}>
@@ -93,5 +94,91 @@ export function ClaudeJobLine({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * Signing in to Claude Code, right where it's needed: Basalt runs the sign-in
+ * and your browser opens. When the browser can't hand the sign-in back, the
+ * page shows a code to paste here. Anything waiting on it then goes again.
+ */
+export function ClaudeSignInPanel({ onRetry }: { onRetry?: () => void }) {
+  const { toast } = useApp();
+  const st = useClaudeSignIn();
+  const [code, setCode] = useState("");
+  const [sent, setSent] = useState(false);
+  if (st.status === "waiting") {
+    return (
+      <span className="cj-signin" role="status">
+        <span className="cj-signin-wait">
+          <span className="cp-spinner" aria-hidden /> Finish signing in in your browser. Basalt carries on by itself.
+        </span>
+        {st.url && (
+          <>
+            <span className="cj-signin-help">
+              Browser didn’t open?{" "}
+              <button className="cj-link" onClick={() => void openSignInPage()}>
+                Open the sign-in page
+              </button>
+              , then paste the code it shows:
+            </span>
+            <form
+              className="cj-code"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (await sendSignInCode(code)) {
+                  setCode("");
+                  setSent(true);
+                }
+              }}
+            >
+              <input
+                className="input"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                placeholder={sent ? "Checking the code…" : "Paste the code"}
+                aria-label="Sign-in code"
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button className="btn btn-sm" disabled={!code.trim()}>
+                Continue
+              </button>
+            </form>
+          </>
+        )}
+        <span className="cj-actions">
+          <button className="btn btn-sm btn-ghost" onClick={cancelSignIn}>
+            Cancel
+          </button>
+        </span>
+      </span>
+    );
+  }
+  return (
+    <span className="cj-signin">
+      {st.status === "error" && <span className="cj-signin-error">Signing in didn’t finish: {st.error}</span>}
+      <span className="cj-actions">
+        <button className="btn btn-sm btn-primary" onClick={() => void signInToClaude()}>
+          {st.status === "error" ? "Try signing in again" : "Sign in to Claude Code"}
+        </button>
+        {st.status === "error" && st.fallback && (
+          <button
+            className="btn btn-sm"
+            onClick={async () => {
+              const res = await signInInTerminal();
+              toast(res.ok ? "Sign in in the terminal window, then press Try again" : (res.message ?? "Open a terminal and run `claude auth login`."));
+            }}
+          >
+            Use a terminal instead
+          </button>
+        )}
+        {onRetry && (
+          <button className="btn btn-sm" onClick={onRetry}>
+            Try again
+          </button>
+        )}
+      </span>
+    </span>
   );
 }

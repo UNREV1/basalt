@@ -372,3 +372,48 @@
   flex-wrap: wrap;
   margin-top: 8px;
 }
+.cj-signin {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.cj-signin .cj-actions {
+  margin-top: 0;
+}
+.cj-signin-wait {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+.cj-signin-help {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.cj-signin-error {
+  color: var(--danger, #d70015);
+  overflow-wrap: anywhere;
+}
+.cj-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.cj-code {
+  display: flex;
+  gap: 6px;
+  max-width: 360px;
+}
+.cj-code .input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12.5px;
+}

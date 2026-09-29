@@ -285,6 +285,22 @@
   color: var(--danger) !important;
   white-space: pre-wrap;
 }
+.mem-connect li.mem-connect-warn {
+  align-items: flex-start;
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+  background: var(--danger-soft);
+}
+.mem-connect-warn .mem-connect-num {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.mem-connect-warn code {
+  overflow-wrap: anywhere;
+}
+.mem-connect-text > .mem-connect-note {
+  color: var(--text);
+  font-weight: 500;
+}
 .mem-connect .btn {
   flex: none;
 }
@@ -304,7 +320,7 @@
   .mem-connect li {
     flex-wrap: wrap;
   }
-  .mem-connect .btn {
+  .mem-connect li > .btn {
     margin-left: 36px;
   }
 }

@@ -154,8 +154,66 @@ export function dismissClaudeJob(key: string) {
   emit();
 }
 
-/** Open a terminal with Claude Code running, to sign in (desktop app). */
-export async function signInToClaude(): Promise<{ ok: boolean; message?: string }> {
-  const res = await claudeBridge?.signIn?.();
-  return res ?? { ok: false, message: "Open a terminal and run `claude` to sign in." };
+// ---- signing in to Claude Code ----------------------------------------------------------
+
+export interface ClaudeSignIn {
+  status: "idle" | "waiting" | "done" | "error";
+  /** The sign-in page Claude Code printed (the fallback when the browser didn't open). */
+  url?: string;
+  error?: string;
+  /** Signing in without a terminal didn't work here: offer the terminal. */
+  fallback?: boolean;
+  account?: string | null;
+}
+
+let signInState: ClaudeSignIn = { status: "idle" };
+const signInListeners = new Set<() => void>();
+let signInHooked = false;
+
+function setSignIn(next: ClaudeSignIn) {
+  signInState = next;
+  for (const l of signInListeners) l();
+}
+
+function hookSignIn() {
+  if (signInHooked || !claudeBridge?.onSignIn) return;
+  signInHooked = true;
+  claudeBridge.onSignIn((ev) => {
+    if (ev.type === "url") setSignIn({ ...signInState, url: ev.url });
+    else if (ev.cancelled) setSignIn({ status: "idle" });
+    else if (ev.ok) {
+      setSignIn({ status: "done", account: ev.account });
+      // Signed in: everything that stopped for it goes again by itself.
+      for (const j of jobs) if (j.status === "error" && j.errorCode === "auth") void retryClaudeJob(j.key);
+    } else setSignIn({ status: "error", error: ev.error || "Signing in didn't finish.", fallback: ev.fallback });
+  });
+}
+
+export function useClaudeSignIn(): ClaudeSignIn {
+  return useSyncExternalStore(
+    (cb) => {
+      signInListeners.add(cb);
+      return () => signInListeners.delete(cb);
+    },
+    () => signInState,
+  );
+}
+
+/** Sign in to Claude Code: Basalt runs `claude auth login`, which opens the browser. */
+export async function signInToClaude() {
+  if (!claudeBridge?.signIn) return;
+  hookSignIn();
+  setSignIn({ status: "waiting" });
+  const res = await claudeBridge.signIn().catch((e: unknown) => ({ ok: false, message: String(e) }));
+  if (!res?.ok) setSignIn({ status: "error", error: res?.message || "Claude Code couldn't start signing in.", fallback: true });
+}
+
+export const sendSignInCode = (code: string) => claudeBridge?.signInCode?.(code) ?? Promise.resolve(false);
+export const cancelSignIn = () => void claudeBridge?.signInCancel?.();
+export const openSignInPage = () => claudeBridge?.signInPage?.() ?? Promise.resolve(false);
+
+/** The fallback: a terminal window with `claude` running. */
+export async function signInInTerminal(): Promise<{ ok: boolean; message?: string }> {
+  const res = await claudeBridge?.signInTerminal?.();
+  return res ?? { ok: false, message: "Open a terminal and run `claude auth login` to sign in." };
 }

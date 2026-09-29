@@ -6,7 +6,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useApp, usePages, usePeers, useWorkspaceStatus } from "../../lib/hooks.ts";
 import { shareLink, type Workspace } from "../../lib/workspace.ts";
 import { getSettings } from "../../lib/settings.ts";
-import { signInToClaude } from "../../lib/claude.ts";
+import { useClaudeSignIn } from "../../lib/claude.ts";
+import type { ClaudeSettingsProblem } from "../../lib/desktop.ts";
+import { ClaudeSignInPanel } from "../lessons/ClaudeStatus.tsx";
 import { desktop, type ClaudeCodeStatus } from "../../lib/desktop.ts";
 import { displayTitle, ensureSystemPage, pageText, type PageMeta } from "../../../shared/model.ts";
 import { Icon, timeAgo } from "../../components/ui.tsx";
@@ -127,12 +129,28 @@ const CODE_STATE: Record<ClaudeCodeStatus["state"], string> = {
 function ClaudeCodeConnect({ link, connected }: { link: string; connected: boolean }) {
   const [st, setSt] = useState<ClaudeCodeStatus | null>(null);
   const [account, setAccount] = useState<string | null | undefined>(undefined);
+  const [settings, setSettings] = useState<ClaudeSettingsProblem | null>(null);
+  const [resign, setResign] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [fixNote, setFixNote] = useState("");
+  const signIn = useClaudeSignIn();
   const refresh = useCallback(() => {
     desktop?.claudeCodeStatus?.(link).then(setSt, () => setSt(null));
-    desktop?.claude?.available().then((a) => setAccount(a?.account ?? null), () => setAccount(null));
+    desktop?.claude?.available().then(
+      (a) => {
+        setAccount(a?.account ?? null);
+        setSettings(a?.settings ?? null);
+      },
+      () => setAccount(null),
+    );
   }, [link]);
+  // Signed in just now: show the account.
+  useEffect(() => {
+    if (signIn.status !== "done") return;
+    setResign(false);
+    refresh();
+  }, [signIn.status, refresh]);
   useEffect(() => {
     refresh();
     // It may have been added by hand in a terminal meanwhile.
@@ -151,30 +169,71 @@ function ClaudeCodeConnect({ link, connected }: { link: string; connected: boole
 
   const added = st?.state === "this";
   const missing = st ? !st.installed && !added : false;
-  const signIn = async () => {
-    const res = await signInToClaude();
-    if (!res.ok) setError(res.message ?? "Open a terminal and run `claude` to sign in.");
+  const fixSettings = async () => {
+    const res = await desktop?.claude?.fixSettings?.();
+    setFixNote(res?.message ?? "");
+    refresh();
   };
   return (
     <ol className="mem-connect">
       {!missing && account !== undefined && (
-        <li className={account ? "done" : ""}>
+        <li className={account && !resign ? "done" : ""}>
           <span className="mem-connect-num" aria-hidden>
-            {account ? <Icon name="check" size={13} stroke={2.6} /> : <Icon name="lock" size={12} />}
+            {account && !resign ? <Icon name="check" size={13} stroke={2.6} /> : <Icon name="lock" size={12} />}
           </span>
           <div className="mem-connect-text">
             <strong>{account ? "Signed in to Claude Code" : "Sign in to Claude Code"}</strong>
             <span>
               {account
                 ? `As ${account}. Basalt uses your Claude plan through it: no API key.`
-                : "Basalt uses your Claude plan through Claude Code, so it needs your sign-in once. A terminal opens with Claude: sign in there (type /login if it doesn't ask)."}
+                : "Basalt uses your Claude plan through Claude Code, so it needs your sign-in once. Your browser opens to sign in; no terminal needed."}
+              {account && !resign && signIn.status !== "waiting" && (
+                <>
+                  {" "}
+                  <button className="cj-link" onClick={() => setResign(true)}>
+                    Sign in again
+                  </button>
+                </>
+              )}
+            </span>
+            {(!account || resign || signIn.status === "waiting") && <ClaudeSignInPanel />}
+          </div>
+        </li>
+      )}
+      {settings && (
+        <li className="mem-connect-warn">
+          <span className="mem-connect-num" aria-hidden>
+            <Icon name="x" size={12} />
+          </span>
+          <div className="mem-connect-text">
+            <strong>Claude Code’s settings file has a mistake</strong>
+            <span>
+              {settings.message}
+              {settings.where ? ` (${settings.where})` : ""} in <code>{settings.file}</code>. Claude Code skips the whole file while it’s broken, and
+              stops at a “Settings Error” when it starts in a terminal. Fix repairs small slips like a stray comma; if it can’t, it moves the file
+              aside so Claude Code uses its defaults. Your original is always kept.
+            </span>
+            {fixNote && <span className="mem-connect-note">{fixNote}</span>}
+            <span className="cj-actions">
+              <button className="btn btn-sm btn-primary" onClick={fixSettings}>
+                Fix it
+              </button>
+              <button className="btn btn-sm" onClick={() => void desktop?.claude?.showSettings?.()}>
+                Show the file
+              </button>
             </span>
           </div>
-          {!account && (
-            <button className="btn btn-primary" onClick={signIn}>
-              Sign in
-            </button>
-          )}
+        </li>
+      )}
+      {!settings && fixNote && (
+        <li className="done">
+          <span className="mem-connect-num" aria-hidden>
+            <Icon name="check" size={13} stroke={2.6} />
+          </span>
+          <div className="mem-connect-text">
+            <strong>Claude Code’s settings file is fixed</strong>
+            <span>{fixNote}</span>
+          </div>
         </li>
       )}
       <li className={added ? "done" : ""}>

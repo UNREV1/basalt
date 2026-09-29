@@ -10,6 +10,7 @@ const http = require("node:http");
 const path = require("node:path");
 const { createUpdater } = require("./updater.cjs");
 const claudeSetup = require("./claude-setup.cjs");
+const network = require("./network.cjs");
 const claudeRun = require("./claude-run.cjs");
 
 // The web app's storage (IndexedDB) is tied to its address, so always prefer
@@ -167,6 +168,9 @@ function registerIpc() {
     buildMenu();
     return updater.isAutomatic();
   });
+  // Phones and tablets on the same network (desktop/network.cjs).
+  ipcMain.handle("basalt:network-status", (e) => (fromApp(e) ? network.firewallStatus() : null));
+  ipcMain.handle("basalt:network-allow", (e) => (fromApp(e) ? network.allowThroughFirewall() : null));
   ipcMain.handle("basalt:open-data-folder", (e) => (fromApp(e) ? shell.openPath(app.getPath("userData")) : undefined));
   // The page only passes the workspace link; the command Claude runs is always this app's own.
   ipcMain.handle("basalt:claude-code-status", (e, link) =>

@@ -46,15 +46,51 @@ export interface BasaltServer {
 const MAX_MESSAGE_BYTES = 50 * 1024 * 1024;
 const ROOM_IDLE_MS = 5 * 60 * 1000;
 
-/** http://<address>:<port> for each LAN IPv4 address, so other devices can join. */
-export function lanUrls(port: number): string[] {
-  const out: string[] = [];
-  for (const list of Object.values(os.networkInterfaces())) {
+/** Adapters other devices can't reach this computer through (virtual machines, WSL, VPNs, Bluetooth, hotspots). */
+const VIRTUAL = /vethernet|virtualbox|vmware|vmnet|hyper-v|wsl|docker|^br-|^veth|virbr|bluetooth|tailscale|zerotier|vpn|^utun|^awdl|^llw|loopback|local area connection\*|npcap/i;
+
+/** How likely an address is to be the one a phone on the same Wi-Fi can reach (higher is likelier). */
+function reachability(name: string, address: string): number {
+  let score = 0;
+  if (VIRTUAL.test(name)) score -= 100;
+  if (/wi-?fi|wlan|wireless|^wl/i.test(name)) score += 30;
+  else if (/ethernet|^eth|^en/i.test(name)) score += 20;
+  // Home networks; not VirtualBox's (192.168.56.x) or Windows' hotspot (192.168.137.x) ranges.
+  if (/^192\.168\.(56|137)\./.test(address)) score -= 50;
+  else if (address.startsWith("192.168.")) score += 10;
+  else if (address.startsWith("10.")) score += 8;
+  else if (/^172\.(1[6-9]|2\d|3[01])\./.test(address)) score += 2;
+  else if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(address)) score -= 20; // carrier-grade NAT, Tailscale
+  return score;
+}
+
+export interface LanNetwork {
+  url: string;
+  /** The adapter's name, e.g. "Wi-Fi" or "Ethernet". */
+  name: string;
+  /** Looks like a real home or office network (not a virtual adapter). */
+  likely: boolean;
+}
+
+/**
+ * This computer's addresses other devices can try, likeliest first: the Wi-Fi
+ * or Ethernet one before virtual adapters (WSL, Hyper-V, VirtualBox, VPNs).
+ */
+export function lanNetworks(port: number, interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]> = os.networkInterfaces()): LanNetwork[] {
+  const out: (LanNetwork & { score: number })[] = [];
+  for (const [name, list] of Object.entries(interfaces)) {
     for (const a of list ?? []) {
-      if (a.family === "IPv4" && !a.internal) out.push(`http://${a.address}:${port}`);
+      if (a.family !== "IPv4" || a.internal || a.address.startsWith("169.254.")) continue;
+      const score = reachability(name, a.address);
+      out.push({ url: `http://${a.address}:${port}`, name, likely: score >= 0, score });
     }
   }
-  return out;
+  return out.sort((x, y) => y.score - x.score).map(({ score: _, ...n }) => n);
+}
+
+/** http://<address>:<port> for each LAN IPv4 address, likeliest first, so other devices can join. */
+export function lanUrls(port: number, interfaces?: NodeJS.Dict<os.NetworkInterfaceInfo[]>): string[] {
+  return lanNetworks(port, interfaces).map((n) => n.url);
 }
 
 export function createBasaltServer(opts: BasaltServerOptions): BasaltServer {
@@ -231,7 +267,8 @@ export function createBasaltServer(opts: BasaltServerOptions): BasaltServer {
       res.writeHead(200, { "content-type": "application/json", "access-control-allow-origin": "*" });
       // Local paths are only for pages opened on this computer.
       const local = /^(127\.|::1$|::ffff:127\.)/.test(req.socket.remoteAddress ?? "");
-      res.end(JSON.stringify({ app: "basalt", lan: lanUrls(port), mcp: local ? (opts.mcp ?? null) : null }));
+      const networks = lanNetworks(port);
+      res.end(JSON.stringify({ app: "basalt", lan: networks.map((n) => n.url), networks, mcp: local ? (opts.mcp ?? null) : null }));
       return;
     }
     serveStatic(req, res);

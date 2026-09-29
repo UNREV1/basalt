@@ -41,7 +41,7 @@ All versions: [Releases](https://github.com/UNREV1/basalt/releases).
 First launch, once:
 
 - **Windows** may show *"Windows protected your PC"* because the app isn't code-signed (that costs money) → click **More info → Run anyway**.
-- **Windows Firewall** asks whether Basalt may use networks → allow **Private networks**, so your phone and other devices on the same Wi-Fi can sync.
+- **Windows Firewall** asks whether Basalt may use networks → allow it, so your phone and other devices on the same Wi-Fi can sync. Missed it, or your Wi-Fi counts as a *public* network? **Share → Phone or tablet can’t connect? → Allow phones to connect** fixes it (Windows asks for permission once).
 
 The desktop app is the full Basalt with its sync server built in: your notes live on your computer (Help → *Show data folder*), it works offline, and **Share** gives phones and tablets on your Wi-Fi an invite link / QR code to join. For access from anywhere, see *Put it on the internet for free* below.
 
@@ -77,6 +77,14 @@ Open the app, create a workspace, and you're done. For development with hot relo
 1. Click **Share** (top right) → copy the invite link, or show the QR code.
 2. Open it on your phone / tablet / other computer → **Join workspace**.
 3. Edits appear everywhere in real time, with live cursors. Each device keeps a full local copy, so it keeps working offline and merges automatically when back online (CRDTs via [Yjs](https://yjs.dev)).
+
+The invite link uses your computer's address on your Wi-Fi. Basalt picks the address of your Wi-Fi or Ethernet adapter, not the virtual ones Windows adds (WSL, Hyper-V, VirtualBox, a mobile hotspot); if your computer has more than one, choose another under **Address** in the Share dialog.
+
+**Phone or tablet can't connect?**
+
+- It has to be on the same Wi-Fi as the computer, and Basalt has to be open there.
+- On Windows, click **Allow phones to connect** in the Share dialog (under *Phone or tablet can’t connect?*). It lets Basalt through Windows Firewall on every kind of network and removes block rules left over from dismissing Windows' own question.
+- Still nothing? Try another address from the list, or put Basalt online (below) so it works from anywhere.
 
 On a phone, use your browser's **Add to Home Screen / Install app** to get an app icon (it's a PWA).
 

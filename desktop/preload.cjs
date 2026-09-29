@@ -14,6 +14,11 @@ contextBridge.exposeInMainWorld("basaltDesktop", {
   getAutoUpdate: () => ipcRenderer.invoke("basalt:get-auto-update"),
   setAutoUpdate: (on) => ipcRenderer.invoke("basalt:set-auto-update", Boolean(on)),
   openDataFolder: () => ipcRenderer.invoke("basalt:open-data-folder"),
+  /** Other devices on the network: whether Windows Firewall lets them reach Basalt, and allowing it. */
+  network: {
+    status: () => ipcRenderer.invoke("basalt:network-status"),
+    allow: () => ipcRenderer.invoke("basalt:network-allow"),
+  },
   /** Whether Basalt is added to Claude Code, and for which workspace. */
   claudeCodeStatus: (link) => ipcRenderer.invoke("basalt:claude-code-status", String(link)),
   /** Add Basalt to Claude Code for this workspace (runs `claude mcp add`). */

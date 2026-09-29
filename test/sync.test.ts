@@ -141,3 +141,37 @@ test("awareness (presence) is relayed", async () => {
   aa.destroy();
   ab.destroy();
 });
+
+test("invite links use the address a phone on the same Wi-Fi can reach, not a virtual adapter's", async () => {
+  const { lanNetworks, lanUrls } = await import("../server/relay.ts");
+  const nic = (address: string) => [{ address, family: "IPv4", internal: false, netmask: "255.255.255.0", mac: "00:00:00:00:00:00", cidr: null }] as never;
+  // A typical Windows PC: WSL, Hyper-V, VirtualBox, a hotspot and Bluetooth listed before the Wi-Fi.
+  const windows = {
+    "vEthernet (WSL)": nic("172.24.160.1"),
+    "vEthernet (Default Switch)": nic("172.30.48.1"),
+    "VirtualBox Host-Only Network": nic("192.168.56.1"),
+    "Local Area Connection* 10": nic("192.168.137.1"),
+    "Bluetooth Network Connection": nic("169.254.12.7"),
+    "Wi-Fi": nic("192.168.1.23"),
+    "Loopback Pseudo-Interface 1": [{ address: "127.0.0.1", family: "IPv4", internal: true }] as never,
+  };
+  const ranked = lanNetworks(8787, windows);
+  assert.equal(ranked[0].url, "http://192.168.1.23:8787");
+  assert.equal(ranked[0].name, "Wi-Fi");
+  assert.equal(ranked[0].likely, true);
+  assert.ok(ranked.slice(1).every((n) => !n.likely), "the rest are marked virtual");
+  assert.ok(!ranked.some((n) => n.url.includes("169.254.") || n.url.includes("127.0.0.1")), "no link-local or loopback");
+  assert.equal(lanUrls(8787, windows)[0], "http://192.168.1.23:8787");
+  // Ethernet on a 10.x office network still wins over virtual ones.
+  assert.equal(lanNetworks(80, { "vEthernet (WSL)": nic("172.24.160.1"), Ethernet: nic("10.0.4.12") })[0].name, "Ethernet");
+});
+
+test("desktop: allowing phones through Windows Firewall replaces Basalt's inbound rules with one allow rule", async () => {
+  const { createRequire } = await import("node:module");
+  const { ruleScript, RULE } = createRequire(import.meta.url)("../desktop/network.cjs");
+  const script: string = ruleScript("C:\\Program Files\\Basalt\\Basalt.exe");
+  const lines = script.split("\r\n").filter(Boolean);
+  // Old rules first (leftover block rules would win), then one allow rule for this exact program, on any network.
+  assert.match(lines[1], /delete rule name=all dir=in program="C:\\Program Files\\Basalt\\Basalt\.exe"/);
+  assert.match(lines[3], new RegExp(`add rule name="${RULE.replace(/[()]/g, "\\$&")}" dir=in action=allow program="C:\\\\Program Files\\\\Basalt\\\\Basalt\\.exe" enable=yes profile=any`));
+});

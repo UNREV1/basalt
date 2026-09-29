@@ -8,6 +8,13 @@ export interface DesktopBridge {
   getAutoUpdate(): Promise<boolean | null>;
   setAutoUpdate(on: boolean): Promise<boolean | null>;
   openDataFolder(): Promise<string>;
+  /** Phones and tablets on the same network: Windows Firewall has to let them reach Basalt. */
+  network?: {
+    /** needed: this system has a firewall rule to add (Windows); allowed: it's in place. */
+    status(): Promise<{ needed: boolean; allowed: boolean } | null>;
+    /** Add the rule (Windows asks for permission). */
+    allow(): Promise<{ ok: boolean; message: string } | null>;
+  };
   /** null when the link isn't a workspace link. */
   claudeCodeStatus?(link: string): Promise<ClaudeCodeStatus | null>;
   addToClaudeCode?(link: string): Promise<{ ok: boolean; message: string } | null>;

@@ -500,3 +500,34 @@ button.lh-card:active {
 .lh-step.locked .lh-step-name {
   color: var(--text-muted);
 }
+
+/* What you typed, found in the skill tree. */
+.lh-found {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+.lh-found-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.lh-found-row:hover {
+  border-color: var(--accent);
+}
+.lh-found-row .grow {
+  display: flex;
+  flex-direction: column;
+}
+.lh-found-name {
+  font-weight: 600;
+}

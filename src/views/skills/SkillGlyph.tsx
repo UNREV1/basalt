@@ -5,11 +5,14 @@ import type { Skill } from "../../../shared/skills.ts";
 
 export function SkillGlyph({
   skill,
+  path,
   color,
   size = 28,
   locked = false,
 }: {
-  skill: Pick<Skill, "name" | "glyph" | "category">;
+  skill?: Pick<Skill, "name" | "glyph" | "category">;
+  /** The icon's path data, when it's known already (a planned skill's). */
+  path?: string;
   color: string;
   size?: number;
   locked?: boolean;
@@ -17,7 +20,7 @@ export function SkillGlyph({
   return (
     <span className={`sk-glyph${locked ? " locked" : ""}`} style={{ ["--c" as string]: color, width: size, height: size }} aria-hidden>
       <svg viewBox="0 0 24 24" width={size * 0.58} height={size * 0.58} fill="none" strokeWidth={2.1} strokeLinecap="round" strokeLinejoin="round">
-        <path d={GLYPHS[glyphFor(skill)]} />
+        <path d={path ?? GLYPHS[glyphFor(skill ?? { name: "" })]} />
       </svg>
     </span>
   );

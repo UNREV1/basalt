@@ -6,8 +6,8 @@
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { allLessons, getCurriculum, getProgress } from "../../../../shared/course.ts";
 import { displayTitle, getPage, pageMeta } from "../../../../shared/model.ts";
-import { allParts, formatModifier, learningOrder, requirementText, skillDone, themedColor, topicProgress } from "../../../../shared/skills.ts";
-import { GLYPHS, glyphFor } from "../../../../shared/glyphs.ts";
+import { allParts, formatModifier, requirementText, skillDone, themedColor } from "../../../../shared/skills.ts";
+import { entryGlyph, missingFor, nextLeaf, trail, type SkillMap } from "../../../../shared/skill-map.ts";
 import type { Skill } from "../../../../shared/skills.ts";
 import { Icon } from "../../../components/ui.tsx";
 import { SkillGlyph } from "../SkillGlyph.tsx";
@@ -66,6 +66,22 @@ function depths(ids: string[], links: SGLink[]): Map<string, number> {
   };
   for (const id of ids) visit(id, new Set());
   return memo;
+}
+
+/** Every skill on the map, general to detail: each topic, then what's inside it. */
+function a11yOrder(map: SkillMap) {
+  const out: SkillMap["entries"] = [];
+  const seen = new Set<string>();
+  const walk = (id: string) => {
+    const e = map.byId.get(id);
+    if (!e || seen.has(id)) return;
+    seen.add(id);
+    out.push(e);
+    e.children.forEach(walk);
+  };
+  for (const e of map.entries) if (!e.parent) walk(e.id);
+  for (const e of map.entries) walk(e.id);
+  return out;
 }
 
 const touch = typeof matchMedia === "function" && matchMedia("(hover: none)").matches;
@@ -137,12 +153,13 @@ export function SkillGraphView({
       return next;
     });
 
-  // Nodes and links from the skill tree.
+  // Nodes and links from the map: the built-in tree with your skills in it.
   const model = useMemo(() => {
     const nodes: SGNode[] = [];
     const links: SGLink[] = [];
+    const map = data.map;
     const areaColor = new Map(data.areas.map((a) => [a.id, themedColor(a.color, dark)]));
-    const used = new Set(data.skills.map((s) => s.category));
+    const used = new Set(map.entries.map((e) => e.ability));
     const abilities = data.areas.filter((a) => used.has(a.id) || ["str", "dex", "con", "int", "wis", "cha"].includes(a.id));
     for (const a of abilities) {
       const st = data.sheet.areas.find((x) => x.area.id === a.id);
@@ -161,61 +178,74 @@ export function SkillGraphView({
         sub: st ? `${st.score} (${formatModifier(st.modifier)})` : "10 (+0)",
       });
     }
-    const skills = data.skills;
-    const parts = new Map<string, typeof skills>();
-    for (const s of skills) if (s.topic && data.byId.has(s.topic)) parts.set(s.topic, [...(parts.get(s.topic) ?? []), s]);
+    // Innermost parts learnt, for a topic's ring.
+    const leaves = new Map<string, { done: number; total: number }>();
+    const count = (id: string): { done: number; total: number } => {
+      const known = leaves.get(id);
+      if (known) return known;
+      leaves.set(id, { done: 0, total: 0 });
+      const e = map.byId.get(id)!;
+      const v = e.children.length
+        ? e.children.map(count).reduce((a, c) => ({ done: a.done + c.done, total: a.total + c.total }), { done: 0, total: 0 })
+        : { done: e.done ? 1 : 0, total: 1 };
+      leaves.set(id, v);
+      return v;
+    };
     // Where a topic "ends": its parts nothing else in it builds on. What needs
     // the topic hangs off those, so the map reads topic → parts → next topic.
-    const exits = (topicId: string): string[] => {
-      const inside = parts.get(topicId) ?? [];
-      const ids = new Set(inside.map((p) => p.id));
-      const out = inside.filter((p) => !inside.some((q) => q.parents.includes(p.id) && ids.has(q.id))).map((p) => p.id);
-      return out.length ? out : [topicId];
+    const exits = (id: string): string[] => {
+      const inside = map.byId.get(id)?.children ?? [];
+      const set = new Set(inside);
+      const out = inside.filter((p) => !inside.some((q) => set.has(q) && map.byId.get(q)!.needs.includes(p)));
+      return out.length ? out : [id];
     };
     const courseNodes = new Map<string, SGNode>();
-    for (const s of skills) {
-      const st = data.stats.get(s.id);
-      const color = areaColor.get(s.category) ?? "#8b8d98";
-      const inside = parts.get(s.id);
-      const learnt = inside ? topicProgress(ws.doc, skills, s.id, data.stats) : undefined;
+    for (const e of map.entries) {
+      const s = e.real;
+      const st = s ? data.stats.get(s.id) : undefined;
+      const color = (s?.color ? themedColor(s.color, dark) : undefined) ?? areaColor.get(e.ability) ?? "#8b8d98";
+      const learnt = e.children.length ? count(e.id) : undefined;
       nodes.push({
-        id: s.id,
+        id: e.id,
         kind: "skill",
-        label: s.name,
-        icon: s.icon,
+        label: e.name,
+        icon: e.icon,
         color,
-        ability: abilities.some((a) => a.id === s.category) ? s.category : (abilities[0]?.id ?? s.category),
-        level: st?.level ?? 1,
+        ability: abilities.some((a) => a.id === e.ability) ? e.ability : (abilities[0]?.id ?? e.ability),
+        level: st?.level ?? 0,
         progress: learnt ? (learnt.total ? learnt.done / learnt.total : 0) : (st?.progress.fraction ?? 0),
-        locked: !(st?.unlocked ?? true),
+        locked: e.locked,
         goal: !!st?.goalReached,
         depth: 0,
-        branch: s.branch,
+        branch: e.branch,
         learnt,
-        done: skillDone(ws.doc, skills, s, data.stats),
-        busy: busy.has(s.id),
-        peers: peers.get(s.id),
-        glyph: GLYPHS[glyphFor(s)],
+        done: e.done,
+        busy: busy.has(e.id),
+        peers: peers.get(e.id),
+        glyph: entryGlyph(e),
+        planned: !s,
+        tier: e.tier,
       });
-      // Prerequisites. A topic you need is drawn from its last parts.
-      for (const p of s.parents) {
-        if (!data.byId.has(p)) continue;
-        const missing = st?.missing.find((m) => m.parentId === p);
-        const from = parts.has(p) ? exits(p) : [p];
-        for (const f of from) links.push({ source: f, target: s.id, kind: "prereq", met: !missing });
+      // What comes first. A topic you need is drawn from its last parts.
+      for (const n of e.needs) {
+        const need = map.byId.get(n);
+        if (!need) continue;
+        const missing = st?.missing.some((m) => m.parentId === n);
+        const met = e.cat ? need.done : !missing;
+        for (const f of need.children.length ? exits(n) : [n]) links.push({ source: f, target: e.id, kind: "prereq", met });
       }
       // A topic → its parts: drawn to the ones you start with, the rest only shape the layout.
-      if (s.topic && data.byId.has(s.topic)) {
-        const siblings = new Set((parts.get(s.topic) ?? []).map((x) => x.id));
-        const entry = !s.parents.some((p) => siblings.has(p));
-        links.push({ source: s.topic, target: s.id, kind: "part", met: data.stats.get(s.topic)?.unlocked ?? true, hidden: !entry });
+      if (e.parent && map.byId.has(e.parent)) {
+        const siblings = new Set(map.byId.get(e.parent)!.children);
+        const entry = !e.needs.some((n) => siblings.has(n));
+        links.push({ source: e.parent, target: e.id, kind: "part", met: !map.byId.get(e.parent)!.locked, hidden: !entry });
       }
-      for (const cid of s.courseIds) {
+      for (const cid of s?.courseIds ?? []) {
         const page = getPage(ws.doc, cid);
         const c = page && !page.get("deletedAt") ? getCurriculum(page) : null;
         if (!page || !c) continue;
         // A course planned for this skill (named after it) is the skill itself on the map.
-        if ((displayTitle(pageMeta(page)) || c.topic).trim().toLowerCase() === s.name.trim().toLowerCase()) continue;
+        if ((displayTitle(pageMeta(page)) || c.topic).trim().toLowerCase() === s!.name.trim().toLowerCase()) continue;
         const id = `course:${cid}`;
         if (!courseNodes.has(id)) {
           const lessons = allLessons(c);
@@ -226,7 +256,7 @@ export function SkillGraphView({
             label: displayTitle(pageMeta(page)) || c.topic,
             icon: pageMeta(page).icon || "🎓",
             color,
-            ability: s.category,
+            ability: e.ability,
             level: 0,
             progress: lessons.length ? done / lessons.length : 0,
             locked: false,
@@ -235,12 +265,12 @@ export function SkillGraphView({
             sub: `${done}/${lessons.length} lessons`,
           });
         }
-        links.push({ source: s.id, target: id, kind: "course", met: true });
+        links.push({ source: e.id, target: id, kind: "course", met: true });
       }
     }
     nodes.push(...courseNodes.values());
     const depth = depths(
-      skills.map((s) => s.id),
+      map.entries.map((e) => e.id),
       links,
     );
     for (const n of nodes) {
@@ -253,22 +283,22 @@ export function SkillGraphView({
     return { nodes, links, order: abilities.map((a) => a.id) };
   }, [data, dark, ws, busy, peers]);
 
-  const branches = useMemo(() => [...new Set(data.skills.map((s) => s.branch).filter((b): b is string => !!b))].sort(), [data.skills]);
+  const branches = useMemo(() => [...new Set(data.map.entries.map((e) => e.branch).filter((b): b is string => !!b))].sort(), [data.map]);
 
   // Search / ability filter from the toolbar, plus this view's status and path filters.
   const visibleMatches = useMemo(() => {
     if (!matches && status === "all" && !branch) return null;
     const out = new Set<string>();
-    for (const s of data.skills) {
-      if (matches && !matches.has(s.id)) continue;
-      const st = data.stats.get(s.id);
-      if (status === "unlocked" && !st?.unlocked) continue;
-      if (status === "locked" && st?.unlocked) continue;
+    for (const e of data.map.entries) {
+      if (matches && !matches.has(e.id)) continue;
+      const st = e.real ? data.stats.get(e.real.id) : undefined;
+      if (status === "unlocked" && e.locked) continue;
+      if (status === "locked" && !e.locked) continue;
       if (status === "goal" && !st?.goalReached) continue;
-      if (status === "branch" && !s.branch) continue;
-      if (branch && s.branch !== branch) continue;
-      out.add(s.id);
-      for (const c of s.courseIds) out.add(`course:${c}`);
+      if (status === "branch" && !e.branch) continue;
+      if (branch && e.branch !== branch) continue;
+      out.add(e.id);
+      for (const c of e.real?.courseIds ?? []) out.add(`course:${c}`);
     }
     return out;
   }, [matches, status, branch, data]);
@@ -285,7 +315,7 @@ export function SkillGraphView({
         if (!id) return cb.onDeselect();
         if (id === "@you") return cb.onCenter();
         if (id.startsWith("course:")) return cb.onStartCourse(id.slice(7));
-        if (cb.order.includes(id) && !cb.data.byId.has(id)) return cb.onAbility(id);
+        if (cb.order.includes(id) && !cb.data.map.byId.has(id)) return cb.onAbility(id);
         cb.onStart(id);
       },
       onDetails: (id) => {
@@ -295,7 +325,7 @@ export function SkillGraphView({
           if (owner) cb.onDetails(owner.id);
           return;
         }
-        if (cb.data.byId.has(id)) cb.onDetails(id);
+        if (cb.data.map.byId.has(id)) cb.onDetails(id);
       },
       onHover: (id, at) => setHover(id && at ? { id, x: at.x, y: at.y } : null),
     });
@@ -383,32 +413,34 @@ export function SkillGraphView({
           through them (the map follows), Enter starts the next lesson, the context-menu key or
           Shift+F10 shows details. */}
       <ul className="sg-a11y" aria-label="Skills on the map">
-        {learningOrder(data.skills).map((s) => {
-          const node = nodeById.get(s.id);
-          const st = data.stats.get(s.id);
-          const state = !st?.unlocked
+        {a11yOrder(data.map).map((e) => {
+          const node = nodeById.get(e.id);
+          const state = e.locked
             ? "locked"
-            : node?.done
+            : e.done
               ? "learnt"
               : node?.learnt
                 ? `${node.learnt.done} of ${node.learnt.total} parts learnt`
-                : `level ${st.level}`;
+                : e.real
+                  ? `level ${data.stats.get(e.real.id)?.level ?? 1}`
+                  : "not started";
+          const parent = e.parent ? data.map.byId.get(e.parent) : undefined;
           return (
-            <li key={s.id}>
+            <li key={e.id}>
               <button
-                data-skill={s.id}
-                onFocus={() => engine.current?.focus(s.id)}
+                data-skill={e.id}
+                onFocus={() => engine.current?.focus(e.id)}
                 onBlur={() => engine.current?.focus(null)}
-                onClick={() => onStart(s.id)}
-                onKeyDown={(e) => {
-                  if (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10")) {
-                    e.preventDefault();
-                    onDetails(s.id);
+                onClick={() => onStart(e.id)}
+                onKeyDown={(ev) => {
+                  if (ev.key === "ContextMenu" || (ev.shiftKey && ev.key === "F10")) {
+                    ev.preventDefault();
+                    onDetails(e.id);
                   }
                 }}
               >
-                {s.name}, {state}
-                {s.topic && data.byId.has(s.topic) ? `, part of ${data.byId.get(s.topic)!.name}` : ""}. Start the next lesson.
+                {e.name}, {state}
+                {parent ? `, part of ${parent.name}` : ""}. Start the next lesson.
               </button>
             </li>
           );
@@ -525,7 +557,11 @@ export function SkillGraphView({
               <span className="sg-key road" /> A learning path Claude planned for you, named where it starts.
             </li>
             <li>
-              <span className="sg-key tier" /> Radial: each ring out is one more step along a path.
+              <span className="sg-key tier" /> Radial: general topics nearest you, and each path runs straight out from there: a sub-topic, the steps
+              you learn before the next one, then the next, and advanced skills after everything they need, from any tree. Nothing is skipped.
+            </li>
+            <li>
+              <span className="sg-key dashed" /> Light and outlined: planned in Basalt's skill tree, not started yet. Click to start it.
             </li>
           </ul>
           <p className="small faint">
@@ -540,8 +576,8 @@ export function SkillGraphView({
       {hovered && hover && (
         <div className="sg-tip" style={{ left: hover.x, top: hover.y }} role="tooltip">
           <div className="sg-tip-head">
-            {hovered.skill ? (
-              <SkillGlyph skill={hovered.skill} color={model.nodes.find((n) => n.id === hovered.skill!.id)?.color ?? "#8b8d98"} size={24} />
+            {hovered.glyph ? (
+              <SkillGlyph path={hovered.glyph} color={nodeById.get(hover.id)?.color ?? "#8b8d98"} size={24} />
             ) : (
               <span className="sg-tip-icon">{hovered.icon}</span>
             )}
@@ -564,7 +600,7 @@ function hoverInfo(
   data: SkillTreeData,
   nodes: SGNode[],
   ws: Workspace,
-): { icon: string; title: string; lines: string[]; action?: string; skill?: Skill } | null {
+): { icon: string; title: string; lines: string[]; action?: string; skill?: Skill; glyph?: string } | null {
   if (id === "@you") {
     const learnt = data.skills.filter((s) => !data.skills.some((x) => x.topic === s.id) && skillDone(ws.doc, data.skills, s, data.stats)).length;
     return {
@@ -587,12 +623,33 @@ function hoverInfo(
     };
   }
   if (node.kind === "course") return { icon: node.icon, title: node.label, lines: [node.sub ?? ""], action: "Click to start its next lesson" };
-  const s = data.byId.get(id);
-  const st = data.stats.get(id);
-  if (!s || !st) return null;
-  const area = data.areas.find((a) => a.id === s.category);
+  const e = data.map.byId.get(id);
+  if (!e) return null;
+  const verb = touch ? "Tap" : "Click";
+  const area = data.areas.find((a) => a.id === e.ability);
+  const where = trail(data.map, id)
+    .slice(0, -1)
+    .map((x) => x.name)
+    .join(" › ");
+  const needs = e.locked
+    ? missingFor(data.map, id)
+        .slice(0, 3)
+        .map((m) => m.name)
+    : [];
+  const leaf = e.children.length ? nextLeaf(data.map, id) : undefined;
+  const s = e.real;
+  const st = s ? data.stats.get(s.id) : undefined;
+  if (!s || !st) {
+    // Planned: in the built-in tree, not started yet.
+    const kind = e.tier === "general" ? "General topic" : e.tier === "sub" ? "Sub-topic" : e.tier === "advanced" ? "Advanced" : "Step";
+    const lines = [`${area?.attribute ?? area?.name ?? ""} · ${kind} · not started`];
+    if (where) lines.push(where);
+    if (node.learnt) lines.push(`${node.learnt.total} step${node.learnt.total === 1 ? "" : "s"} inside`);
+    if (needs.length) lines.push(`Needs ${needs.join(", ")} first`);
+    const action = e.locked ? `${verb} to see what to learn first` : leaf && leaf.id !== id ? `${verb} to start with ${leaf.name}` : `${verb} to start`;
+    return { icon: e.icon, title: e.name, lines, action, glyph: node.glyph };
+  }
   const lines = [`${area?.attribute ?? area?.name ?? ""} · Level ${st.level} ${st.rank.name}`];
-  const inside = data.skills.filter((x) => x.topic === s.id);
   if (node.learnt) lines.push(`${node.learnt.done} of ${node.learnt.total} parts learnt`);
   else
     lines.push(
@@ -603,21 +660,16 @@ function hoverInfo(
   const lessons = s.courseIds.map((c) => data.courses.get(c)).filter((c): c is NonNullable<typeof c> => !!c && c.total > 0);
   if (!node.learnt && lessons.length)
     lines.push(`${lessons.reduce((a, c) => a + c.mastered + c.skipped, 0)} of ${lessons.reduce((a, c) => a + c.total, 0)} lessons done`);
-  if (s.topic && data.byId.has(s.topic)) lines.push(`Part of ${data.byId.get(s.topic)!.name}`);
-  if (!st.unlocked) lines.push(`Needs ${st.missing.map((m) => requirementText(m, { now: false })).join(", ")}`);
+  if (where) lines.push(where);
+  if (needs.length) lines.push(`Needs ${needs.join(", ")} first`);
+  else if (!st.unlocked) lines.push(`Needs ${st.missing.map((m) => requirementText(m, { now: false })).join(", ")}`);
   if (st.streak.current > 1) lines.push(`${st.streak.current}-day streak`);
   if (s.goalLevel) lines.push(`Goal: level ${s.goalLevel}${st.goalReached ? " ✓" : ""}`);
-  if (s.branch) lines.push(`Path: ${s.branch}`);
-  const verb = touch ? "Tap" : "Click";
+  if (s.branch && !e.cat) lines.push(`Path: ${s.branch}`);
   let action: string;
-  if (!st.unlocked) action = `${verb} to see what to learn first`;
-  else if (node.done) action = `Learnt · ${verb.toLowerCase()} to review`;
-  else if (inside.length) {
-    const hasParts = (p: { id: string }) => data.skills.some((x) => x.topic === p.id);
-    const next = allParts(data.skills, s.id).find(
-      (p) => !hasParts(p) && data.stats.get(p.id)?.unlocked !== false && !skillDone(ws.doc, data.skills, p, data.stats),
-    );
-    action = next ? `${verb} to continue with ${next.name}` : `${verb} to start`;
-  } else action = lessons.length ? `${verb} to start the next lesson` : `${verb} to plan it and start`;
-  return { icon: s.icon, title: s.name, lines, action, skill: s };
+  if (e.locked) action = `${verb} to see what to learn first`;
+  else if (e.done) action = `Learnt · ${verb.toLowerCase()} to review`;
+  else if (leaf) action = leaf.id === id ? `${verb} to start` : `${verb} to continue with ${leaf.name}`;
+  else action = lessons.length ? `${verb} to start the next lesson` : `${verb} to plan it and start`;
+  return { icon: s.icon, title: s.name, lines, action, skill: s, glyph: node.glyph };
 }

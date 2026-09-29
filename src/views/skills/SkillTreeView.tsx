@@ -20,6 +20,8 @@ import { QuestCheck } from "./Overview.tsx";
 import { GenerateTreeModal } from "./GenerateTree.tsx";
 import { AddSkillModal, AreasModal, applyTemplate, TemplateGrid, TemplatesModal } from "./SkillDialogs.tsx";
 import { SkillPanel } from "./SkillPanel.tsx";
+import { PlannedPanel } from "./PlannedPanel.tsx";
+import { startTreeOver } from "../../../shared/skill-map.ts";
 import { fmt, plural, useSkillTree } from "./useSkillData.ts";
 import type { SkillTemplate } from "./templates.ts";
 import { takeSkillFocus } from "./focus.ts";
@@ -53,7 +55,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
   const [adding, setAdding] = useState<{ parentId?: string } | null>(null);
-  const [modal, setModal] = useState<"areas" | "templates" | "generate" | "archived" | null>(null);
+  const [modal, setModal] = useState<"areas" | "templates" | "generate" | "archived" | "restart" | null>(null);
   const [menu, setMenu] = useState<Anchor | null>(null);
   const [effects, setEffects] = useState<Effect[]>([]);
   const apiRef = useRef<CanvasApi | null>(null);
@@ -87,14 +89,14 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
   // Arriving from a skill page or a path's "Show on the map".
   useEffect(() => {
     const id = takeSkillFocus();
-    if (id && data.byId.has(id)) select(id);
+    if (id && data.map.byId.has(id)) select(id);
     // Only on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // The selection disappears if the skill is deleted or archived elsewhere.
   useEffect(() => {
-    if (selectedId && !data.byId.has(selectedId)) setSelectedId(null);
+    if (selectedId && !data.map.byId.has(selectedId)) setSelectedId(null);
   }, [data, selectedId]);
 
   // Presence: show which skill each collaborator is looking at.
@@ -158,13 +160,13 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
     const q = search.trim().toLowerCase();
     if (!q && !areaFilter) return null;
     const set = new Set<string>();
-    for (const s of data.skills) {
-      if (areaFilter && s.category !== areaFilter) continue;
-      if (q && !`${s.name} ${s.description}`.toLowerCase().includes(q)) continue;
-      set.add(s.id);
+    for (const e of data.map.entries) {
+      if (areaFilter && e.ability !== areaFilter) continue;
+      if (q && !`${e.name} ${e.description}`.toLowerCase().includes(q)) continue;
+      set.add(e.id);
     }
     return set;
-  }, [search, areaFilter, data.skills]);
+  }, [search, areaFilter, data.map]);
 
   const side = !!selectedId || charOpen;
   const center = useMemo(
@@ -200,7 +202,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
     const api = apiRef.current;
     if (!p || !api) return;
     const ids = [...(Array.isArray(p.fit) ? p.fit : []), ...(p.reveal ? [p.reveal] : [])];
-    const ready = p.fit === "all" ? data.version > p.version : ids.every((id) => data.byId.has(id));
+    const ready = p.fit === "all" ? data.version > p.version : ids.every((id) => data.map.byId.has(id));
     if (!ready) return;
     pending.current = null;
     // Give new skills a moment to find their place first.
@@ -228,7 +230,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
 
   const showArea = (areaId: string) => {
     setAreaFilter(areaId);
-    const ids = data.skills.filter((s) => s.category === areaId).map((s) => s.id);
+    const ids = data.map.entries.filter((e) => e.ability === areaId).map((e) => e.id);
     if (ids.length) queueCamera({ fit: ids });
   };
 
@@ -237,9 +239,11 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
     { label: "Edit abilities…", icon: <Icon name="edit" size={15} />, onClick: () => setModal("areas") },
     { label: charOpen ? "Hide character" : "Show character", icon: <Icon name="shapes" size={15} />, onClick: () => setCharOpen(!charOpen), disabled: phone },
     { label: `Archived skills${data.archived.length ? ` (${data.archived.length})` : ""}`, icon: <Icon name="trash" size={15} />, onClick: () => setModal("archived"), disabled: !data.archived.length },
+    { label: "Start the tree over…", icon: <Icon name="tree" size={15} />, onClick: () => setModal("restart") },
   ];
 
-  const empty = data.skills.length === 0;
+  // The built-in tree is always there, so the map is never empty.
+  const empty = data.map.entries.length === 0;
   const selected = selectedId ? data.byId.get(selectedId) : undefined;
 
   const aiButton = hasAi ? (
@@ -263,7 +267,9 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && matches?.size) {
-                    const first = data.skills.find((s) => matches.has(s.id));
+                    // The most general match first: "math" finds Mathematics before its steps.
+                    const rank = (t?: string) => (t === "general" ? 0 : t === "sub" || t === "advanced" ? 1 : t === "detail" ? 2 : 1);
+                    const first = data.map.entries.filter((x) => matches.has(x.id)).sort((a, b) => rank(a.tier) - rank(b.tier))[0];
                     if (first) {
                       setSelectedId(first.id);
                       apiRef.current?.centerOn(first.id);
@@ -369,7 +375,19 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
             {starter.starting && (
               <ClaudeJobLine className="sk-starting" label={starter.starting.label} job={starter.job} note="It opens as soon as it's written." onClose={starter.cancel} />
             )}
-            {selected ? (
+            {selectedId && !selected && data.map.byId.has(selectedId) ? (
+              <PlannedPanel
+                data={data}
+                id={selectedId}
+                dark={dark}
+                onClose={() => setSelectedId(null)}
+                onSelect={(id) => {
+                  setSelectedId(id);
+                  apiRef.current?.centerOn(id);
+                }}
+                onStart={(id) => starter.startSkill(id)}
+              />
+            ) : selected ? (
               <SkillPanel
                 ws={ws}
                 data={data}
@@ -418,6 +436,35 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
       {modal === "areas" && <AreasModal ws={ws} areas={data.areas} dark={dark} onClose={() => setModal(null)} />}
       {modal === "templates" && <TemplatesModal ws={ws} data={data} dark={dark} onClose={() => setModal(null)} onApplied={afterCreate} />}
       {modal === "generate" && <GenerateTreeModal ws={ws} areas={data.areas} dark={dark} onClose={() => setModal(null)} onCreated={afterCreate} />}
+      {modal === "restart" && (
+        <Modal title="Start the tree over" onClose={() => setModal(null)} width={480}>
+          <p>
+            Your map becomes Basalt's whole skill tree again, planned from the general to the detailed: every ability's general topics, their
+            sub-topics in order, the steps between them and the advanced skills after them, with nothing skipped.
+          </p>
+          <ul className="small">
+            <li>Skills of yours that are in it keep their XP and progress, and take their place in it.</li>
+            <li>Everything else is archived, not deleted: bring any of it back from Archived skills.</li>
+          </ul>
+          <div className="row" style={{ justifyContent: "flex-end", gap: 8, marginTop: 12 }}>
+            <button className="btn" onClick={() => setModal(null)}>
+              Cancel
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                const res = startTreeOver(ws.doc);
+                setModal(null);
+                setSelectedId(null);
+                toast(`The tree starts over: ${plural(res.kept, "skill")} kept${res.archived ? `, ${res.archived} archived` : ""}`);
+                queueCamera({ fit: "all" });
+              }}
+            >
+              Start over
+            </button>
+          </div>
+        </Modal>
+      )}
       {modal === "archived" && (
         <Modal title="Archived skills" onClose={() => setModal(null)} width={480}>
           {data.archived.length === 0 && <p className="muted">Nothing archived.</p>}

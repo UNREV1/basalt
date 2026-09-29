@@ -11,6 +11,7 @@ import { getLessonContent } from "../../../shared/lesson.ts";
 import { findLibraryCourse, installCourse } from "../../../shared/library/install.ts";
 import type { LibraryCourse } from "../../../shared/library/types.ts";
 import { getPage } from "../../../shared/model.ts";
+import { adoptPlanned, missingFor, nextLeaf, nextStep, skillMapOf } from "../../../shared/skill-map.ts";
 import { allParts, computeSkillStats, listSkills, nextStepToward, requirementText, skillDone, type Requirement } from "../../../shared/skills.ts";
 import { isJobRunning, useClaudeJobs, type ClaudeJob } from "../../lib/claude.ts";
 import { getSettings } from "../../lib/settings.ts";
@@ -183,7 +184,26 @@ export function useLessonStarter(ws: Workspace, ui: StartUi) {
   return {
     starting,
     job,
-    startSkill: (skillId: string) => act(planSkillStart(ws, skillId), { skillId }),
+    startSkill: (skillId: string) => {
+      // The map: planned skills too, and nothing skipped (a topic starts at its next step).
+      const map = skillMapOf(ws.doc);
+      const e = map.byId.get(skillId);
+      if (!e) return act(planSkillStart(ws, skillId), { skillId });
+      const target = e.children.length ? nextLeaf(map, skillId) : e;
+      if (!target) {
+        ui.toast(`You've learnt all of ${e.name}`);
+        return;
+      }
+      if (target.locked && (target.cat || !target.real)) {
+        const first = missingFor(map, target.id)[0];
+        const step = nextStep(map, target.id);
+        ui.toast(`Locked: first learn ${first?.name ?? "what comes before it"}${step && step.id !== first?.id ? `. Next step: ${step.name}` : ""}`);
+        ui.showSkill?.(skillId);
+        return;
+      }
+      const realId = adoptPlanned(ws.doc, map, target.id);
+      if (realId) act(planSkillStart(ws, realId), { skillId: realId });
+    },
     startCourse: (courseId: string) => act(planCourseStart(ws, courseId), { courseId }),
     cancel: () => setStarting(null),
   };

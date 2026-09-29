@@ -16,6 +16,7 @@ import {
   type SkillStats,
   type TodayQuest,
 } from "../../../shared/skills.ts";
+import { skillMapOf, type SkillMap } from "../../../shared/skill-map.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { useSkillsVersion } from "./useSkillXp.ts";
 
@@ -31,6 +32,8 @@ export interface SkillTreeData {
   quests: TodayQuest[];
   /** Lesson counts of every course linked to a skill. */
   courses: Map<string, CourseXp>;
+  /** The whole map: the built-in tree with your skills in it (see shared/skill-map.ts). */
+  map: SkillMap;
 }
 
 export function useSkillTree(ws: Workspace): SkillTreeData {
@@ -51,6 +54,7 @@ export function useSkillTree(ws: Workspace): SkillTreeData {
       sheet: characterSheet(ws.doc, now, stats),
       quests: todaysQuests(ws.doc, now),
       courses: new Map([...new Set(skills.flatMap((s) => s.courseIds))].map((c) => [c, courseXp(ws.doc, c)])),
+      map: skillMapOf(ws.doc, skills, stats),
     };
   }, [ws, version]);
 }

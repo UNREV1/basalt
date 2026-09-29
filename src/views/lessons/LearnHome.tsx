@@ -39,6 +39,8 @@ import { useDueCount } from "../registry.tsx";
 import { QuestCheck } from "../skills/Overview.tsx";
 import { SkillGlyph } from "../skills/SkillGlyph.tsx";
 import { focusSkill } from "../skills/focus.ts";
+import { useSkillTree } from "../skills/useSkillData.ts";
+import { trail } from "../../../shared/skill-map.ts";
 import { AskClaudeFallback, ClaudeJobLine } from "./ClaudeStatus.tsx";
 import { ABILITY_ORDER, LIBRARY } from "./library.ts";
 import { branchRequest, canRunClaude, runRequest } from "./plan.ts";
@@ -306,11 +308,30 @@ function ReflectCard({ ws }: { ws: Workspace }) {
 }
 
 function AskCard({ ws }: { ws: Workspace }) {
-  const { toast } = useApp();
+  const { toast, openPage } = useApp();
   const [goal, setGoal] = useState("");
   const jobs = useClaudeJobs().filter((j) => j.key.startsWith("branch:") || j.key.startsWith("skill-course:"));
   const req = goal.trim() ? branchRequest(ws, goal) : null;
+  const tree = useSkillTree(ws).map;
+  const starter = useLessonStarter(ws, {
+    toast,
+    openPage,
+    showSkill: (id) => {
+      focusSkill(id);
+      navigate({ name: "view", wsId: ws.id, view: "skills" });
+    },
+  });
+  // It's probably in the skill tree already: the most general matches first.
+  const q = goal.trim().toLowerCase();
+  const rank = (t?: string) => (t === "general" ? 0 : t === "sub" || t === "advanced" ? 1 : 2);
+  const found = q.length >= 2 ? tree.entries.filter((e) => e.name.toLowerCase().includes(q)).sort((a, b) => rank(a.tier) - rank(b.tier) || a.name.length - b.name.length).slice(0, 5) : [];
   const go = () => {
+    const exact = found.find((e) => e.name.toLowerCase() === q);
+    if (exact) {
+      starter.startSkill(exact.id);
+      setGoal("");
+      return;
+    }
     if (!req) return;
     if (!ws.info.sync) {
       toast("Turn on sync for this workspace so Claude can reach it (Share → Sync)");
@@ -327,7 +348,7 @@ function AskCard({ ws }: { ws: Workspace }) {
         className="lh-ask-form"
         onSubmit={(e) => {
           e.preventDefault();
-          if (canRunClaude()) go();
+          if (canRunClaude() || found.some((f) => f.name.toLowerCase() === q)) go();
         }}
       >
         <input className="input" value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="e.g. Speak conversational Spanish" aria-label="What do you want to learn?" />
@@ -337,6 +358,30 @@ function AskCard({ ws }: { ws: Workspace }) {
           </button>
         )}
       </form>
+      {found.length > 0 && (
+        <div className="lh-found">
+          <span className="small muted">In your skill tree already:</span>
+          {found.map((e) => {
+            const where = trail(tree, e.id)
+              .slice(0, -1)
+              .map((x) => x.name)
+              .join(" › ");
+            return (
+              <button key={e.id} className="lh-found-row" onClick={() => starter.startSkill(e.id)}>
+                <span className="grow" style={{ minWidth: 0 }}>
+                  <span className="lh-found-name ellipsis">{e.name}</span>
+                  <span className="small muted ellipsis">
+                    {where || "General topic"}
+                    {e.locked ? " · locked" : e.done ? " · learnt" : ""}
+                  </span>
+                </span>
+                <Icon name={e.locked ? "lock" : "play"} size={13} />
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {starter.starting && <ClaudeJobLine label={starter.starting.label} job={starter.job} note="It opens as soon as it's written." onClose={starter.cancel} />}
       {!canRunClaude() && goal.trim() && <AskClaudeFallback request={req} label="Copy the request" />}
       {jobs.map((j) => (
         <ClaudeJobLine key={j.key} label={j.label} job={j} onClose={j.status !== "running" ? () => dismissClaudeJob(j.key) : undefined} />

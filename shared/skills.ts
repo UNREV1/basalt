@@ -93,6 +93,8 @@ export interface Skill {
   topic?: string;
   /** Line icon on the skill map (see shared/glyphs.ts); picked from the name when unset. */
   glyph?: string;
+  /** Its place in the built-in skill tree (shared/skill-catalog.ts), once started from there. */
+  catalog?: string;
 }
 
 export interface SkillArea {
@@ -446,6 +448,7 @@ export function normalizeSkill(raw: Partial<Skill> & { id: string }): Skill {
   if (typeof raw.branch === "string" && raw.branch.trim()) out.branch = raw.branch.trim().slice(0, 120);
   if (typeof raw.topic === "string" && raw.topic && raw.topic !== raw.id) out.topic = raw.topic;
   if (isGlyph(raw.glyph)) out.glyph = raw.glyph;
+  if (typeof raw.catalog === "string" && raw.catalog) out.catalog = raw.catalog.slice(0, 200);
   return out;
 }
 
@@ -618,6 +621,7 @@ export interface SkillInput {
   /** The skill this one is part of (see Skill.topic). */
   topic?: string;
   glyph?: string;
+  catalog?: string;
 }
 
 export function createSkill(doc: Y.Doc, input: SkillInput): Skill {
@@ -649,6 +653,7 @@ export function createSkill(doc: Y.Doc, input: SkillInput): Skill {
       branch: input.branch,
       topic: input.topic && existing.has(input.topic) ? input.topic : undefined,
       glyph: input.glyph,
+      catalog: input.catalog,
     });
     skillsMap(doc).set(id, clone(skill));
     // Created together with the skill so no other client ever races to create it.
@@ -1297,6 +1302,8 @@ export interface SkillPlanItem {
   /** The skill it's part of: a key in this plan, or an existing skill's id or name. */
   topicKey?: string;
   glyph?: string;
+  /** Its place in the built-in skill tree. */
+  catalog?: string;
 }
 
 /**
@@ -1331,6 +1338,7 @@ export function createSkillsFromPlan(doc: Y.Doc, plan: SkillPlanItem[]): Map<str
         // Topics usually come before their parts; later ones are set below.
         topic: item.topicKey ? resolve(item.topicKey) : undefined,
         glyph: item.glyph,
+        catalog: item.catalog,
       });
       ids.set(item.key, s.id);
     }

@@ -8,6 +8,7 @@ import { useSyncExternalStore } from "react";
 import { getCurriculum } from "../../../shared/course.ts";
 import { courseAhead, courseMistakes, learnerStats, learningMap, MISTAKE_WHY, type LearnerStats } from "../../../shared/learning.ts";
 import { displayTitle, getPage, pageMeta } from "../../../shared/model.ts";
+import { skillMapOf, trail } from "../../../shared/skill-map.ts";
 import { GENERAL_PLAN, PLAN_STEPS } from "../../../shared/skill-plan.ts";
 import { listSkills, type Skill } from "../../../shared/skills.ts";
 import { claudeBridge, isJobRunning, startClaudeJob } from "../../lib/claude.ts";
@@ -84,7 +85,15 @@ ${statsLine(stats, ws)} ${ADAPT}`;
 /** Skills with nothing planned yet: no parts and no course. */
 export function unplannedSkills(ws: Workspace): Skill[] {
   const skills = listSkills(ws.doc);
-  return skills.filter((s) => !s.courseIds.some((c) => getPage(ws.doc, c) && !getPage(ws.doc, c)!.get("deletedAt")) && !skills.some((x) => x.topic === s.id));
+  // The built-in tree plans its topics already (their steps are on the map).
+  const map = skillMapOf(ws.doc, skills);
+  return skills.filter(
+    (s) =>
+      !s.courseIds.some((c) => getPage(ws.doc, c) && !getPage(ws.doc, c)!.get("deletedAt")) &&
+      !skills.some((x) => x.topic === s.id) &&
+      !map.byId.get(s.id)?.children.length &&
+      !map.byId.get(s.id)?.cat,
+  );
 }
 
 /**
@@ -98,6 +107,19 @@ export function planSkillRequest(ws: Workspace, skillId: string, opts: { lessons
   const stats = learnerStats(ws.doc);
   const lessons = opts.lessons ?? true;
   const topic = skill.topic ? listSkills(ws.doc).find((s) => s.id === skill.topic) : undefined;
+  // A step in the built-in tree is planned already: it only needs its lessons.
+  if (skill.catalog) {
+    const where = trail(skillMapOf(ws.doc), skill.id)
+      .map((e) => e.name)
+      .join(" › ");
+    const prompt = `Plan the lessons for my skill "${skill.name}" (skill id ${skill.id}), a step in my skill tree: ${where}.
+1. Call get_skill_tree to see what comes before and after it, and research it (web search) enough to be accurate.
+2. Give it a course outline with plan_courses: 1–3 modules of 3–6 short lessons, each a title and a one-line objective, that start where the step before it left off and end ready for the next. Don't add skills or parts: the tree is planned already.
+3. ${lessons ? `Write the first ${stats.aheadTarget} lessons with write_interactive_lesson, following its style guide and the learning loop.` : "Don't write any lessons yet: titles only."}
+
+${statsLine(stats, ws)} ${ADAPT}`;
+    return { key: `skill-plan:${skill.id}`, label: lessons ? `Planning ${skill.name} and writing your first lesson` : `Planning ${skill.name}`, prompt };
+  }
   const prompt = `Plan my skill "${skill.name}" (skill id ${skill.id})${skill.description ? `: ${skill.description}` : ""}${topic ? `. It's part of "${topic.name}"` : ""}.
 1. Call get_skill_tree, and research the skill (web search) enough to be accurate.
 2. If it's narrow enough to learn in about ten short lessons, just give it a course outline with plan_courses. Otherwise plan it completely with the general plan below, with "${skill.name}" itself as the subject (don't add a new subject skill: its topics get topic "${skill.id}")${skill.branch ? ` and branch "${skill.branch}"` : ""}.

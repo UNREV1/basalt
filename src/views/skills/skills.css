@@ -1573,3 +1573,53 @@ html[data-glass] .sk-page {
   stroke: var(--c);
   opacity: 0.75;
 }
+
+/* ---- a planned skill (the built-in tree, not started yet) ---------------------------- */
+
+.sk-plan-name {
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.sk-plan-trail {
+  margin: 2px 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.sk-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sk-plan-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: var(--radius-sm, 6px);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.sk-plan-row:hover {
+  background: var(--hover);
+}
+.sk-plan-state {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.sk-plan-state.done {
+  color: var(--success);
+}
+.sk-plan-state.locked {
+  color: var(--text-faint, var(--text-muted));
+}

@@ -219,7 +219,7 @@ Real life, with the progression mechanics of D&D (but none of the video-game loo
   - **It works like an RPG skill tree:**
     - Each skill is a circle with a line icon. Bigger means a higher level, the color is its ability and a ring fills toward the next level.
     - Skills you can learn now glow, learnt ones get a check, and locked ones are dashed and dim.
-    - Arrows run from what to learn first to what it unlocks. Hover a skill to light up everything it needs and leads to.
+    - Arrows run from what to learn first to what it unlocks. Hover a skill to light up everything it needs and leads to. The lines and arrows are strongest next to it and fade step by step the farther along they go.
     - Finishing a lesson that opens new skills shows *Unlocked!*, and the map pulses them.
   - **Topics** like Arithmetic have a double rim, and their badge shows how many parts you've learnt.
   - **Layouts:**

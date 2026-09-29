@@ -140,7 +140,10 @@ export function SkillGraphView({
   const [prefs, setPrefsState] = useState<Prefs>(loadPrefs);
   const [status, setStatus] = useState<Status>("all");
   const [branch, setBranch] = useState("");
-  const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
+  // What the pointer is on (re-renders only when that changes; the tooltip follows the pointer directly).
+  const [hoverId, setHoverId] = useState<string | null>(null);
+  const hoverAt = useRef({ x: 0, y: 0 });
+  const tipRef = useRef<HTMLDivElement>(null);
   const [legend, setLegend] = useState(false);
   const setPrefs = (p: Partial<Prefs>) =>
     setPrefsState((cur) => {
@@ -342,7 +345,17 @@ export function SkillGraphView({
         }
         if (cb.data.map.byId.has(id)) cb.onDetails(id);
       },
-      onHover: (id, at) => setHover(id && at ? { id, x: at.x, y: at.y } : null),
+      onHover: (id, at) => {
+        if (id && at) {
+          hoverAt.current = at;
+          const tip = tipRef.current;
+          if (tip) {
+            tip.style.left = `${at.x}px`;
+            tip.style.top = `${at.y}px`;
+          }
+        }
+        setHoverId(id && at ? id : null);
+      },
     });
     engine.current = e;
     apiRef.current = {
@@ -400,7 +413,7 @@ export function SkillGraphView({
   }, [dark]);
 
   const nodeById = useMemo(() => new Map(model.nodes.map((n) => [n.id, n])), [model]);
-  const hovered = hover ? hoverInfo(hover.id, data, model.nodes, ws) : null;
+  const hovered = useMemo(() => (hoverId ? hoverInfo(hoverId, data, model.nodes, ws) : null), [hoverId, data, model, ws]);
   const sheet = hideTools;
 
   return (
@@ -593,11 +606,11 @@ export function SkillGraphView({
         </div>
       )}
 
-      {hovered && hover && (
-        <div className="sg-tip" style={{ left: hover.x, top: hover.y }} role="tooltip">
+      {hovered && hoverId && (
+        <div className="sg-tip" ref={tipRef} style={{ left: hoverAt.current.x, top: hoverAt.current.y }} role="tooltip">
           <div className="sg-tip-head">
             {hovered.glyph ? (
-              <SkillGlyph path={hovered.glyph} color={nodeById.get(hover.id)?.color ?? "#8b8d98"} size={24} />
+              <SkillGlyph path={hovered.glyph} color={nodeById.get(hoverId)?.color ?? "#8b8d98"} size={24} />
             ) : (
               <span className="sg-tip-icon">{hovered.icon}</span>
             )}

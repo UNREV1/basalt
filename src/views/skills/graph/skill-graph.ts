@@ -11,7 +11,8 @@
 // parts are learnt; its parts hang below it and lead on to the next topic. Arrows run from a
 // prerequisite to what it unlocks (solid once met). Soft colored roads trace
 // the learning paths Claude mapped. Hovering or selecting a skill lights up
-// its whole path: everything it needs and everything it leads to.
+// its whole path: everything it needs and everything it leads to, strongest
+// next to it and fading the farther along the path it goes.
 
 import {
   forceCollide,
@@ -150,11 +151,20 @@ function pathColor(name: string): string {
   return PATH_COLORS[h % PATH_COLORS.length];
 }
 
+/** A color with an opacity, as CSS (cached: the map asks for the same few thousands of times a frame). */
+const alphas = new Map<string, string>();
 function alpha(hex: string, a: number): string {
-  const m = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return hex;
-  const n = parseInt(m[1], 16);
-  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+  const q = Math.round(a * 100) / 100;
+  const key = hex + q;
+  let out = alphas.get(key);
+  if (out === undefined) {
+    const m = /^#([0-9a-f]{6})$/i.exec(hex);
+    const n = m ? parseInt(m[1], 16) : 0;
+    out = m ? `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${q})` : hex;
+    if (alphas.size > 5000) alphas.clear();
+    alphas.set(key, out);
+  }
+  return out;
 }
 
 export class SkillGraph {
@@ -166,6 +176,10 @@ export class SkillGraph {
   private byId = new Map<string, Node>();
   private parents = new Map<string, string[]>();
   private children = new Map<string, string[]>();
+  /** Label widths by font and text (measuring text is slow; the same labels come back every frame). */
+  private widths = new Map<string, number>();
+  /** The last path worked out (see pathOf), kept until the map changes. */
+  private pathCache: { id: string; hops: Map<string, number> } | null = null;
   /** Part → the topic it belongs to. */
   private partOf = new Map<string, string>();
   /** Skill → the skills it needs (prerequisite links only). */
@@ -177,6 +191,8 @@ export class SkillGraph {
   /** Radial layout: the branches as drawn (from → to), and the same as "from>to" keys. */
   private branchEdges: [string, string][] = [];
   private edgeSet = new Set<string>();
+  /** Links that run along a drawn branch (the branch is drawn instead), worked out with the layout. */
+  private alongBranch = new WeakSet<Link>();
   /** Nodes that just arrived: they start at their place instead of flying in. */
   private fresh = new Set<string>();
   /** Clusters: each group's circle and name (areas, and the fields in them), drawn behind the skills. */
@@ -295,6 +311,7 @@ export class SkillGraph {
       );
     this.parents = new Map();
     this.children = new Map();
+    this.pathCache = null;
     this.partOf = new Map(links.filter((l) => l.kind === "part").map((l) => [l.target, l.source]));
     this.needs = new Map();
     for (const l of links) if (l.kind === "prereq") this.needs.set(l.target, [...(this.needs.get(l.target) ?? []), l.source]);
@@ -796,6 +813,12 @@ export class SkillGraph {
       (l) => visibleIds.has(String((l.source as Node).id ?? l.source)) && visibleIds.has(String((l.target as Node).id ?? l.target)),
     );
     this.computeSlots(visible);
+    this.alongBranch = new WeakSet();
+    for (const l of this.links) {
+      const a = String((l.source as Node).id ?? l.source);
+      const b = String((l.target as Node).id ?? l.target);
+      if (this.edgeSet.has(`${a}>${b}`)) this.alongBranch.add(l);
+    }
     const structured = layout !== "clusters";
     // Ability hubs are anchors: fixed where the layout puts them.
     for (const n of visible) {
@@ -806,20 +829,40 @@ export class SkillGraph {
       n.x = p.x;
       n.y = p.y;
     }
+    const radial = layout === "radial";
+    const tree = layout === "tree";
+    // Structured layouts keep their nodes apart themselves (no repulsion), so a course
+    // sits in its own spot beside its skill: across the path (radial), or below it (tree).
+    if (structured) {
+      const count = new Map<string, number>();
+      for (const l of links) {
+        if (l.kind !== "course") continue;
+        const skill = String((l.source as Node).id ?? l.source);
+        const p = this.slots.get(skill);
+        if (!p) continue;
+        const i = count.get(skill) ?? 0;
+        count.set(skill, i + 1);
+        const off = (this.byId.get(skill)?.r ?? 12) + 16 + i * 22;
+        const len = Math.hypot(p.x, p.y) || 1;
+        this.slots.set(
+          String((l.target as Node).id ?? l.target),
+          radial ? { x: p.x - (p.y / len) * off, y: p.y + (p.x / len) * off } : { x: p.x - 10 + i * 22, y: p.y + off },
+        );
+      }
+    }
     const target = (n: Node): Pt => {
-      if (n.kind === "course") return { x: n.x ?? 0, y: n.y ?? 0 };
+      if (n.kind === "course") return this.slots.get(n.id) ?? { x: n.x ?? 0, y: n.y ?? 0 };
       const slot = this.slots.get(n.id);
       if (slot) return slot;
       // Clusters: around the hub, pulled a little toward the middle.
       const hub = this.hubPoint(n.ability);
       return { x: hub.x * 0.72, y: hub.y * 0.72 };
     };
-    // Like Obsidian's graph: skills push each other apart and links pull like springs, so
-    // dragging one tugs its neighbours along. The layouts hold their shape differently:
-    // the tree firmly (an outline), the radial map firmly (general to detail, ring by
-    // ring), clusters loosely (each skill drawn to its field's space, groups kept apart).
-    const radial = layout === "radial";
-    const tree = layout === "tree";
+    // Like Obsidian's graph: links pull like springs, so dragging one tugs its neighbours
+    // along. The layouts hold their shape differently: the tree firmly (an outline), the
+    // radial map firmly (general to detail, ring by ring; both already keep every node
+    // clear of the next, so nothing needs pushing apart), clusters loosely (skills push
+    // each other apart, each drawn to its field's space, groups kept apart).
     const pull = radial ? 0.55 : tree ? 0.9 : 0.12;
     // Radial: each skill also hangs on a spring from the one it branches out of.
     const springs = radial
@@ -827,6 +870,7 @@ export class SkillGraph {
           .filter(([from, id]) => visibleIds.has(id) && visibleIds.has(from))
           .map(([from, id]) => ({ source: from, target: id, kind: "part", met: true, hidden: true }) as unknown as Link)
       : [];
+    const springSet = new Set(springs);
     const gap = (l: Link) => {
       const a = this.slots.get(String((l.source as Node).id ?? l.source));
       const b = this.slots.get(String((l.target as Node).id ?? l.target));
@@ -839,12 +883,23 @@ export class SkillGraph {
     };
     // New arrivals start where they belong; when that's most of the map, there's little left to settle.
     let placed = 0;
+    let movable = 0;
     for (const n of visible) {
+      if (n.kind === "ability") continue;
+      movable++;
       if (!this.fresh.has(n.id)) continue;
       const slot = this.slots.get(n.id);
-      if (slot) ((n.x = slot.x + (Math.random() - 0.5) * 6), (n.y = slot.y + (Math.random() - 0.5) * 6), placed++);
+      if (!slot) continue;
+      const jitter = structured ? 0 : 6;
+      n.x = slot.x + (Math.random() - 0.5) * jitter;
+      n.y = slot.y + (Math.random() - 0.5) * jitter;
+      n.vx = 0;
+      n.vy = 0;
+      placed++;
     }
     this.fresh.clear();
+    // Everything new and already in place (a structured map, freshly opened): nothing to settle.
+    const inPlace = structured && movable > 0 && placed === movable;
     // (Clusters always get a little room to spread out.)
     if (structured && placed > visible.length / 2) heat = Math.min(heat, 0.12);
     this.sim
@@ -855,10 +910,13 @@ export class SkillGraph {
           .id((d) => d.id)
           .distance((l) => (l.kind === "course" ? 34 : radial ? gap(l) : tree ? 40 : l.kind === "part" ? 42 : 70))
           .strength((l) =>
+            // (A structured layout holds a course in its own spot, beside its skill.)
             l.kind === "course"
-              ? 0.9
+              ? structured
+                ? 0
+                : 0.9
               : radial
-                ? springs.includes(l)
+                ? springSet.has(l)
                   ? 0.12
                   : 0
                 : tree
@@ -870,23 +928,33 @@ export class SkillGraph {
                       : 0,
           ),
       )
+      // Pushing apart (the costly part: every node against its neighbours) only for clusters.
       .force(
         "charge",
-        forceManyBody<Node>()
-          .strength((d) => (d.kind === "course" ? -30 : tree ? 0 : radial ? -30 : -26))
-          .distanceMax(radial ? 70 : 90),
+        structured
+          ? null
+          : forceManyBody<Node>()
+              .strength((d) => (d.kind === "course" ? -30 : -26))
+              .distanceMax(90),
       )
       .force(
         "x",
-        forceX<Node>((d) => target(d).x).strength((d) => (d.kind === "skill" ? pull : 0)),
+        forceX<Node>((d) => target(d).x).strength((d) => (d.kind === "skill" || (structured && d.kind === "course") ? pull : 0)),
       )
       .force(
         "y",
-        forceY<Node>((d) => target(d).y).strength((d) => (d.kind === "skill" ? pull : 0)),
+        forceY<Node>((d) => target(d).y).strength((d) => (d.kind === "skill" || (structured && d.kind === "course") ? pull : 0)),
       )
-      .force("collide", forceCollide<Node>((d) => (tree ? 0 : d.r + (d.kind === "course" ? 4 : radial ? 4 : 3))).iterations(2));
+      .force("collide", structured ? null : forceCollide<Node>((d) => d.r + (d.kind === "course" ? 4 : 3)).iterations(2));
     // The radial map starts in place: stop once it's close enough, instead of creeping for seconds.
     this.sim.alphaMin(structured ? 0.02 : 0.005);
+    if (inPlace) {
+      // Freshly opened and every node already where it belongs: nothing to animate.
+      this.sim.alpha(0).stop();
+      if (this.autoFit) this.fit(undefined, false);
+      this.request();
+      return;
+    }
     this.sim.alpha(Math.max(this.sim.alpha(), heat));
     if (this.reduced) {
       this.sim.stop();
@@ -1000,39 +1068,46 @@ export class SkillGraph {
 
   // ---- paths --------------------------------------------------------------------------------------
 
-  /** Everything a skill needs (ancestors) and leads to (descendants), plus its courses. */
-  pathOf(id: string): Set<string> {
-    const out = new Set<string>([id]);
-    const walk = (start: string, next: Map<string, string[]>) => {
-      const stack = [start];
-      while (stack.length) {
-        const cur = stack.pop()!;
-        for (const n of next.get(cur) ?? []) {
+  /**
+   * Everything a skill needs (ancestors) and leads to (descendants), plus its
+   * courses, each with how many steps away it is (the skill itself: 0). Worked
+   * out breadth first, so each is reached its shortest way; kept until the map changes.
+   */
+  pathOf(id: string): Map<string, number> {
+    if (this.pathCache?.id === id) return this.pathCache.hops;
+    const out = new Map<string, number>([[id, 0]]);
+    let frontier = [id];
+    for (let d = 1; frontier.length; d++) {
+      const next: string[] = [];
+      for (const cur of frontier)
+        for (const n of this.parents.get(cur) ?? []) {
           if (out.has(n)) continue;
-          out.add(n);
-          stack.push(n);
+          out.set(n, d);
+          next.push(n);
         }
-      }
-    };
-    walk(id, this.parents);
+      frontier = next;
+    }
     // What it leads to: all of it along its own path, and just the first step into other paths.
     const home = this.byId.get(id)?.branch;
-    const stack = [id];
-    while (stack.length) {
-      const cur = stack.pop()!;
-      for (const n of this.children.get(cur) ?? []) {
-        if (out.has(n) || (home && this.byId.get(n)?.branch !== home && cur !== id)) continue;
-        out.add(n);
-        if (!home || this.byId.get(n)?.branch === home) stack.push(n);
-      }
+    frontier = [id];
+    for (let d = 1; frontier.length; d++) {
+      const next: string[] = [];
+      for (const cur of frontier)
+        for (const n of this.children.get(cur) ?? []) {
+          if (out.has(n) || (home && this.byId.get(n)?.branch !== home && cur !== id)) continue;
+          out.set(n, d);
+          if (!home || this.byId.get(n)?.branch === home) next.push(n);
+        }
+      frontier = next;
     }
     for (const l of this.links) {
       const s = (l.source as Node).id;
       const t = (l.target as Node).id;
-      if (l.kind === "course" && out.has(s)) out.add(t);
+      if (l.kind === "course" && out.has(s) && !out.has(t)) out.set(t, out.get(s)! + 1);
     }
     const n = this.byId.get(id);
-    if (n?.kind === "ability") for (const m of this.nodes) if (m.ability === id) out.add(m.id);
+    if (n?.kind === "ability") for (const m of this.nodes) if (m.ability === id && !out.has(m.id)) out.set(m.id, 1);
+    this.pathCache = { id, hops: out };
     return out;
   }
 
@@ -1067,6 +1142,13 @@ export class SkillGraph {
     const focus = this.hover?.id ?? this.focusId ?? this.opts.selectedId;
     const path = focus && this.byId.has(focus) ? this.pathOf(focus) : null;
     const dim = (id: string) => (path ? !path.has(id) : this.opts.matches ? !this.opts.matches.has(id) : false);
+    // Along the lit path, lines and arrows fade the farther they are from what you're
+    // pointing at: full strength next to it, fainter step by step, never quite gone.
+    const near = (id: string) => {
+      const h = path?.get(id);
+      return h === undefined || h <= 1 ? 1 : 0.16 + 0.84 * Math.pow(0.8, h - 1);
+    };
+    const nearest = (a: string, b: string) => Math.min(near(a), near(b));
     const showCourse = (n: Node) => this.opts.courses || n.kind !== "course";
     // Only what's on screen (plus a margin, in world units) is drawn.
     const view = { x0: -t.x / t.k, y0: -t.y / t.k, x1: (this.w - t.x) / t.k, y1: (this.h - t.y) / t.k };
@@ -1150,14 +1232,15 @@ export class SkillGraph {
       const polar = (p: Pt) => ({ a: Math.atan2(p.y, p.x), r: Math.hypot(p.x, p.y) });
       // Batched: one path per look (color, width, dashes), so a thousand branches are a few strokes.
       const batches = new Map<string, { path: Path2D; color: string; width: number; dash: boolean }>();
-      const branch = (from: Pt, to: Node, width: number) => {
+      const branch = (from: Pt & { id?: string }, to: Node, width: number) => {
         const lit = path?.has(to.id) ?? false;
         const faded = dim(to.id);
         const a = polar(from);
         const b = polar({ x: to.x!, y: to.y! });
         const rm = (a.r + b.r) / 2;
-        const color = alpha(to.color, faded ? 0.07 : lit ? 0.9 : to.locked ? (to.planned ? 0.2 : 0.28) : 0.5);
-        const w = Math.round((lit ? width + 1 : width) * 2) / 2;
+        const strength = lit ? nearest(to.id, from.id ?? to.id) : 0;
+        const color = alpha(to.color, faded ? 0.07 : lit ? Math.max(0.9 * strength, to.locked ? 0.2 : 0.3) : to.locked ? (to.planned ? 0.2 : 0.28) : 0.5);
+        const w = Math.round((lit ? width + strength * 1.5 : width) * 2) / 2;
         // Dashes only close up (they're costly to draw, and a blur from afar).
         const dash = to.locked && t.k >= 0.6;
         const key = `${color}|${w}|${dash}`;
@@ -1176,7 +1259,7 @@ export class SkillGraph {
         if (!to || !f || to.x === undefined || f.x === undefined) continue;
         if (!fine && to.tier === "detail" && f.tier === "detail" && !path?.has(id)) continue;
         if (!onScreen(f, 400) && !onScreen(to, 400)) continue;
-        branch({ x: f.x, y: f.y! }, to, Math.max(1.5, 5.5 - (this.ringOf.get(id) ?? 1) * 1.1));
+        branch({ x: f.x, y: f.y!, id: f.id }, to, Math.max(1.5, 5.5 - (this.ringOf.get(id) ?? 1) * 1.1));
       }
       ctx.lineCap = "round";
       for (const b of batches.values()) {
@@ -1198,7 +1281,7 @@ export class SkillGraph {
         if (!to || !f || to.x === undefined || f.x === undefined) continue;
         if (!onScreen(f, 600) && !onScreen(to, 600)) continue;
         const lit = path?.has(id) ?? false;
-        const key = alpha(to.color, dim(id) ? 0.1 : lit ? 0.9 : to.locked ? 0.3 : 0.55);
+        const key = alpha(to.color, dim(id) ? 0.1 : lit ? Math.max(0.9 * nearest(id, from), 0.3) : to.locked ? 0.3 : 0.55);
         let p = batches.get(key);
         if (!p) batches.set(key, (p = new Path2D()));
         p.moveTo(f.x, f.y!);
@@ -1238,12 +1321,13 @@ export class SkillGraph {
     }
 
     // Links.
+    const linkBatches = new Map<string, { color: string; opacity: number; width: number; dashed: boolean; lines: Path2D; heads: Path2D }>();
     for (const l of this.links) {
       const s = l.source as Node;
       const d = l.target as Node;
       if (l.hidden || s.x === undefined || d.x === undefined || !showCourse(s) || !showCourse(d)) continue;
       // A link along a branch is the branch itself.
-      if (this.opts.layout !== "clusters" && l.kind !== "course" && this.edgeSet.has(`${s.id}>${d.id}`)) continue;
+      if (this.opts.layout !== "clusters" && l.kind !== "course" && this.alongBranch.has(l)) continue;
       if (!onScreen(s, 600) && !onScreen(d, 600)) continue;
       const onPath = (path?.has(d.id) && path?.has(s.id)) ?? false;
       if (t.k < 0.32 && d.tier === "detail" && !onPath) continue;
@@ -1277,14 +1361,16 @@ export class SkillGraph {
         ctx.beginPath();
         ctx.moveTo(a.x - a.r, a.y!);
         ctx.bezierCurveTo(bend, a.y!, bend, b.y!, b.x! - b.r - 3, b.y!);
-        ctx.strokeStyle = alpha(b.color, lit ? 0.85 : crossing ? 0.25 : 0.4);
-        ctx.lineWidth = (lit ? 2 : 1.2) / Math.sqrt(t.k);
+        const strength = lit ? nearest(a.id, b.id) : 0;
+        ctx.strokeStyle = alpha(b.color, lit ? Math.max(0.85 * strength, 0.25) : crossing ? 0.25 : 0.4);
+        ctx.lineWidth = (lit ? 1.2 + strength : 1.2) / Math.sqrt(t.k);
         ctx.stroke();
         continue;
       }
       const faded = dim(s.id) || dim(d.id);
       const arrow = l.kind !== "course";
-      const lit = path && path.has(s.id) && path.has(d.id);
+      const lit = !!path && path.has(s.id) && path.has(d.id);
+      const strength = lit ? nearest(s.id, d.id) : 0;
       const dx = d.x - s.x;
       const dy = d.y! - s.y!;
       const len = Math.hypot(dx, dy) || 1;
@@ -1297,20 +1383,35 @@ export class SkillGraph {
       // A gentle curve so crossing edges read apart.
       const mx = (x1 + x2) / 2 - uy * len * 0.08;
       const my = (y1 + y2) / 2 + ux * len * 0.08;
-      ctx.beginPath();
-      ctx.moveTo(x1, y1);
-      ctx.quadraticCurveTo(mx, my, x2, y2);
       const base = l.kind === "course" ? theme.edge : l.met ? d.color : theme.edge;
-      ctx.strokeStyle = faded ? alpha(theme.edge.startsWith("#") ? theme.edge : "#888888", 0.12) : lit ? d.color : base;
+      const color = faded ? alpha(theme.edge.startsWith("#") ? theme.edge : "#888888", 0.12) : lit ? d.color : base;
       // Radial: links across branches (not along one) are quieter, the branches carry the shape.
       const across = this.opts.layout === "radial" && l.kind === "prereq";
       // Between trees (math → physics): always there, quiet unless it's on the path you're looking at.
       const between = l.kind === "prereq" && s.tier !== undefined && d.tier !== undefined && s.branch !== d.branch;
-      ctx.globalAlpha = faded ? (between ? 0.12 : 0.35) : l.kind === "course" ? 0.55 : l.kind === "part" ? 0.6 : between && !lit ? 0.22 : across && !lit ? 0.45 : 0.85;
-      ctx.lineWidth = (lit ? 2.6 : l.kind === "prereq" ? 1.6 : 1.1) / Math.sqrt(t.k);
-      if (!l.met && arrow && t.k >= 0.5) ctx.setLineDash([5 / t.k, 4 / t.k]);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      const opacity = faded
+        ? between
+          ? 0.12
+          : 0.35
+        : lit
+          ? Math.max(0.85 * strength, 0.22)
+          : l.kind === "course"
+            ? 0.55
+            : l.kind === "part"
+              ? 0.6
+              : between
+                ? 0.22
+                : across
+                  ? 0.45
+                  : 0.85;
+      const width = (lit ? 1.2 + 1.4 * strength : l.kind === "prereq" ? 1.6 : 1.1) / Math.sqrt(t.k);
+      const dashed = !l.met && arrow && t.k >= 0.5;
+      // Batched: one stroke (and one fill for the arrowheads) per look.
+      const key = `${color}|${Math.round(opacity * 100)}|${Math.round(width * 20)}|${dashed}`;
+      let batch = linkBatches.get(key);
+      if (!batch) linkBatches.set(key, (batch = { color, opacity, width, dashed, lines: new Path2D(), heads: new Path2D() }));
+      batch.lines.moveTo(x1, y1);
+      batch.lines.quadraticCurveTo(mx, my, x2, y2);
       if (arrow) {
         // Arrowhead along the curve's end tangent.
         const tx = x2 - mx;
@@ -1319,16 +1420,24 @@ export class SkillGraph {
         const ax = tx / tl;
         const ay = ty / tl;
         const size = (l.kind === "part" ? 5.5 : 7) / Math.sqrt(t.k);
-        ctx.beginPath();
-        ctx.moveTo(x2, y2);
-        ctx.lineTo(x2 - ax * size - ay * size * 0.55, y2 - ay * size + ax * size * 0.55);
-        ctx.lineTo(x2 - ax * size + ay * size * 0.55, y2 - ay * size - ax * size * 0.55);
-        ctx.closePath();
-        ctx.fillStyle = ctx.strokeStyle as string;
-        ctx.fill();
+        batch.heads.moveTo(x2, y2);
+        batch.heads.lineTo(x2 - ax * size - ay * size * 0.55, y2 - ay * size + ax * size * 0.55);
+        batch.heads.lineTo(x2 - ax * size + ay * size * 0.55, y2 - ay * size - ax * size * 0.55);
+        batch.heads.closePath();
       }
-      ctx.globalAlpha = 1;
     }
+    // Faint first, so what's lit is drawn over the rest.
+    for (const b of [...linkBatches.values()].sort((x, y) => x.opacity - y.opacity)) {
+      ctx.globalAlpha = b.opacity;
+      ctx.strokeStyle = b.color;
+      ctx.fillStyle = b.color;
+      ctx.lineWidth = b.width;
+      if (b.dashed) ctx.setLineDash([5 / t.k, 4 / t.k]);
+      ctx.stroke(b.lines);
+      ctx.setLineDash([]);
+      ctx.fill(b.heads);
+    }
+    ctx.globalAlpha = 1;
 
     // Nodes.
     const dots = new Map<string, Path2D>();
@@ -1570,10 +1679,43 @@ export class SkillGraph {
     // node, then gives way, so zooming in reveals more of them.
     type Box = { x0: number; y0: number; x1: number; y1: number };
     const overlaps = (b: Box, o: Box) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0;
-    const placed: Box[] = [];
+    // A grid over the screen, so a label is only tested against what's near it.
+    const CELL = 72;
+    const cells = (b: Box, f: (key: number) => boolean | void): boolean => {
+      const cx0 = Math.floor(b.x0 / CELL);
+      const cx1 = Math.floor(b.x1 / CELL);
+      const cy0 = Math.floor(b.y0 / CELL);
+      const cy1 = Math.floor(b.y1 / CELL);
+      for (let cx = cx0; cx <= cx1; cx++) for (let cy = cy0; cy <= cy1; cy++) if (f((cx + 4096) * 8192 + cy + 4096) === true) return true;
+      return false;
+    };
+    const grid = <T,>(boxOf: (v: T) => Box) => {
+      const m = new Map<number, T[]>();
+      return {
+        add: (v: T) =>
+          void cells(boxOf(v), (k) => {
+            const list = m.get(k);
+            if (list) list.push(v);
+            else m.set(k, [v]);
+          }),
+        some: (b: Box, test: (v: T) => boolean) => cells(b, (k) => m.get(k)?.some((v) => overlaps(b, boxOf(v)) && test(v)) ?? false),
+      };
+    };
+    const placed = grid<Box>((b) => b);
+    const hitsPlaced = (b: Box, test: (o: Box) => boolean = () => true) => placed.some(b, test);
+    const measure = (label: string) => {
+      const key = ctx.font + "|" + label;
+      let w = this.widths.get(key);
+      if (w === undefined) {
+        w = ctx.measureText(label).width;
+        if (this.widths.size > 20000) this.widths.clear();
+        this.widths.set(key, w);
+      }
+      return w;
+    };
     // Slanted labels (a path's steps): their corners, and the box around them for a quick first test.
     type Slant = { pts: Pt[]; box: Box };
-    const slanted: Slant[] = [];
+    const slanted = grid<Slant>((o) => o.box);
     const corners = (b: Box): Pt[] => [
       { x: b.x0, y: b.y0 },
       { x: b.x1, y: b.y0 },
@@ -1596,13 +1738,15 @@ export class SkillGraph {
       }
       return false;
     };
-    const hitsSlant = (pts: Pt[], box: Box) => slanted.some((o) => overlaps(box, o.box) && !separated(pts, o.pts));
-    const discs = new Map<string, Box>();
+    const hitsSlant = (pts: Pt[], box: Box) => slanted.some(box, (o) => !separated(pts, o.pts));
+    type Disc = { id: string; b: Box };
+    const discs = grid<Disc>((d) => d.b);
+    const hitsNode = (b: Box, except: string) => discs.some(b, (d) => d.id !== except);
     if (me) {
       // Your level and class under you.
       const c = this.toScreen({ x: 0, y: 0 });
       const below = c.y + 47 * t.k + 16;
-      placed.push({ x0: c.x - 80, y0: c.y - 47 * t.k, x1: c.x + 80, y1: below + 20 });
+      placed.add({ x0: c.x - 80, y0: c.y - 47 * t.k, x1: c.x + 80, y1: below + 20 });
     }
     const shown = this.nodes.filter((n) => n.x !== undefined && showCourse(n) && onScreen(n, n.r + 40));
     for (const n of shown) {
@@ -1610,8 +1754,8 @@ export class SkillGraph {
       const r = n.r * t.k;
       if (r < 2 && n.kind !== "ability") continue;
       const b = { x0: s.x - r, y0: s.y - r, x1: s.x + r, y1: s.y + r };
-      discs.set(n.id, b);
-      if (n.kind === "ability") placed.push(b);
+      discs.add({ id: n.id, b });
+      if (n.kind === "ability") placed.add(b);
     }
     // General to detail as you zoom in: areas first, then fields, then topics, then the steps.
     const layout = this.opts.layout;
@@ -1637,11 +1781,11 @@ export class SkillGraph {
         if (r < (g.level === 1 ? 26 : 34) || c.x + r < 0 || c.x - r > this.w || c.y + r < 0 || c.y - r > this.h) continue;
         const label = g.level === 1 ? g.label.toUpperCase() : g.label;
         ctx.font = g.level === 1 ? `800 12px ${theme.font}` : `750 13px ${theme.font}`;
-        const w = ctx.measureText(label).width;
+        const w = measure(label);
         const y = g.level === 1 ? c.y - r - 7 : c.y - r + 17;
         const box = { x0: c.x - w / 2 - 3, y0: y - 12, x1: c.x + w / 2 + 3, y1: y + 4 };
-        if (placed.some((o) => overlaps(box, o))) continue;
-        placed.push(box);
+        if (hitsPlaced(box)) continue;
+        placed.add(box);
         ctx.textAlign = "center";
         ctx.lineWidth = 4;
         ctx.strokeStyle = theme.bg;
@@ -1678,7 +1822,7 @@ export class SkillGraph {
       const s = this.toScreen({ x: n.x!, y: n.y! });
       ctx.font = `800 11px ${theme.font}`;
       const label = (road.name.length > 32 ? `${road.name.slice(0, 31)}…` : road.name).toUpperCase();
-      const w = ctx.measureText(label).width;
+      const w = measure(label);
       const gap = (n.r + (n.goal ? 10 : 7)) * t.k;
       const box = (base: number): Box => ({
         x0: s.x - w / 2 - 3,
@@ -1688,8 +1832,8 @@ export class SkillGraph {
       });
       // Above its first step, else below it, wherever it covers no other skill.
       const spots = [s.y - gap - 7, s.y + gap + 13];
-      const y = spots.find((b) => !placed.some((o) => overlaps(box(b), o)) && ![...discs].some(([id, o]) => id !== n.id && overlaps(box(b), o))) ?? spots[0];
-      placed.push(box(y));
+      const y = spots.find((b) => !hitsPlaced(box(b)) && !hitsNode(box(b), n.id)) ?? spots[0];
+      placed.add(box(y));
       ctx.globalAlpha = road.faded ? 0.35 : 1;
       ctx.lineWidth = 4;
       ctx.strokeStyle = theme.bg;
@@ -1703,7 +1847,7 @@ export class SkillGraph {
       const big = n.tier === "general" || n.tier === "field" || (!n.tier && !!n.learnt);
       ctx.font = `${n.kind === "course" ? 500 : big ? 800 : n.learnt ? 700 : 600} ${n.kind === "course" ? 11 : n.tier === "general" ? 15.5 : big ? 14 : n.learnt ? 13 : 12}px ${theme.font}`;
       const label = n.label.length > 28 ? `${n.label.slice(0, 27)}…` : n.label;
-      const w = ctx.measureText(label).width;
+      const w = measure(label);
       const gap = (n.r + (n.goal ? 10 : 7)) * t.k;
       // Radial: a path's steps sit in a line, so their labels run across the path, slanted at
       // most 60° (still readable), one beside the next like the rungs of a ladder.
@@ -1738,9 +1882,9 @@ export class SkillGraph {
           x1: Math.max(...pts.map((p) => p.x)),
           y1: Math.max(...pts.map((p) => p.y)),
         };
-        const blocked = placed.some((o) => overlaps(box, o) && !separated(pts, corners(o))) || hitsSlant(pts, box);
+        const blocked = hitsPlaced(box, (o) => !separated(pts, corners(o))) || hitsSlant(pts, box);
         if (blocked && !forced) continue;
-        slanted.push({ pts, box });
+        slanted.add({ pts, box });
         ctx.save();
         ctx.translate(s.x, s.y);
         ctx.rotate(phi);
@@ -1762,8 +1906,8 @@ export class SkillGraph {
         const y = under ? s.y - n.r * t.k - 13 : s.y;
         const x0 = under ? x - w : x;
         const box = { x0: x0 - 2, y0: y - 8 - (under ? 4 : 0), x1: x0 + w + 3, y1: y + 7 };
-        if (!forced && (placed.some((o) => overlaps(box, o)) || hitsSlant(corners(box), box))) continue;
-        placed.push(box);
+        if (!forced && (hitsPlaced(box) || hitsSlant(corners(box), box))) continue;
+        placed.add(box);
         ctx.textAlign = under ? "right" : "left";
         ctx.lineWidth = 4;
         ctx.strokeStyle = theme.bg;
@@ -1802,15 +1946,12 @@ export class SkillGraph {
         const x0 = p.align === "center" ? p.x - w / 2 : p.align === "left" ? p.x : p.x - w;
         return { x0: x0 - 3, y0: p.y - 11, x1: x0 + w + 3, y1: p.y + 4 };
       };
-      const clearOfLabels = (b: Box) => !placed.some((o) => overlaps(b, o)) && !hitsSlant(corners(b), b);
-      const clearOfNodes = (b: Box) => {
-        for (const [id, o] of discs) if (id !== n.id && overlaps(b, o)) return false;
-        return true;
-      };
+      const clearOfLabels = (b: Box) => !hitsPlaced(b) && !hitsSlant(corners(b), b);
+      const clearOfNodes = (b: Box) => !hitsNode(b, n.id);
       let at = spots.find((p) => clearOfLabels(box(p)) && clearOfNodes(box(p)));
       if (at === undefined && forced) at = spots.find((p) => clearOfLabels(box(p))) ?? spots[0];
       if (at === undefined) continue;
-      placed.push(box(at));
+      placed.add(box(at));
       ctx.textAlign = at.align;
       ctx.lineWidth = 4;
       ctx.strokeStyle = theme.bg;

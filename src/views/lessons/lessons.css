@@ -847,3 +847,49 @@ html[data-desktop="darwin"] .lp-top {
     animation: none !important;
   }
 }
+
+/* Skills a lesson finished or opened up: the RPG moment. */
+.lp-unlocks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 420px;
+  margin: 4px auto 0;
+}
+.lp-unlock {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  color: var(--text);
+  text-align: left;
+  animation: lp-unlock-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+.lp-unlock svg {
+  color: var(--accent);
+}
+.lp-unlock.learnt {
+  border-color: color-mix(in srgb, var(--success, #34c759) 40%, var(--border));
+  background: color-mix(in srgb, var(--success, #34c759) 12%, transparent);
+}
+.lp-unlock.learnt svg {
+  color: var(--success, #34c759);
+}
+.lp-unlock + .lp-unlock {
+  animation-delay: 0.15s;
+}
+@keyframes lp-unlock-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-unlock {
+    animation: none;
+  }
+}

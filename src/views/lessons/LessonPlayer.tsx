@@ -29,11 +29,13 @@ import {
   abilityScore,
   addXp,
   areaOf,
+  computeSkillStats,
   formatModifier,
   LESSON_MASTERED_XP,
   levelForXp,
   listSkills,
   logPractice,
+  skillDone,
   totalXp,
   type Skill,
 } from "../../../shared/skills.ts";
@@ -524,6 +526,9 @@ interface Result {
   practiceMinutes: number;
   minutesLearning: number;
   reviewed?: { right: number; total: number };
+  /** Skills this lesson unlocked, and ones it finished learning (a lesson can complete a skill). */
+  unlocked?: Skill[];
+  learnt?: Skill[];
 }
 
 function finish(
@@ -558,6 +563,10 @@ function finish(
   const score = answerIdx.length ? right / answerIdx.length : 1;
   const skill = listSkills(doc).find((k) => k.courseIds.includes(target.courseId)) ?? null;
   const xpBefore = skill ? totalXp(doc, skill.id) : 0;
+  // For the unlock moment: which skills were open, and learnt, before this lesson counted.
+  const statsBefore = computeSkillStats(doc);
+  const skillsBefore = listSkills(doc);
+  const learntBefore = new Set(skillsBefore.filter((k) => skillDone(doc, skillsBefore, k, statsBefore)).map((k) => k.id));
   writeProgress(page, target.lessonId, {
     status: "mastered",
     mastery: Math.max(prev.mastery, score),
@@ -574,7 +583,11 @@ function finish(
   // Keep the next lessons (and the path) ready before the learner gets there.
   keepAhead(ws, target.courseId);
   const gained = skill ? totalXp(doc, skill.id) - xpBefore : firstTime ? LESSON_MASTERED_XP : 0;
-  return { right, total: answerIdx.length, stars: starsFor(right, answerIdx.length), firstTime, skill, xpBefore, gained, practiceMinutes, minutesLearning };
+  const statsAfter = computeSkillStats(doc);
+  const skillsAfter = listSkills(doc);
+  const unlocked = skillsAfter.filter((k) => statsBefore.get(k.id)?.unlocked === false && statsAfter.get(k.id)?.unlocked);
+  const learnt = skillsAfter.filter((k) => !learntBefore.has(k.id) && skillDone(doc, skillsAfter, k, statsAfter));
+  return { right, total: answerIdx.length, stars: starsFor(right, answerIdx.length), firstTime, skill, xpBefore, gained, practiceMinutes, minutesLearning, unlocked, learnt };
 }
 
 function Completion({ ws, target, session, result }: { ws: Workspace; target: PlayerTarget; session: Session; result: Result }) {
@@ -692,6 +705,27 @@ function Completion({ ws, target, session, result }: { ws: Workspace; target: Pl
               <span className="grow">Remembered</span>
               <strong>+{result.gained} XP</strong>
             </div>
+          </div>
+        )}
+
+        {!!(result.learnt?.length || result.unlocked?.length) && (
+          <div className="lp-unlocks" role="status">
+            {result.learnt?.map((k) => (
+              <div key={`l-${k.id}`} className="lp-unlock learnt">
+                <Icon name="check" size={15} stroke={2.6} />
+                <span className="grow">
+                  <strong>Learnt:</strong> {k.name}
+                </span>
+              </div>
+            ))}
+            {result.unlocked?.map((k) => (
+              <div key={`u-${k.id}`} className="lp-unlock">
+                <Icon name="unlock" size={15} />
+                <span className="grow">
+                  <strong>Unlocked:</strong> {k.name}
+                </span>
+              </div>
+            ))}
           </div>
         )}
 

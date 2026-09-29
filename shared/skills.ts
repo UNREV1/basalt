@@ -24,6 +24,7 @@
 
 import * as Y from "yjs";
 import { randomId } from "./crypto.ts";
+import { isGlyph } from "./glyphs.ts";
 import { allLessons, getCurriculum, getProgress } from "./course.ts";
 import { createPage, ensureBuiltinType, findSystemPage, getPage, todayKey, trashPage } from "./model.ts";
 
@@ -90,6 +91,8 @@ export interface Skill {
    * A skill with parts is a topic; learning it means learning its parts.
    */
   topic?: string;
+  /** Line icon on the skill map (see shared/glyphs.ts); picked from the name when unset. */
+  glyph?: string;
 }
 
 export interface SkillArea {
@@ -442,6 +445,7 @@ export function normalizeSkill(raw: Partial<Skill> & { id: string }): Skill {
   if (typeof raw.pageId === "string" && raw.pageId) out.pageId = raw.pageId;
   if (typeof raw.branch === "string" && raw.branch.trim()) out.branch = raw.branch.trim().slice(0, 120);
   if (typeof raw.topic === "string" && raw.topic && raw.topic !== raw.id) out.topic = raw.topic;
+  if (isGlyph(raw.glyph)) out.glyph = raw.glyph;
   return out;
 }
 
@@ -613,6 +617,7 @@ export interface SkillInput {
   branch?: string;
   /** The skill this one is part of (see Skill.topic). */
   topic?: string;
+  glyph?: string;
 }
 
 export function createSkill(doc: Y.Doc, input: SkillInput): Skill {
@@ -643,6 +648,7 @@ export function createSkill(doc: Y.Doc, input: SkillInput): Skill {
       pageId: input.pageId,
       branch: input.branch,
       topic: input.topic && existing.has(input.topic) ? input.topic : undefined,
+      glyph: input.glyph,
     });
     skillsMap(doc).set(id, clone(skill));
     // Created together with the skill so no other client ever races to create it.
@@ -1037,11 +1043,49 @@ export interface Requirement {
   have: number;
   /** A topic as prerequisite: every one of its parts must be learnt. */
   parts?: { done: number; total: number };
+  /** A skill with lessons as prerequisite: all of them must be done. */
+  lessons?: { done: number; total: number };
+}
+
+/**
+ * The next thing you can learn on the way to a locked skill: follow what it
+ * needs (and what that needs) to the first skill that's open and not learnt.
+ */
+export function nextStepToward(doc: Y.Doc, skillId: string, stats = computeSkillStats(doc), skills = listSkills(doc)): Skill | undefined {
+  const byId = new Map(skills.map((s) => [s.id, s]));
+  const seen = new Set<string>();
+  const walk = (id: string): Skill | undefined => {
+    if (seen.has(id)) return undefined;
+    seen.add(id);
+    const s = byId.get(id);
+    const st = stats.get(id);
+    if (!s || !st) return undefined;
+    if (st.unlocked) {
+      if (skillDone(doc, skills, s, stats)) return undefined;
+      // A topic: its next open part.
+      const parts = allParts(skills, id).filter((p) => !skills.some((x) => x.topic === p.id));
+      if (parts.length) return parts.find((p) => stats.get(p.id)?.unlocked !== false && !skillDone(doc, skills, p, stats)) ?? parts.map((p) => walk(p.id)).find(Boolean);
+      return s;
+    }
+    for (const m of st.missing) {
+      const hit = walk(m.parentId);
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  const st = stats.get(skillId);
+  if (!st || st.unlocked) return undefined;
+  for (const m of st.missing) {
+    const hit = walk(m.parentId);
+    if (hit) return hit;
+  }
+  return undefined;
 }
 
 /** "Mnemonics level 2 (now 1)", or "all of Arithmetic (3/5 learnt)". */
 export function requirementText(m: Requirement, opts: { now?: boolean } = {}): string {
   if (m.parts) return `all of ${m.name}${opts.now === false ? "" : ` (${m.parts.done}/${m.parts.total} learnt)`}`;
+  if (m.lessons) return `${m.name}${opts.now === false ? "" : ` (${m.lessons.done}/${m.lessons.total} lessons)`}`;
   return `${m.name} level ${m.need}${opts.now === false ? "" : ` (now ${m.have})`}`;
 }
 
@@ -1101,6 +1145,15 @@ export function computeSkillStats(doc: Y.Doc, now = Date.now(), skills = listSki
       if (skills.some((x) => x.topic === p)) {
         const tp = needTopic(p);
         if (tp.done < tp.total) missing.push({ parentId: p, name: parent.name, need: s.requiredLevel, have: pb.level, parts: tp });
+        continue;
+      }
+      // A prerequisite you learn with lessons is met once they're all done (or its goal is
+      // reached): the things you need to progress are learnt, not just started.
+      const lessons = parent.courseIds.map((c) => courseXp(doc, c)).filter((c) => c.total > 0);
+      if (lessons.length) {
+        const done = lessons.reduce((a, c) => a + c.mastered + c.skipped, 0);
+        const total = lessons.reduce((a, c) => a + c.total, 0);
+        if (done < total && !pb.goalReached) missing.push({ parentId: p, name: parent.name, need: s.requiredLevel, have: pb.level, lessons: { done, total } });
       } else if (pb.level < s.requiredLevel) missing.push({ parentId: p, name: parent.name, need: s.requiredLevel, have: pb.level });
     }
     out.set(s.id, { ...b, unlocked: missing.length === 0, missing });
@@ -1112,9 +1165,25 @@ export function computeSkillStats(doc: Y.Doc, now = Date.now(), skills = listSki
     seen.add(t.id);
     return [...(out.get(t.id)?.missing ?? []), ...topicLock(t, seen)];
   };
+  const inherit = (id: string, more: Requirement[]) => {
+    const cur = out.get(id)!;
+    const add = more.filter((m) => !cur.missing.some((x) => x.parentId === m.parentId));
+    if (!add.length && !cur.unlocked) return false;
+    out.set(id, { ...cur, unlocked: false, missing: [...cur.missing, ...add] });
+    return true;
+  };
   for (const s of skills) {
-    const inherited = topicLock(s).filter((m) => !out.get(s.id)!.missing.some((x) => x.parentId === m.parentId));
-    if (inherited.length) out.set(s.id, { ...out.get(s.id)!, unlocked: false, missing: [...out.get(s.id)!.missing, ...inherited] });
+    const inherited = topicLock(s);
+    if (inherited.length) inherit(s.id, inherited);
+  }
+  // Nothing opens past a locked skill: what a locked prerequisite (or topic) is
+  // waiting for, its dependents wait for too, all the way down the path.
+  for (let pass = 0, changed = true; changed && pass < 64; pass++) {
+    changed = false;
+    for (const s of skills) {
+      const from = [...s.parents, ...(s.topic ? [s.topic] : [])].map((p) => out.get(p)).filter((p): p is SkillStats => !!p && !p.unlocked);
+      for (const p of from) if (inherit(s.id, p.missing)) changed = true;
+    }
   }
   return out;
 }
@@ -1227,6 +1296,7 @@ export interface SkillPlanItem {
   branch?: string;
   /** The skill it's part of: a key in this plan, or an existing skill's id or name. */
   topicKey?: string;
+  glyph?: string;
 }
 
 /**
@@ -1260,6 +1330,7 @@ export function createSkillsFromPlan(doc: Y.Doc, plan: SkillPlanItem[]): Map<str
         branch: item.branch,
         // Topics usually come before their parts; later ones are set below.
         topic: item.topicKey ? resolve(item.topicKey) : undefined,
+        glyph: item.glyph,
       });
       ids.set(item.key, s.id);
     }
@@ -1383,7 +1454,7 @@ export function skillTreeSummary(doc: Y.Doc, now = Date.now()): string {
     if (st.courseXp) parts.push(`${fmt(st.courseXp)} from courses`);
     if (st.streak.current > 1) parts.push(`${st.streak.current}-day streak`);
     if (s.goalLevel) parts.push(`goal L${s.goalLevel}${st.goalReached ? " ✓" : ""}`);
-    if (!st.unlocked) parts.push(`LOCKED: needs ${st.missing.map((m) => (m.parts ? requirementText(m) : `${m.name} L${m.need} (now L${m.have})`)).join(", ")}`);
+    if (!st.unlocked) parts.push(`LOCKED: needs ${st.missing.map((m) => (m.parts || m.lessons ? requirementText(m) : `${m.name} L${m.need} (now L${m.have})`)).join(", ")}`);
     else if (s.parents.length && s.requiredLevel > 1) parts.push(`unlocked at L${s.requiredLevel} of prerequisites`);
     const inside = skills.filter((x) => x.topic === s.id);
     if (inside.length) {

@@ -12,6 +12,7 @@ import { useSettings } from "../../lib/settings.ts";
 import { useTheme } from "../../lib/theme.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { Icon, Menu, Modal, type Anchor, type MenuItem } from "../../components/ui.tsx";
+import { usePlayer } from "../lessons/player.ts";
 import { useLessonStarter } from "../lessons/start.ts";
 import { CharacterPanel } from "./CharacterPanel.tsx";
 import { QuestCheck } from "./Overview.tsx";
@@ -74,6 +75,10 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
   };
 
   const starter = useLessonStarter(ws, { toast, openPage, showSkill: (id) => select(id) });
+  // The lesson player shows its own unlocks.
+  const player = usePlayer();
+  const playerOpen = useRef(false);
+  playerOpen.current = !!player;
 
   // Every skill is a page; older skills get theirs here.
   useEffect(() => ensureSkillPages(ws.doc), [ws]);
@@ -130,11 +135,18 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
     prevStats.current = data.stats;
     if (!prev) return;
     const added: Effect[] = [];
+    const opened: string[] = [];
     for (const [id, st] of data.stats) {
       const before = prev.get(id);
       if (!before) continue;
       if (st.level > before.level) added.push({ key: ++fxKey.current, id });
+      // Unlocked, like in an RPG: a pulse on the map and a word about it.
+      if (st.unlocked && !before.unlocked) {
+        added.push({ key: ++fxKey.current, id });
+        opened.push(data.byId.get(id)?.name ?? "");
+      }
     }
+    if (opened.length && !playerOpen.current) toast(`Unlocked: ${opened.slice(0, 3).join(", ")}${opened.length > 3 ? ` and ${opened.length - 3} more` : ""}`);
     if (!added.length) return;
     setEffects((fx) => [...fx, ...added]);
     const keys = new Set(added.map((a) => a.key));
@@ -154,6 +166,21 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
   }, [search, areaFilter, data.skills]);
 
   const side = !!selectedId || charOpen;
+  const center = useMemo(
+    () => ({
+      initials:
+        settings.identity.name
+          .split(/\s+/)
+          .map((w) => w[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase() || "ME",
+      color: settings.identity.color,
+      title: `Level ${data.sheet.level}`,
+      sub: data.sheet.title,
+    }),
+    [settings.identity.name, settings.identity.color, data.sheet.level, data.sheet.title],
+  );
   const questStrip = data.quests.length > 0;
   const insets = useMemo(
     () => ({
@@ -319,6 +346,11 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
               peers={peerColors}
               toolsBottom={phone && !selectedId ? 112 : 12}
               hideTools={phone && !!selectedId}
+              center={center}
+              onCenter={() => {
+                setSelectedId(null);
+                setCharOpen(true);
+              }}
             />
             {questStrip && (
               <div className="sk-quest-strip" role="group" aria-label="Today's quests">

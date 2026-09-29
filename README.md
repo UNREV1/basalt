@@ -187,12 +187,17 @@ Real life, with the progression mechanics of D&D (but none of the video-game loo
 - **The skill map** (*Character* in the sidebar) shows every skill at once, with your character beside it.
   - **Click a skill to start its next lesson.** If the lesson isn't written yet, Claude writes it and it opens by itself. A skill with nothing planned yet gets planned by Claude, or starts a matching built-in course (Athletics starts *Strength Training 101*).
   - **Right-click a skill** (or press and hold on a touch screen) for its details: what to learn first, its parts, the practice log, quests and more.
-  - **Reading it:** each skill is a circle. Bigger means a higher level, the color is its ability and a ring fills toward the next level. Arrows run from what to learn first to what it unlocks, locked skills are dashed, and each path Claude planned is a colored road. Hover a skill to light up everything it needs and leads to.
+  - **It works like an RPG skill tree:**
+    - Each skill is a circle with a line icon. Bigger means a higher level, the color is its ability and a ring fills toward the next level.
+    - Skills you can learn now glow, learnt ones get a check, and locked ones are dashed and dim.
+    - Arrows run from what to learn first to what it unlocks. Hover a skill to light up everything it needs and leads to.
+    - Finishing a lesson that opens new skills shows *Unlocked!*, and the map pulses them.
   - **Topics** like Arithmetic have a double rim, and their badge shows how many parts you've learnt.
   - **Layouts:**
-    - **Tree** (default): a column per ability. A planned subject gets its own block, with a lane per topic and its parts below.
+    - **Radial** (default): you in the middle, your six abilities around you, and every path branching out from there. A subject grows into its topics and each topic into its parts, one ring further out each step. Click yourself in the middle for your character.
+    - **Tree:** a column per ability, and a planned subject gets a lane per topic.
     - **Clusters:** skills gather around their ability.
-    - **Rings:** abilities in the middle, deeper skills further out.
+  - **Physics like Obsidian's graph:** skills push each other apart and links pull like springs. Drag one and its neighbours follow, then everything settles.
   - **Getting around:** filter by status or path, search, pinch or scroll to zoom. From the keyboard, Tab moves through the skills (the map follows) and Enter starts a lesson.
 - **Your character** sits beside the map (a sheet you pull up on a phone). It shows your level and class, what's up next with one-click lessons, your six ability scores and their hexagon, today's quests and recent XP.
 - **The general plan: every skill is planned the same way, up front.** Ask for a topic, or click any skill that has no plan yet, and Claude maps the whole tree right away, as titles only:
@@ -201,6 +206,11 @@ Real life, with the progression mechanics of D&D (but none of the video-game loo
   - Each part has a course outline with every lesson title.
 
   The next topic unlocks once you've learnt every part of the one before, and a topic's parts unlock with it. Lessons are written just before you reach them. *Plan every skill* on the character panel plans your whole tree this way, one skill after another.
+- **You learn what you need to progress:**
+  - A prerequisite you learn with lessons counts once all its lessons are done, not just started. Subjects connect: Physics needs Algebra, and Claude links them when it plans.
+  - Nothing opens past a locked skill, all the way down the path.
+  - A locked skill shows the next step you can take toward it.
+  - *I know this already* (or *I know all of this* on a topic) lets you test out of what you know, like skipping ahead in a game.
 - Start from templates or describe any goal and let Claude generate a tree. The *D&D character* template has every D&D skill as a real-life skill; the others are Memory & study, fitness, programming, languages, music, art, math, money, social skills, mindfulness and cooking. Skills from before abilities moved to the closest one, for example Mind → Intelligence.
 
 ### Liquid Glass design

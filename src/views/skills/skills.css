@@ -1373,9 +1373,6 @@ html[data-glass] .sk-page {
   display: flex;
   flex-direction: column;
 }
-.sk-upnext-icon {
-  font-size: 20px;
-}
 .sk-upnext-name {
   font-weight: 600;
 }
@@ -1533,9 +1530,6 @@ html[data-glass] .sk-page {
 .sk-part.next .sk-part-state {
   border-color: var(--accent);
 }
-.sk-part-icon {
-  font-size: 16px;
-}
 .sk-part-go {
   flex: none;
 }
@@ -1561,4 +1555,20 @@ html[data-glass] .sk-page {
     left: 50%;
     top: 60px;
   }
+}
+
+/* A skill's line icon in its color, like on the map. */
+.sk-glyph {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  background: var(--c);
+  stroke: #fff;
+}
+.sk-glyph.locked {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--c);
+  stroke: var(--c);
+  opacity: 0.75;
 }

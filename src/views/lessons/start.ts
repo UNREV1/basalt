@@ -11,7 +11,7 @@ import { getLessonContent } from "../../../shared/lesson.ts";
 import { findLibraryCourse, installCourse } from "../../../shared/library/install.ts";
 import type { LibraryCourse } from "../../../shared/library/types.ts";
 import { getPage } from "../../../shared/model.ts";
-import { allParts, computeSkillStats, listSkills, requirementText, skillDone, type Requirement } from "../../../shared/skills.ts";
+import { allParts, computeSkillStats, listSkills, nextStepToward, requirementText, skillDone, type Requirement } from "../../../shared/skills.ts";
 import { isJobRunning, useClaudeJobs, type ClaudeJob } from "../../lib/claude.ts";
 import { getSettings } from "../../lib/settings.ts";
 import type { Workspace } from "../../lib/workspace.ts";
@@ -169,7 +169,8 @@ export function useLessonStarter(ws: Workspace, ui: StartUi) {
         return;
       case "locked": {
         const m = plan.missing;
-        ui.toast(`First: ${m.map((x) => requirementText(x, { now: false })).join(" and ")}`);
+        const next = target.skillId ? nextStepToward(ws.doc, target.skillId) : undefined;
+        ui.toast(`Locked: first ${m[0] ? requirementText(m[0], { now: false }) : "what it needs"}${next ? `. Next step: ${next.name}` : ""}`);
         if (target.skillId) ui.showSkill?.(target.skillId);
         return;
       }

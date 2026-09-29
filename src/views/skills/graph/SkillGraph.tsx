@@ -7,7 +7,10 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "rea
 import { allLessons, getCurriculum, getProgress } from "../../../../shared/course.ts";
 import { displayTitle, getPage, pageMeta } from "../../../../shared/model.ts";
 import { allParts, formatModifier, learningOrder, requirementText, skillDone, themedColor, topicProgress } from "../../../../shared/skills.ts";
+import { GLYPHS, glyphFor } from "../../../../shared/glyphs.ts";
+import type { Skill } from "../../../../shared/skills.ts";
 import { Icon } from "../../../components/ui.tsx";
+import { SkillGlyph } from "../SkillGlyph.tsx";
 import type { Workspace } from "../../../lib/workspace.ts";
 import { fmt, type SkillTreeData } from "../useSkillData.ts";
 import { SkillGraph as Engine, type GraphLayout, type SGLink, type SGNode } from "./skill-graph.ts";
@@ -35,15 +38,14 @@ interface Prefs {
   courses: boolean;
 }
 
-const PREFS_KEY = "basalt:skill-graph";
-const DEFAULT_PREFS: Prefs = { layout: "tree", labels: true, courses: true };
+const PREFS_KEY = "basalt:skill-map";
+const DEFAULT_PREFS: Prefs = { layout: "radial", labels: true, courses: true };
 
 function loadPrefs(): Prefs {
   try {
     const saved = JSON.parse(localStorage.getItem(PREFS_KEY) ?? "{}") as { layout?: string; labels?: boolean; courses?: boolean };
-    // "Flow" became the Tree layout.
-    const layout = saved.layout === "flow" ? "tree" : saved.layout;
-    return { ...DEFAULT_PREFS, ...saved, layout: layout === "clusters" || layout === "rings" || layout === "tree" ? layout : "tree" };
+    const layout = saved.layout === "tree" || saved.layout === "clusters" || saved.layout === "radial" ? saved.layout : "radial";
+    return { ...DEFAULT_PREFS, ...saved, layout };
   } catch {
     return DEFAULT_PREFS;
   }
@@ -86,6 +88,8 @@ export function SkillGraphView({
   peers,
   toolsBottom = 12,
   hideTools = false,
+  center,
+  onCenter,
 }: {
   ws: Workspace;
   data: SkillTreeData;
@@ -109,6 +113,10 @@ export function SkillGraphView({
   /** How far above the bottom the toolbar sits (clear of a bottom sheet). */
   toolsBottom?: number;
   hideTools?: boolean;
+  /** You, in the middle of the radial map. */
+  center: { initials: string; color: string; title: string; sub: string };
+  /** Click on you in the middle. */
+  onCenter: () => void;
 }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -187,6 +195,7 @@ export function SkillGraphView({
         done: skillDone(ws.doc, skills, s, data.stats),
         busy: busy.has(s.id),
         peers: peers.get(s.id),
+        glyph: GLYPHS[glyphFor(s)],
       });
       // Prerequisites. A topic you need is drawn from its last parts.
       for (const p of s.parents) {
@@ -264,8 +273,8 @@ export function SkillGraphView({
     return out;
   }, [matches, status, branch, data]);
 
-  const cbRef = useRef({ onStart, onStartCourse, onDetails, onAbility, onDeselect, data, order: model.order });
-  cbRef.current = { onStart, onStartCourse, onDetails, onAbility, onDeselect, data, order: model.order };
+  const cbRef = useRef({ onStart, onStartCourse, onDetails, onAbility, onDeselect, onCenter, data, order: model.order });
+  cbRef.current = { onStart, onStartCourse, onDetails, onAbility, onDeselect, onCenter, data, order: model.order };
 
   // The engine lives as long as the canvas.
   useEffect(() => {
@@ -274,6 +283,7 @@ export function SkillGraphView({
       onSelect: (id) => {
         const cb = cbRef.current;
         if (!id) return cb.onDeselect();
+        if (id === "@you") return cb.onCenter();
         if (id.startsWith("course:")) return cb.onStartCourse(id.slice(7));
         if (cb.order.includes(id) && !cb.data.byId.has(id)) return cb.onAbility(id);
         cb.onStart(id);
@@ -315,9 +325,12 @@ export function SkillGraphView({
     engine.current?.setData(model.nodes, model.links, model.order);
   }, [model]);
 
+  const centerKey = `${center.initials}|${center.color}|${center.title}|${center.sub}`;
   useEffect(() => {
-    engine.current?.setOptions({ ...prefs, dark, matches: visibleMatches, selectedId });
-  }, [prefs, dark, visibleMatches, selectedId]);
+    engine.current?.setOptions({ ...prefs, dark, matches: visibleMatches, selectedId, center });
+    // The center is compared by value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefs, dark, visibleMatches, selectedId, centerKey]);
 
   useEffect(() => {
     engine.current?.setInsets(insets);
@@ -407,9 +420,9 @@ export function SkillGraphView({
           <div className="sg-seg" role="radiogroup" aria-label="Layout">
             {(
               [
+                ["radial", "Radial", "An RPG skill tree: you in the middle, every path branching out"],
                 ["tree", "Tree", "A column per ability, foundations at the top, each topic's parts below it"],
                 ["clusters", "Clusters", "Skills gather around their ability"],
-                ["rings", "Rings", "Abilities in the middle, each skill further out the deeper it is"],
               ] as const
             ).map(([id, label, title]) => (
               <button
@@ -512,7 +525,7 @@ export function SkillGraphView({
               <span className="sg-key road" /> A learning path Claude planned for you, named where it starts.
             </li>
             <li>
-              <span className="sg-key tier" /> Tree and Rings: tiers, how deep a skill is in its path.
+              <span className="sg-key tier" /> Radial: each ring out is one more step along a path.
             </li>
           </ul>
           <p className="small faint">
@@ -527,7 +540,11 @@ export function SkillGraphView({
       {hovered && hover && (
         <div className="sg-tip" style={{ left: hover.x, top: hover.y }} role="tooltip">
           <div className="sg-tip-head">
-            <span className="sg-tip-icon">{hovered.icon}</span>
+            {hovered.skill ? (
+              <SkillGlyph skill={hovered.skill} color={model.nodes.find((n) => n.id === hovered.skill!.id)?.color ?? "#8b8d98"} size={24} />
+            ) : (
+              <span className="sg-tip-icon">{hovered.icon}</span>
+            )}
             <strong>{hovered.title}</strong>
           </div>
           {hovered.lines.map((l, i) => (
@@ -542,7 +559,21 @@ export function SkillGraphView({
   );
 }
 
-function hoverInfo(id: string, data: SkillTreeData, nodes: SGNode[], ws: Workspace): { icon: string; title: string; lines: string[]; action?: string } | null {
+function hoverInfo(
+  id: string,
+  data: SkillTreeData,
+  nodes: SGNode[],
+  ws: Workspace,
+): { icon: string; title: string; lines: string[]; action?: string; skill?: Skill } | null {
+  if (id === "@you") {
+    const learnt = data.skills.filter((s) => !data.skills.some((x) => x.topic === s.id) && skillDone(ws.doc, data.skills, s, data.stats)).length;
+    return {
+      icon: "🧙",
+      title: `Level ${data.sheet.level} · ${data.sheet.title}`,
+      lines: [`${fmt(data.sheet.xp)} XP`, `${learnt} skill${learnt === 1 ? "" : "s"} learnt, ${data.skills.length} on your map`],
+      action: `${touch ? "Tap" : "Click"} for your character`,
+    };
+  }
   const node = nodes.find((n) => n.id === id);
   if (!node) return null;
   if (node.kind === "ability") {
@@ -588,5 +619,5 @@ function hoverInfo(id: string, data: SkillTreeData, nodes: SGNode[], ws: Workspa
     );
     action = next ? `${verb} to continue with ${next.name}` : `${verb} to start`;
   } else action = lessons.length ? `${verb} to start the next lesson` : `${verb} to plan it and start`;
-  return { icon: s.icon, title: s.name, lines, action };
+  return { icon: s.icon, title: s.name, lines, action, skill: s };
 }

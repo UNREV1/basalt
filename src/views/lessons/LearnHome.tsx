@@ -37,6 +37,7 @@ import { useTheme } from "../../lib/theme.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { useDueCount } from "../registry.tsx";
 import { QuestCheck } from "../skills/Overview.tsx";
+import { SkillGlyph } from "../skills/SkillGlyph.tsx";
 import { focusSkill } from "../skills/focus.ts";
 import { AskClaudeFallback } from "./ClaudeStatus.tsx";
 import { ABILITY_ORDER, LIBRARY } from "./library.ts";
@@ -407,7 +408,7 @@ function Branches({ ws }: { ws: Workspace }) {
     return (
       <li key={s.id} className={`lh-step${done ? " done" : ""}${isNext ? " next" : ""}${small ? " small" : ""}${locked ? " locked" : ""}`} style={{ ["--c" as string]: themedColor(area.color, dark) }}>
         <span className="lh-step-dot">{done ? <Icon name="check" size={small ? 11 : 13} stroke={3} /> : locked ? <Icon name="lock" size={11} /> : n + 1}</span>
-        <span className="lh-step-icon">{s.icon}</span>
+        <SkillGlyph skill={s} color={themedColor(area.color, dark)} size={small ? 26 : 30} locked={locked} />
         <span className="grow lh-step-text">
           <span className="lh-step-name">{s.name}</span>
           <span className="lh-muted">
@@ -461,8 +462,8 @@ function Branches({ ws }: { ws: Workspace }) {
         return (
           <div key={name} className="lh-card lh-branch">
             <div className="lh-branch-head">
-              <strong>
-                {subject ? `${subject.icon} ` : ""}
+              <strong className="row" style={{ gap: 8 }}>
+                {subject && <SkillGlyph skill={subject} color={themedColor(areaOf(ws.doc, subject, areas).color, dark)} size={26} />}
                 {name}
               </strong>
               <span className="row" style={{ gap: 6 }}>

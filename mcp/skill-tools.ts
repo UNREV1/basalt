@@ -30,6 +30,7 @@ import {
 } from "../shared/skills.ts";
 import { createCourseOutline } from "../shared/library/install.ts";
 import { GENERAL_PLAN } from "../shared/skill-plan.ts";
+import { GLYPH_NAMES } from "../shared/glyphs.ts";
 import { ToolError } from "./ops.ts";
 import { CURRICULUM } from "./schemas.ts";
 
@@ -155,6 +156,7 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
               goal_level: z.number().int().min(1).max(50).optional(),
               quests: z.array(QUEST).optional(),
               topic: z.string().optional().describe("The bigger skill this is part of: a key in this call, or an existing skill's id or name"),
+              glyph: z.enum(GLYPH_NAMES).optional().describe("Line icon on the skill map (picked from the name when omitted)"),
               course: COURSE_OUTLINE.optional(),
             }),
           )
@@ -182,6 +184,7 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
             quests: s.quests,
             branch,
             topicKey: s.topic,
+            glyph: s.glyph,
           })),
         ),
       );
@@ -214,6 +217,7 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
         prerequisites: z.array(z.string()).optional().describe("Replaces prerequisites (skill ids or names); [] removes all"),
         required_level: z.number().int().min(1).max(50).optional(),
         topic: z.string().optional().describe('Make it part of this skill (id or name); "" makes it a skill of its own'),
+        glyph: z.enum(GLYPH_NAMES).optional().describe("Line icon on the skill map"),
         archived: z.boolean().optional(),
       },
     },
@@ -223,6 +227,7 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
         const patch: Partial<Skill> = {};
         if (a.name) patch.name = a.name;
         if (a.icon) patch.icon = a.icon;
+        if (a.glyph) patch.glyph = a.glyph;
         if (a.description !== undefined) patch.description = a.description;
         if (a.goal_level) patch.goalLevel = a.goal_level;
         if (a.archived !== undefined) patch.archived = a.archived;

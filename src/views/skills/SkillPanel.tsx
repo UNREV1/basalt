@@ -26,6 +26,7 @@ import {
   courseXp,
   questStatus,
   allParts,
+  nextStepToward,
   partsOf,
   requirementText,
   skillDone,
@@ -41,6 +42,7 @@ import type { Workspace } from "../../lib/workspace.ts";
 import { EmojiPicker, Icon, Popover, timeAgo, type Anchor } from "../../components/ui.tsx";
 import { fmt, plural, type SkillTreeData } from "./useSkillData.ts";
 import { levelUpMessage } from "./Overview.tsx";
+import { SkillGlyph } from "./SkillGlyph.tsx";
 import { AskClaudeFallback } from "../lessons/ClaudeStatus.tsx";
 import { planSkillRequest } from "../lessons/plan.ts";
 import { planSkillStart } from "../lessons/start.ts";
@@ -210,12 +212,14 @@ function LearnSection({
   ws,
   data,
   skill,
+  dark,
   onStart,
   onSelect,
 }: {
   ws: Workspace;
   data: SkillTreeData;
   skill: Skill;
+  dark: boolean;
   onStart: (id: string) => void;
   onSelect: (id: string) => void;
 }) {
@@ -254,18 +258,22 @@ function LearnSection({
     case "done":
       primary = <p className="sk-learn-done">✓ You've learnt all of {skill.name}.</p>;
       break;
-    case "locked":
-      primary = (
-        <div className="sk-learn-first">
-          <span className="small muted">Learn first:</span>
-          {plan.missing.map((m) => (
-            <button key={m.parentId} className="btn btn-sm" onClick={() => onStart(m.parentId)}>
-              <Icon name="play" size={12} /> {requirementText(m)}
-            </button>
-          ))}
-        </div>
+    case "locked": {
+      // Like an RPG: what it takes, and the next thing you can do about it.
+      const next = nextStepToward(ws.doc, skill.id, data.stats, data.skills);
+      const needs = <p className="small muted sk-learn-note">Unlocks after {plan.missing.map((m) => requirementText(m)).join(" and ")}.</p>;
+      primary = next ? (
+        <>
+          <button className="btn btn-primary sk-learn-go" onClick={() => onStart(next.id)}>
+            <Icon name="play" size={14} /> Next step: {next.name}
+          </button>
+          {needs}
+        </>
+      ) : (
+        needs
       );
       break;
+    }
     case "ask":
       primary = (
         <>
@@ -277,19 +285,22 @@ function LearnSection({
   }
   const leaf = !parts.length;
   const learnt = skillDone(ws.doc, data.skills, skill, data.stats);
-  const level = data.stats.get(skill.id)?.level ?? 1;
+  const open = data.stats.get(skill.id)?.unlocked !== false;
+  // Testing out of what you already know: only what's open to you, like an RPG.
+  const knowIt = () => {
+    const leaves = leaf ? [skill] : allParts(data.skills, skill.id).filter((p) => !hasParts(p));
+    ws.doc.transact(() => {
+      for (const p of leaves) if (!skillDone(ws.doc, data.skills, p, data.stats)) updateSkill(ws.doc, p.id, { goalLevel: Math.max(1, data.stats.get(p.id)?.level ?? 1) });
+    });
+  };
   return (
     <Section
       title={tp ? `Learn · ${tp.done}/${tp.total} learnt` : "Learn"}
       aside={
-        leaf &&
+        open &&
         !learnt && (
-          <button
-            className="btn btn-ghost btn-sm"
-            title="Count it as learnt: what comes after it unlocks"
-            onClick={() => updateSkill(ws.doc, skill.id, { goalLevel: Math.max(1, level) })}
-          >
-            I know this already
+          <button className="btn btn-ghost btn-sm" title="Count it as learnt: what comes after it unlocks" onClick={knowIt}>
+            {leaf ? "I know this already" : "I know all of this"}
           </button>
         )
       }
@@ -311,7 +322,7 @@ function LearnSection({
                   <span className="sk-part-state" aria-hidden>
                     {done ? <Icon name="check" size={11} stroke={3} /> : locked ? <Icon name="lock" size={10} /> : null}
                   </span>
-                  <span className="sk-part-icon">{p.icon}</span>
+                  <SkillGlyph skill={p} color={themedColor(data.areas.find((a) => a.id === p.category)?.color ?? "#8b8d98", dark)} size={22} locked={locked} />
                   <span className="grow ellipsis">{p.name}</span>
                   <span className="small muted">{inner ? `${inner.done}/${inner.total}` : total ? `${count}/${total}` : ""}</span>
                 </button>
@@ -528,7 +539,7 @@ export function SkillPanel({
           </label>
         </div>
 
-        <LearnSection ws={ws} data={data} skill={skill} onStart={onStart} onSelect={onSelect} />
+        <LearnSection ws={ws} data={data} skill={skill} dark={dark} onStart={onStart} onSelect={onSelect} />
 
         {!stats.unlocked && (
           <div className="sk-locked-note" role="note">

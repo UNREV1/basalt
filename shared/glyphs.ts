@@ -1,0 +1,141 @@
+// Line icons for skills, drawn on the skill map (and beside skills in lists)
+// instead of emoji: 24×24, stroked, round caps, like the rest of the app's
+// icons. A skill can name its glyph; otherwise one is picked from its name,
+// then from its ability.
+
+export const GLYPHS = {
+  book: "M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5zM4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5",
+  brain: "M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 3 3h1V4zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-3 3h-1V4z",
+  sigma: "M18 7V4H6l6 8-6 8h12v-3",
+  calculator: "M5 2h14v20H5zM8 6h8v4H8zM8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01",
+  triangle: "M12 4l8 14H4zM12 12.5m-2.5 0a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0",
+  chart: "M3 3v18h18M7 15l4-5 3 3 5-7",
+  dice: "M12 2l8.66 5v10L12 22l-8.66-5V7L12 2zM12 8l-5 8h10l-5-8zM12 2v6M3.34 7L12 8l8.66-1M7 16l5 6 5-6",
+  flask: "M9 3h6M10 3v6L4.5 18.5A2 2 0 0 0 6.2 21h11.6a2 2 0 0 0 1.7-2.5L14 9V3M7 15h10",
+  atom: "M2 12a10 4 0 1 0 20 0a10 4 0 1 0-20 0M12 2a4 10 0 1 0 0 20a4 10 0 1 0 0-20M12 12h.01",
+  dna: "M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9M9 6.5h6M9 17.5h6",
+  leaf: "M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.5 19 2c1 2 2 4.2 2 8 0 5.5-4.8 10-10 10zM2 21c0-3 1.9-5.4 5.2-6",
+  paw: "M6.5 10.5m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M10 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M15 6m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M18.5 10.5m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M12.5 12c-3 0-6 4-6 6.5 0 1.5 1.3 2.5 2.8 2.5 1.2 0 2-.6 3.2-.6s2 .6 3.2.6c1.5 0 2.8-1 2.8-2.5 0-2.5-3-6.5-6-6.5z",
+  globe: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18",
+  speech: "M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z",
+  landmark: "M3 21h18M4 10h16M12 3l8 5H4zM6 10v8M10 10v8M14 10v8M18 10v8",
+  scale: "M12 3v18M8 21h8M5 7h14M5 7l-3 7a3 2 0 0 0 6 0zM19 7l-3 7a3 2 0 0 0 6 0z",
+  bulb: "M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.8.8 1 1.5 1 2.5h6c0-1 .2-1.7 1-2.5A6 6 0 0 0 12 3z",
+  search: "M11 19a8 8 0 1 1 5.3-14 8 8 0 0 1-5.3 14zM21 21l-4.35-4.35",
+  puzzle: "M4 8h4a2 2 0 1 1 4 0h4v4a2 2 0 1 1 0 4v4H4v-4a2 2 0 1 0 0-4z",
+  code: "M8 6l-6 6 6 6M16 6l6 6-6 6M14 4l-4 16",
+  cpu: "M6 6h12v12H6zM9 9h6v6H9zM9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4",
+  music: "M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z",
+  keyboard: "M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10",
+  palette:
+    "M12 3a9 9 0 1 0 0 18c1 0 1.7-.8 1.7-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7H17a4 4 0 0 0 4-4c0-4.2-4-8.3-9-8.3zM7.5 12h.01M9.5 7.5h.01M14.5 7.5h.01",
+  pen: "M4 20h4L19 9l-4-4L4 16zM14 6l4 4",
+  feather: "M20 4a8 8 0 0 0-11.3 0L4 8.7V20h11.3L20 15.3A8 8 0 0 0 20 4zM16 8L2 22M17.5 15H9",
+  camera: "M4 7h3l2-3h6l2 3h3v12H4zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
+  dumbbell: "M6 7v10M3 9v6M18 7v10M21 9v6M6 12h12",
+  run: "M14 4.5m-2 0a2 2 0 1 0 4 0a2 2 0 1 0-4 0M5 21l4-6 3 2 1-6-3-2-3 3M13 11l2 3h4M10 9l2-2 3 1",
+  mountain: "M2 20l7-12 4 7 3-4 6 9zM8 11l2 2 2-1",
+  bike: "M5.5 17.5m-3.5 0a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0M18.5 17.5m-3.5 0a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0M5.5 17.5L9 10h6l3.5 7.5M9 10l3 7.5M14 6h2l1 4",
+  waves: "M2 8c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2M2 14c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2M2 20c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2",
+  heart: "M12 21s-8-5.2-8-11a4.5 4.5 0 0 1 8-2.8A4.5 4.5 0 0 1 20 10c0 5.8-8 11-8 11z",
+  pulse: "M3 12h4l3-8 4 16 3-8h4",
+  moon: "M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z",
+  apple: "M12 7c-2-2-7-1.5-7 4 0 4 3 9 5 9 1 0 1.5-.5 2-.5s1 .5 2 .5c2 0 5-5 5-9 0-5.5-5-6-7-4zM12 7c0-2 1-4 3-4",
+  target: "M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zM12 12.01v-.02",
+  eye: "M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+  compass: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15.5 8.5l-2 5-5 2 2-5z",
+  coins: "M12 7m-8 0a8 3 0 1 0 16 0a8 3 0 1 0-16 0M4 7v5c0 1.7 3.6 3 8 3s8-1.3 8-3V7M4 12v5c0 1.7 3.6 3 8 3s8-1.3 8-3v-5",
+  pot: "M4 11h16v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4zM2 11h20M9 7c0-1 1-1 1-2M14 7c0-1 1-1 1-2",
+  users: "M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM2 21v-1a6 6 0 0 1 12 0v1M16 3.1a4 4 0 0 1 0 7.8M22 21v-1a6 6 0 0 0-4-5.7",
+  mic: "M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3",
+  handshake: "M2 12l4-5h4l3 2M22 12l-4-5h-3l-5 4a1.6 1.6 0 0 0 2.2 2.2L14 12l4 4M6 12l5 5a1.4 1.4 0 0 0 2-2M9 14l2.5 2.5M2 12l2 2M22 12l-3 3",
+  crown: "M3 8l4 4 5-7 5 7 4-4-2 11H5z",
+  mask: "M4 5c3 1 5 1 8 0 3 1 5 1 8 0v6a8 8 0 0 1-16 0zM9 10h.01M15 10h.01M9 15a4 4 0 0 0 6 0",
+  shield: "M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z",
+  hand: "M18 11V6a2 2 0 0 0-4 0M14 10V4a2 2 0 0 0-4 0v2M10 10.5V6a2 2 0 0 0-4 0v8M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.9-6-2.4l-3.6-3.6a2 2 0 0 1 2.8-2.8L7 15",
+  ghost: "M12 3a7 7 0 0 0-7 7v11l3-2 2 2 2-2 2 2 2-2 3 2V10a7 7 0 0 0-7-7zM9 10h.01M15 10h.01",
+  lotus: "M12 20c-4 0-8-2-9-6 3 0 6 1 9 4 3-3 6-4 9-4-1 4-5 6-9 6zM12 18c-2-3-2-7 0-11 2 4 2 8 0 11z",
+  sword: "M14.5 17.5L3 6V3h3l11.5 11.5M13 19l6-6M16 16l4 4M19 21l2-2",
+  bolt: "M13 2L4 14h7l-1 8 9-12h-7l1-8z",
+  flame: "M12 22c4 0 7-2.8 7-6.8 0-3.7-2.6-6.1-4.2-8.2-.5 2.3-1.6 3.6-2.8 4.2C12.3 8.3 11 5 8.5 2.5 8.6 6 5 8.4 5 13.2 5 18.6 8 22 12 22z",
+  clock: "M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 7v5l3 2",
+  briefcase: "M3 7h18v13H3zM8 7V4h8v3M3 13h18",
+  cap: "M2 9l10-5 10 5-10 5zM6 11v5c3 2 9 2 12 0v-5M22 9v6",
+  star: "M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z",
+} as const;
+
+export type GlyphName = keyof typeof GLYPHS;
+export const GLYPH_NAMES = Object.keys(GLYPHS) as GlyphName[];
+
+export const isGlyph = (v: unknown): v is GlyphName => typeof v === "string" && Object.hasOwn(GLYPHS, v);
+
+/** Words in a skill's name → its glyph. Earlier rules win. */
+const RULES: [RegExp, GlyphName][] = [
+  [/\b(rope|knot|bowline|hitch)/, "hand"],
+  [/\b(geometr|trigonometr|angle|triangle|circle|shape|area|volume)/, "triangle"],
+  [/\b(statistic|probabilit|data|chart|analytic|regression)/, "chart"],
+  [/\b(dice|chance|odds|poker)/, "dice"],
+  [
+    /\b(math|arithmetic|algebra|calculus|equation|number|fraction|decimal|percent|ratio|proportion|exponent|root|variable|quadratic|linear|integral|derivative|logic|addition|subtraction|multipl|division|counting|place value|negative|order of operations|inequalit)/,
+    "sigma",
+  ],
+  [/\b(arcana|physic|mechanic|motion|force|energy|quantum|electric|atom|science)/, "atom"],
+  [/\b(chemi|molecule|reaction|element)/, "flask"],
+  [/\b(biolog|genetic|cell|anatom|evolution|dna)/, "dna"],
+  [/\b(nature|ecolog|plant|botan|garden|environment)/, "leaf"],
+  [/\b(animal|pet|dog|cat|horse|wildlife)/, "paw"],
+  [/\b(geograph|travel|world|countr|map)/, "globe"],
+  [/\b(language|spanish|french|german|japanese|chinese|english|italian|vocabular|grammar|conversation)/, "speech"],
+  [/\b(histor|civili|ancient|war\b|empire)/, "landmark"],
+  [/\b(philosoph|ethic|religio|mytholog|law\b|justice)/, "scale"],
+  [/\b(memory|mnemonic|remember|recall|spaced|repetition|flashcard)/, "brain"],
+  [/\b(study|learn|school|exam|note-taking|reading)/, "cap"],
+  [/\b(research|investigat|detective|search)/, "search"],
+  [/\b(problem|puzzle|strateg|chess)/, "puzzle"],
+  [/\b(program|code|coding|python|javascript|software|web dev|algorithm)/, "code"],
+  [/\b(computer|tech|electronic|hardware|machine learning|\bai\b)/, "cpu"],
+  [/\b(guitar|piano|music|song|sing|chord|rhythm|drum|instrument|melod|harmon)/, "music"],
+  [/\b(typing|keyboard)/, "keyboard"],
+  [/\b(paint|art\b|draw|sketch|color|design|illustrat)/, "palette"],
+  [/\b(writ|essay|poet|story|journal)/, "feather"],
+  [/\b(photo|camera|film|video)/, "camera"],
+  [/\b(strength|lift|squat|deadlift|bench|muscle|gym|weight)/, "dumbbell"],
+  [/\b(climb|boulder|hik|mountain)/, "mountain"],
+  [/\b(cycl|bike|bicycle)/, "bike"],
+  [/\b(swim|surf|row)/, "waves"],
+  [/\b(run|sprint|marathon|athlet|sport|cardio)/, "run"],
+  [/\b(endurance|stamina|heart rate|fitness)/, "pulse"],
+  [/\b(sleep|rest|recover)/, "moon"],
+  [/\b(nutrition|diet|food|eat)/, "apple"],
+  [/\b(cook|bak|chef|kitchen|recipe)/, "pot"],
+  [/\b(health|medic|first aid|vital|wellbeing|well-being)/, "heart"],
+  [/\b(focus|concentrat|attention|deep work|productiv)/, "target"],
+  [/\b(mindful|meditat|breath|calm|yoga)/, "lotus"],
+  [/\b(percept|observ|notice|awareness)/, "eye"],
+  [/\b(survival|outdoor|navigat|camp|bushcraft)/, "compass"],
+  [/\b(money|financ|invest|budget|saving|econom)/, "coins"],
+  [/\b(career|business|work|job|entrepreneur)/, "briefcase"],
+  [/\b(speak|speech|present|public|perform|stage|mic)/, "mic"],
+  [/\b(persua|negotiat|sales|sell|influenc)/, "handshake"],
+  [/\b(lead|manag|team|captain)/, "crown"],
+  [/\b(act\b|acting|improv|decept|bluff|theat|drama)/, "mask"],
+  [/\b(intimidat|assert|boundar|confiden|defen|privacy|security)/, "shield"],
+  [/\b(social|friend|people|relationship|networking|empath|insight)/, "users"],
+  [/\b(sleight|hand|craft|juggl|knit|sew|wood|knot)/, "hand"],
+  [/\b(stealth|sneak|quiet)/, "ghost"],
+  [/\b(martial|fight|box|fenc|sword|combat|self-defen)/, "sword"],
+  [/\b(acrobat|balance|flexib|dance|gymnast|mobility)/, "run"],
+  [/\b(idea|creativ|invent|innovat)/, "bulb"],
+  [/\b(time|habit|routine|schedule)/, "clock"],
+  [/\b(energy|power|motivat)/, "bolt"],
+];
+
+const ABILITY_GLYPH: Record<string, GlyphName> = { str: "dumbbell", dex: "hand", con: "heart", int: "book", wis: "eye", cha: "speech" };
+
+/** The glyph for a skill: its own choice, else from its name, else from its ability. */
+export function glyphFor(skill: { name: string; glyph?: string; category?: string }): GlyphName {
+  if (isGlyph(skill.glyph)) return skill.glyph;
+  const text = skill.name.toLowerCase();
+  for (const [re, g] of RULES) if (re.test(text)) return g;
+  return ABILITY_GLYPH[skill.category ?? ""] ?? "star";
+}

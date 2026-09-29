@@ -13,6 +13,7 @@ import type { Workspace } from "../../lib/workspace.ts";
 import { AskClaudeFallback } from "../lessons/ClaudeStatus.tsx";
 import { canRunClaude, planAllText, planEverySkill, stopPlanningEverySkill, unplannedSkills, usePlanAll } from "../lessons/plan.ts";
 import { QuestCheck, Radar } from "./Overview.tsx";
+import { SkillGlyph } from "./SkillGlyph.tsx";
 import { XpBar } from "./SkillPanel.tsx";
 import { fmt, plural, type SkillTreeData } from "./useSkillData.ts";
 
@@ -166,7 +167,7 @@ export function CharacterPanel({
             <div className="sk-upnext">
               {up.map((u) => (
                 <button key={u.skill.id} className="sk-upnext-row" onClick={() => onStart(u.skill.id)}>
-                  <span className="sk-upnext-icon">{u.skill.icon}</span>
+                  <SkillGlyph skill={u.skill} color={themedColor(data.areas.find((a) => a.id === u.skill.category)?.color ?? "#8b8d98", dark)} size={32} />
                   <span className="grow" style={{ minWidth: 0 }}>
                     <span className="sk-upnext-name ellipsis">{u.skill.name}</span>
                     <span className="small muted ellipsis">

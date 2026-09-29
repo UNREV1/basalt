@@ -545,3 +545,52 @@ test("topics: parts nest under a topic, wait for it, and a topic you need means 
   assert.match(text, /\n {4}- ⭐ Counting/);
   assert.match(text, /Counting \[\w+\]: .*part of Arithmetic/);
 });
+
+test("what you need to progress: a prerequisite with lessons must be learnt, and the next step toward a locked skill", async () => {
+  const { nextStepToward, requirementText } = await import("../shared/skills.ts");
+  const doc = new Y.Doc();
+  const fractions = createSkill(doc, { name: "Fractions", category: "int" });
+  const ratios = createSkill(doc, { name: "Ratios", category: "int", parents: [fractions.id] });
+  const rates = createSkill(doc, { name: "Rates", category: "int", parents: [ratios.id], requiredLevel: 2 });
+  const courseId = createPage(doc, { kind: "course", title: "Fractions" });
+  const page = getPage(doc, courseId)!;
+  initCourse(page, { topic: "Fractions" });
+  setCurriculum(page, {
+    topic: "Fractions",
+    overview: "",
+    levels: [{ id: "l", name: "Foundations", summary: "", modules: [{ id: "m", title: "Parts of a whole", summary: "", lessons: [{ id: "x1", title: "Halves", objectives: [] }, { id: "x2", title: "Thirds", objectives: [] }] }] }],
+  });
+  updateSkill(doc, fractions.id, { courseIds: [courseId] });
+
+  let st = computeSkillStats(doc);
+  assert.equal(st.get(ratios.id)!.unlocked, false);
+  assert.equal(requirementText(st.get(ratios.id)!.missing[0]), "Fractions (0/2 lessons)");
+  assert.equal(nextStepToward(doc, rates.id)?.id, fractions.id, "the way to Rates starts with Fractions");
+
+  // One lesson makes level 2, but half a skill isn't learnt: Ratios stays locked.
+  setProgress(page, "x1", { status: "mastered" });
+  st = computeSkillStats(doc);
+  assert.equal(st.get(fractions.id)!.level, 2);
+  assert.equal(st.get(ratios.id)!.unlocked, false);
+  setProgress(page, "x2", { status: "mastered" });
+  st = computeSkillStats(doc);
+  assert.equal(st.get(ratios.id)!.unlocked, true);
+  assert.equal(nextStepToward(doc, rates.id)?.id, ratios.id);
+  assert.equal(nextStepToward(doc, ratios.id), undefined, "nothing to do for an open skill");
+});
+
+test("skills get line icons: their own, from their name, or from their ability", async () => {
+  const { glyphFor, GLYPHS } = await import("../shared/glyphs.ts");
+  const doc = new Y.Doc();
+  const a = createSkill(doc, { name: "Algebra", category: "int" });
+  const b = createSkill(doc, { name: "Juggling knots", category: "dex" });
+  const c = createSkill(doc, { name: "Something new", category: "cha" });
+  assert.equal(glyphFor(a), "sigma");
+  assert.equal(glyphFor(b), "hand");
+  assert.equal(glyphFor(c), "speech");
+  updateSkill(doc, c.id, { glyph: "crown" });
+  assert.equal(glyphFor(getSkill(doc, c.id)!), "crown");
+  updateSkill(doc, a.id, { glyph: "not-a-glyph" });
+  assert.equal(getSkill(doc, a.id)!.glyph, undefined, "unknown glyphs are dropped");
+  for (const d of Object.values(GLYPHS)) assert.match(d, /^M[\d.\s,a-zA-Z-]+$/);
+});

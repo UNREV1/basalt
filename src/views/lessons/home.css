@@ -294,9 +294,6 @@ button.lh-card:active {
   color: var(--c);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 18%, transparent);
 }
-.lh-step-icon {
-  font-size: 20px;
-}
 .lh-step-text {
   min-width: 0;
 }
@@ -511,9 +508,6 @@ button.lh-card:active {
 }
 .lh-step.small + .lh-step.small::before {
   left: 10px;
-}
-.lh-step.small .lh-step-icon {
-  font-size: 17px;
 }
 .lh-step.locked .lh-step-name {
   color: var(--text-muted);

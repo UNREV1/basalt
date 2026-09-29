@@ -155,7 +155,7 @@ echo "Login successful."
 });
 
 test("desktop: updates install themselves only when you're not using Basalt", () => {
-  const { goodMoment, AWAY_SECONDS, BACKGROUND_MS } = require("../desktop/updater.cjs");
+  const { goodMoment, AWAY_SECONDS, BACKGROUND_MS } = require("../desktop/update-timing.cjs");
   const win = (s: { focused?: boolean; minimized?: boolean; visible?: boolean }) => ({
     isDestroyed: () => false,
     isFocused: () => s.focused ?? false,

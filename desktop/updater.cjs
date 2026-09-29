@@ -17,18 +17,15 @@
 const { app, dialog, net, shell, powerMonitor, Notification } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
+const { goodMoment } = require("./update-timing.cjs");
 
 const OWNER = "UNREV1";
 const REPO = "basalt";
 const RELEASES_PAGE = `https://github.com/${OWNER}/${REPO}/releases/latest`;
 const CHECK_EVERY_MS = 60 * 60 * 1000;
 const FIRST_CHECK_AFTER_MS = 15 * 1000;
-/** How often a downloaded update looks for a good moment to install. */
+/** How often a downloaded update looks for a good moment to install (see update-timing.cjs). */
 const WAIT_STEP_MS = 60 * 1000;
-/** No keyboard or mouse for this long: you've stepped away. */
-const AWAY_SECONDS = 10 * 60;
-/** Basalt minimized, hidden or in the background this long: you're doing something else. */
-const BACKGROUND_MS = 5 * 60 * 1000;
 
 const settingsFile = () => path.join(app.getPath("userData"), "desktop-settings.json");
 
@@ -80,19 +77,6 @@ function needsPermission() {
 }
 
 /**
- * Whether now is a good moment to restart into the new version: you're away
- * from the computer, or Basalt has been out of the way for a while.
- * @param {Electron.BrowserWindow | null} win
- * @param {number} backgroundSince - when Basalt last lost focus (0: it has focus)
- */
-function goodMoment(win, backgroundSince, now = Date.now(), idleSeconds = powerMonitor.getSystemIdleTime()) {
-  if (idleSeconds >= AWAY_SECONDS) return true;
-  if (!win || win.isDestroyed()) return true;
-  const outOfTheWay = win.isMinimized() || !win.isVisible() || !win.isFocused();
-  return outOfTheWay && backgroundSince > 0 && now - backgroundSince >= BACKGROUND_MS;
-}
-
-/**
  * @param {() => Electron.BrowserWindow | null} getWindow
  * @param {{ isBusy?: () => boolean }} [opts] - isBusy: something is running that a restart would cut short
  */
@@ -130,7 +114,7 @@ function createUpdater(getWindow, opts = {}) {
       const win = getWindow();
       // (Basalt may never have had focus: count from now.)
       if (win && !win.isDestroyed() && !win.isFocused() && !backgroundSince) backgroundSince = Date.now();
-      if (!isBusy() && goodMoment(win, backgroundSince)) install();
+      if (!isBusy() && goodMoment(win, backgroundSince, Date.now(), powerMonitor.getSystemIdleTime())) install();
     };
     waiting = setInterval(attempt, WAIT_STEP_MS);
     attempt();
@@ -302,4 +286,4 @@ function createUpdater(getWindow, opts = {}) {
   };
 }
 
-module.exports = { createUpdater, compareVersions, goodMoment, AWAY_SECONDS, BACKGROUND_MS };
+module.exports = { createUpdater, compareVersions };

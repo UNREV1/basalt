@@ -30,6 +30,7 @@
       "main.cjs",
       "preload.cjs",
       "updater.cjs",
+      "update-timing.cjs",
       "claude-setup.cjs",
       "claude-run.cjs",
       "package.json",

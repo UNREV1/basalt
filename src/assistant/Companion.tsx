@@ -73,6 +73,9 @@ export function Companion() {
   // Everything the animation loop reads, without re-running it.
   const live = useRef({ s, size, phone, openPageId: route.name === "page" ? route.pageId : null });
   live.current = { s, size, phone, openPageId: route.name === "page" ? route.pageId : null };
+  // The loop sleeps once it has settled; anything that could move it wakes it.
+  const wakeRef = useRef<() => void>(() => {});
+  useEffect(() => wakeRef.current(), [s, size, phone, route]);
 
   useEffect(() => {
     if (!hello) return;
@@ -86,6 +89,21 @@ export function Companion() {
     }, 7000);
     return () => clearTimeout(t);
   }, [hello]);
+
+  // At rest, a blink every few seconds (a moment's animation instead of an endless one).
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let off = 0;
+    const t = setInterval(() => {
+      el.classList.add("cp-blink");
+      off = window.setTimeout(() => el.classList.remove("cp-blink"), 320);
+    }, 5200);
+    return () => {
+      clearInterval(t);
+      clearTimeout(off);
+    };
+  }, [settings.assistant.character]);
 
   // "Done!" for a moment after a reply finishes while the panel is closed.
   const wasRunning = useRef(false);
@@ -113,6 +131,30 @@ export function Companion() {
     let lastSide: "left" | "right" = "left";
     let lastBelow = false;
     let raf = 0;
+    let running = false;
+    let lastTransform = "";
+    let lastPupils = "";
+    let lastFlying = false;
+    // Only runs while something is moving; asleep, it costs nothing (no frames, no layout reads).
+    const wake = () => {
+      if (running) return;
+      running = true;
+      raf = requestAnimationFrame(tick);
+    };
+    wakeRef.current = wake;
+    // Eyes: at what it's working on, else at the pointer.
+    const lookAt = (look: Pt) => {
+      const { size } = live.current;
+      const dx = look.x - (pos.x + size / 2);
+      const dy = look.y - (pos.y + size / 2);
+      const d = Math.hypot(dx, dy) || 1;
+      const k = Math.min(1, d / 160);
+      const pupils = `translate(${((dx / d) * 2.6 * k).toFixed(1)} ${((dy / d) * 2.4 * k).toFixed(1)})`;
+      if (pupils !== lastPupils) {
+        lastPupils = pupils;
+        pupilsRef.current?.setAttribute("transform", pupils);
+      }
+    };
 
     const clamp = (p: Pt): Pt => {
       const { size } = live.current;
@@ -165,7 +207,6 @@ export function Companion() {
 
     let placed = false;
     const tick = (now: number) => {
-      raf = requestAnimationFrame(tick);
       const t = target(now);
       // Start where it rests instead of flying in on every load.
       if (!placed) {
@@ -182,8 +223,16 @@ export function Companion() {
         pos = clamp({ x: pos.x + vel.x, y: pos.y + vel.y });
       }
       const tilt = Math.max(-18, Math.min(18, vel.x * 1.6));
-      el.style.transform = `translate3d(${pos.x.toFixed(1)}px, ${pos.y.toFixed(1)}px, 0) rotate(${tilt.toFixed(1)}deg)`;
-      el.classList.toggle("cp-flying", Math.hypot(vel.x, vel.y) > 2.5);
+      const transform = `translate3d(${pos.x.toFixed(1)}px, ${pos.y.toFixed(1)}px, 0) rotate(${tilt.toFixed(1)}deg)`;
+      if (transform !== lastTransform) {
+        lastTransform = transform;
+        el.style.transform = transform;
+      }
+      const flying = Math.hypot(vel.x, vel.y) > 2.5;
+      if (flying !== lastFlying) {
+        lastFlying = flying;
+        el.classList.toggle("cp-flying", flying);
+      }
       const sideNow = pos.x > innerWidth / 2 ? "left" : "right";
       if (sideNow !== lastSide) {
         lastSide = sideNow;
@@ -195,22 +244,30 @@ export function Companion() {
         lastBelow = below;
         el.classList.toggle("cp-below", below);
       }
-      // Eyes: at what it's working on, else at the pointer.
-      const { size } = live.current;
-      const cx = pos.x + size / 2;
-      const cy = pos.y + size / 2;
-      const look = t.look ?? pointer;
-      const dx = look.x - cx;
-      const dy = look.y - cy;
-      const d = Math.hypot(dx, dy) || 1;
-      const k = Math.min(1, d / 160);
-      pupilsRef.current?.setAttribute("transform", `translate(${((dx / d) * 2.6 * k).toFixed(2)} ${((dy / d) * 2.4 * k).toFixed(2)})`);
+      lookAt(t.look ?? pointer);
+      // Keep going while it moves, is dragged, or is busy; otherwise sleep until woken.
+      const { s } = live.current;
+      const busy = s.running || (!!s.activity && Date.now() - s.activity.at < VISIT_MS + 4000);
+      const moving = Math.hypot(t.at.x - pos.x, t.at.y - pos.y) > 0.4 || Math.hypot(vel.x, vel.y) > 0.05;
+      if (drag || busy || moving) raf = requestAnimationFrame(tick);
+      else running = false;
     };
-    raf = requestAnimationFrame(tick);
+    wake();
+    // Where it rests can move with the layout (its dock in the top bar): look now and then.
+    const every = setInterval(wake, 1000);
+    addEventListener("resize", wake);
+    // The eyes follow the pointer without waking the whole loop (once a frame at most).
+    let eyes = 0;
 
     const onMove = (e: PointerEvent) => {
       pointer = { x: e.clientX, y: e.clientY };
+      if (!running && !eyes)
+        eyes = requestAnimationFrame(() => {
+          eyes = 0;
+          lookAt(pointer);
+        });
       if (drag && e.pointerId === drag.id) {
+        wake();
         const next = clamp({ x: e.clientX - drag.dx, y: e.clientY - drag.dy });
         if (Math.hypot(next.x - pos.x, next.y - pos.y) > 3) drag.moved = true;
         pos = next;
@@ -220,6 +277,7 @@ export function Companion() {
       if (e.button !== 0) return;
       drag = { dx: e.clientX - pos.x, dy: e.clientY - pos.y, moved: false, id: e.pointerId };
       el.setPointerCapture(e.pointerId);
+      wake();
     };
     const onUp = (e: PointerEvent) => {
       if (!drag || e.pointerId !== drag.id) return;
@@ -239,6 +297,10 @@ export function Companion() {
     el.addEventListener("pointercancel", onUp);
     return () => {
       cancelAnimationFrame(raf);
+      cancelAnimationFrame(eyes);
+      clearInterval(every);
+      removeEventListener("resize", wake);
+      wakeRef.current = () => {};
       glow(null);
       removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerdown", onDown);
@@ -252,12 +314,15 @@ export function Companion() {
   const name = settings.assistant.name;
   const bubble = bubbleText(s, name, { hover, hello, recent, phone });
   const mood = recent === "done" && s.mood === "idle" ? "happy" : s.mood;
+  // Bobbing along only when there's something going on; at rest it sits still (and blinks now
+  // and then), so it doesn't redraw every frame behind everything else.
+  const alive = hover || s.open || s.running || !!recent || hello || mood !== "idle";
 
   return (
     <div
       ref={rootRef}
       // On phones the chat covers the screen and its header shows the companion instead.
-      className={`companion cp-mood-${mood}${s.open ? " cp-open" : ""}${s.open && phone ? " cp-hidden" : ""}`}
+      className={`companion cp-mood-${mood}${alive ? " cp-alive" : ""}${s.open ? " cp-open" : ""}${s.open && phone ? " cp-hidden" : ""}`}
       style={{ width: size, height: size }}
       role="button"
       tabIndex={0}

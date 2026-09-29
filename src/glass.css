@@ -145,6 +145,14 @@ html[data-glass] .main {
     var(--glass-shadow);
 }
 
+/* A pane showing a live canvas (the skill map, the graph, a drawing) is solid glass: a
+   backdrop blur behind the whole pane would be redone on every frame the canvas draws. */
+html[data-glass] .main:has(.sg-canvas, .gv-canvas, .pv-canvas, .board-canvas, .embed-canvas, .excalidraw) {
+  background: linear-gradient(180deg, var(--glass-hi) 0, transparent 120px), var(--glass-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
 html[data-glass] .topbar {
   background: transparent;
   border-bottom-color: transparent;
@@ -482,6 +490,16 @@ html[data-glass] ::-webkit-scrollbar-track {
   html[data-glass] :is(.btn, .icon-btn, .tab, .home-card, .create-card, .recent-card) {
     transition: none;
   }
+}
+
+/* ---- over a live canvas ---------------------------------------------------------
+ * Panels and bars that float over something redrawn every frame (the skill map, the
+ * graph) are solid glass: no backdrop blur or lens, which would re-run over the
+ * whole panel on every frame the canvas draws and make panning and hovering lag. */
+html[data-glass] :is(.sk-panel, .sg-tools, .sg-legend, .sk-search-results, .cj-line.sk-starting, .gv-zoom, .gv-panel) {
+  background: linear-gradient(180deg, var(--glass-hi) 0%, transparent 42%), var(--glass-solid, var(--bg)) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
 
 /* ---- refraction (src/lib/liquidGlass.ts, Chromium) --------------------------------

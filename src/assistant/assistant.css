@@ -163,6 +163,24 @@
   animation: pb-pulse 1.3s ease-out infinite;
 }
 
+/* At rest it sits still: the idle loops (SVG animations repaint every frame) run only while
+   it's alive (hovered, chatting, working, just done), plus a short blink now and then. */
+.companion:not(.cp-alive) :is(.pebble-bob, .pebble-shadow, .pebble-eyes) {
+  animation: none;
+}
+.companion.cp-blink:not(.cp-alive) .pebble-eyes {
+  animation: pb-blink-once 0.3s ease-in-out;
+}
+@keyframes pb-blink-once {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  45% {
+    transform: scaleY(0.08);
+  }
+}
+
 @keyframes pb-bob {
   0%,
   100% {

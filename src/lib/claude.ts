@@ -87,6 +87,10 @@ export interface ClaudeJob {
   status: "running" | "done" | "error";
   activity: string;
   error?: string;
+  /** "auth": Claude Code needs signing in; "limit": usage limit reached. */
+  errorCode?: "auth" | "limit" | "other";
+  /** What was asked, so it can be tried again. */
+  opts?: ClaudeRunOptions;
   startedAt: number;
   run?: ClaudeRun;
 }
@@ -119,7 +123,7 @@ export const isJobRunning = (key: string) => claudeJob(key)?.status === "running
 /** Start a background job unless one with this key is already running. */
 export async function startClaudeJob(key: string, label: string, opts: ClaudeRunOptions): Promise<ClaudeJob | undefined> {
   if (isJobRunning(key)) return claudeJob(key);
-  jobs = [...jobs.filter((j) => j.key !== key), { key, label, status: "running", activity: "Starting Claude", startedAt: Date.now() }];
+  jobs = [...jobs.filter((j) => j.key !== key), { key, label, status: "running", activity: "Starting Claude", startedAt: Date.now(), opts }];
   emit();
   try {
     const run = await runClaude(opts, (ev) => {
@@ -128,11 +132,17 @@ export async function startClaudeJob(key: string, label: string, opts: ClaudeRun
     });
     patch(key, { run });
     const end = await run.done;
-    patch(key, end.ok ? { status: "done", activity: "Done", run: undefined } : { status: "error", error: end.error, activity: "", run: undefined });
+    patch(key, end.ok ? { status: "done", activity: "Done", run: undefined } : { status: "error", error: end.error, errorCode: end.code, activity: "", run: undefined });
   } catch (err) {
     patch(key, { status: "error", error: err instanceof Error ? err.message : String(err), activity: "" });
   }
   return claudeJob(key);
+}
+
+/** Run a job that failed again, exactly as it was asked. */
+export function retryClaudeJob(key: string) {
+  const job = claudeJob(key);
+  if (job?.opts && job.status !== "running") return startClaudeJob(key, job.label, job.opts);
 }
 
 export function cancelClaudeJob(key: string) {
@@ -142,4 +152,10 @@ export function cancelClaudeJob(key: string) {
 export function dismissClaudeJob(key: string) {
   jobs = jobs.filter((j) => j.key !== key);
   emit();
+}
+
+/** Open a terminal with Claude Code running, to sign in (desktop app). */
+export async function signInToClaude(): Promise<{ ok: boolean; message?: string }> {
+  const res = await claudeBridge?.signIn?.();
+  return res ?? { ok: false, message: "Open a terminal and run `claude` to sign in." };
 }

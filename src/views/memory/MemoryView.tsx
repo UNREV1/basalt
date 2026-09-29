@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useApp, usePages, usePeers, useWorkspaceStatus } from "../../lib/hooks.ts";
 import { shareLink, type Workspace } from "../../lib/workspace.ts";
 import { getSettings } from "../../lib/settings.ts";
+import { signInToClaude } from "../../lib/claude.ts";
 import { desktop, type ClaudeCodeStatus } from "../../lib/desktop.ts";
 import { displayTitle, ensureSystemPage, pageText, type PageMeta } from "../../../shared/model.ts";
 import { Icon, timeAgo } from "../../components/ui.tsx";
@@ -125,10 +126,12 @@ const CODE_STATE: Record<ClaudeCodeStatus["state"], string> = {
 /** Desktop app: add Basalt to Claude Code with one click, then start a session. */
 function ClaudeCodeConnect({ link, connected }: { link: string; connected: boolean }) {
   const [st, setSt] = useState<ClaudeCodeStatus | null>(null);
+  const [account, setAccount] = useState<string | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const refresh = useCallback(() => {
     desktop?.claudeCodeStatus?.(link).then(setSt, () => setSt(null));
+    desktop?.claude?.available().then((a) => setAccount(a?.account ?? null), () => setAccount(null));
   }, [link]);
   useEffect(() => {
     refresh();
@@ -148,8 +151,32 @@ function ClaudeCodeConnect({ link, connected }: { link: string; connected: boole
 
   const added = st?.state === "this";
   const missing = st ? !st.installed && !added : false;
+  const signIn = async () => {
+    const res = await signInToClaude();
+    if (!res.ok) setError(res.message ?? "Open a terminal and run `claude` to sign in.");
+  };
   return (
     <ol className="mem-connect">
+      {!missing && account !== undefined && (
+        <li className={account ? "done" : ""}>
+          <span className="mem-connect-num" aria-hidden>
+            {account ? <Icon name="check" size={13} stroke={2.6} /> : <Icon name="lock" size={12} />}
+          </span>
+          <div className="mem-connect-text">
+            <strong>{account ? "Signed in to Claude Code" : "Sign in to Claude Code"}</strong>
+            <span>
+              {account
+                ? `As ${account}. Basalt uses your Claude plan through it: no API key.`
+                : "Basalt uses your Claude plan through Claude Code, so it needs your sign-in once. A terminal opens with Claude: sign in there (type /login if it doesn't ask)."}
+            </span>
+          </div>
+          {!account && (
+            <button className="btn btn-primary" onClick={signIn}>
+              Sign in
+            </button>
+          )}
+        </li>
+      )}
       <li className={added ? "done" : ""}>
         <span className="mem-connect-num" aria-hidden>
           {added ? <Icon name="check" size={13} stroke={2.6} /> : 1}

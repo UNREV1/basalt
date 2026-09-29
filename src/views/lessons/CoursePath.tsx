@@ -18,7 +18,7 @@ import type { Workspace } from "../../lib/workspace.ts";
 import { focusSkill } from "../skills/focus.ts";
 import { aheadEnabled, aheadRequest, canRunClaude, keepAhead, runRequest, setAheadEnabled } from "./plan.ts";
 import { openLesson } from "./player.ts";
-import { AskClaudeFallback } from "./ClaudeStatus.tsx";
+import { AskClaudeFallback, ClaudeJobLine } from "./ClaudeStatus.tsx";
 import "./path.css";
 
 const starsOf = (mastery: number) => (mastery >= 0.9 ? 3 : mastery >= 0.6 ? 2 : 1);
@@ -125,17 +125,11 @@ export function CoursePath({ ws, pageId, page }: { ws: Workspace; pageId: string
       </header>
 
       {job && (
-        <div className={`cp-claude${job.status === "error" ? " error" : ""}`} role="status">
-          {job.status === "running" ? <span className="cp-spinner" aria-hidden /> : <Icon name={job.status === "error" ? "x" : "check"} size={14} />}
-          <span className="grow">
-            {job.status === "running" ? `${job.label} · ${job.activity}…` : job.status === "error" ? job.error : "Claude finished preparing your lessons."}
-          </span>
-          {job.status !== "running" && (
-            <button className="icon-btn" aria-label="Dismiss" onClick={() => dismissClaudeJob(job.key)}>
-              <Icon name="x" size={14} />
-            </button>
-          )}
-        </div>
+        <ClaudeJobLine
+          label={job.status === "done" ? "Claude finished preparing your lessons" : job.label}
+          job={job}
+          onClose={job.status !== "running" ? () => dismissClaudeJob(job.key) : undefined}
+        />
       )}
 
       <div className="cp-path">

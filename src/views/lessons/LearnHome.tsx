@@ -39,7 +39,7 @@ import { useDueCount } from "../registry.tsx";
 import { QuestCheck } from "../skills/Overview.tsx";
 import { SkillGlyph } from "../skills/SkillGlyph.tsx";
 import { focusSkill } from "../skills/focus.ts";
-import { AskClaudeFallback } from "./ClaudeStatus.tsx";
+import { AskClaudeFallback, ClaudeJobLine } from "./ClaudeStatus.tsx";
 import { ABILITY_ORDER, LIBRARY } from "./library.ts";
 import { branchRequest, canRunClaude, runRequest } from "./plan.ts";
 import { useLessonStarter } from "./start.ts";
@@ -339,18 +339,7 @@ function AskCard({ ws }: { ws: Workspace }) {
       </form>
       {!canRunClaude() && goal.trim() && <AskClaudeFallback request={req} label="Copy the request" />}
       {jobs.map((j) => (
-        <div key={j.key} className={`lh-job${j.status === "error" ? " error" : ""}`} role="status">
-          {j.status === "running" ? <span className="cp-spinner" aria-hidden /> : <Icon name={j.status === "error" ? "x" : "check"} size={14} />}
-          <span className="grow">
-            {j.label}
-            {j.status === "running" ? ` · ${j.activity}…` : j.status === "error" ? ` · ${j.error}` : " · done"}
-          </span>
-          {j.status !== "running" && (
-            <button className="icon-btn" aria-label="Dismiss" onClick={() => dismissClaudeJob(j.key)}>
-              <Icon name="x" size={14} />
-            </button>
-          )}
-        </div>
+        <ClaudeJobLine key={j.key} label={j.label} job={j} onClose={j.status !== "running" ? () => dismissClaudeJob(j.key) : undefined} />
       ))}
     </section>
   );
@@ -436,19 +425,7 @@ function Branches({ ws }: { ws: Workspace }) {
   return (
     <section className="lh-section">
       <h2 className="lh-h2">Your paths</h2>
-      {starter.starting && (
-        <div className={`lh-job${starter.job?.status === "error" ? " error" : ""}`} role="status">
-          {starter.job?.status === "error" ? <Icon name="x" size={14} /> : <span className="cp-spinner" aria-hidden />}
-          <span className="grow">
-            {starter.starting.label}
-            {starter.job?.status === "running" ? ` · ${starter.job.activity}…` : starter.job?.status === "error" ? ` · ${starter.job.error}` : "…"}
-            <span className="lh-muted"> The lesson opens as soon as it's written.</span>
-          </span>
-          <button className="icon-btn" aria-label="Stop waiting" onClick={starter.cancel}>
-            <Icon name="x" size={14} />
-          </button>
-        </div>
-      )}
+      {starter.starting && <ClaudeJobLine label={starter.starting.label} job={starter.job} note="The lesson opens as soon as it's written." onClose={starter.cancel} />}
       {[...branches.entries()].map(([name, members]) => {
         // The steps: a planned subject's topics, or the branch's own skills.
         const ids = new Set(members.map((m) => m.id));

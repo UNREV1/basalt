@@ -13,7 +13,10 @@ export interface DesktopBridge {
   addToClaudeCode?(link: string): Promise<{ ok: boolean; message: string } | null>;
   /** Claude in the app through Claude Code (desktop/claude-run.cjs). */
   claude?: {
-    available(): Promise<{ installed: boolean } | null>;
+    /** account: the Claude account Claude Code is signed in with, if any. */
+    available(): Promise<{ installed: boolean; account?: string | null } | null>;
+    /** Open a terminal with Claude Code running, to sign in. */
+    signIn?(): Promise<{ ok: boolean; message?: string } | null>;
     run(opts: ClaudeRunOptions): Promise<{ id?: string; error?: string } | null>;
     cancel(id: string): Promise<boolean>;
     onEvent(cb: (ev: ClaudeRunEvent) => void): () => void;
@@ -37,7 +40,16 @@ export type ClaudeRunEvent = { id: string } & (
   | { type: "turn" }
   | { type: "text"; text: string }
   | { type: "tool"; name: string; input: unknown }
-  | { type: "done"; ok: boolean; result?: string; error?: string; cancelled?: boolean; sessionId: string | null }
+  | {
+      type: "done";
+      ok: boolean;
+      result?: string;
+      error?: string;
+      /** auth: Claude Code needs signing in (or its key was refused); limit: usage limit. */
+      code?: "auth" | "limit" | "other";
+      cancelled?: boolean;
+      sessionId: string | null;
+    }
 );
 
 export interface ClaudeCodeStatus {

@@ -13,6 +13,7 @@ import { useTheme } from "../../lib/theme.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { Icon, Menu, Modal, type Anchor, type MenuItem } from "../../components/ui.tsx";
 import { usePlayer } from "../lessons/player.ts";
+import { ClaudeJobLine } from "../lessons/ClaudeStatus.tsx";
 import { useLessonStarter } from "../lessons/start.ts";
 import { CharacterPanel } from "./CharacterPanel.tsx";
 import { QuestCheck } from "./Overview.tsx";
@@ -366,18 +367,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
               </div>
             )}
             {starter.starting && (
-              <div className={`sk-starting${starter.job?.status === "error" ? " error" : ""}`} role="status">
-                {starter.job?.status === "error" ? <Icon name="x" size={15} /> : <span className="sk-spinner" aria-hidden />}
-                <span className="grow">
-                  <strong>{starter.starting.label}</strong>
-                  <span className="muted">
-                    {starter.job?.status === "error" ? ` · ${starter.job.error}` : starter.job?.status === "running" ? ` · ${starter.job.activity}…` : "…"} It opens as soon as it's written.
-                  </span>
-                </span>
-                <button className="icon-btn" aria-label="Stop waiting" onClick={starter.cancel}>
-                  <Icon name="x" size={14} />
-                </button>
-              </div>
+              <ClaudeJobLine className="sk-starting" label={starter.starting.label} job={starter.job} note="It opens as soon as it's written." onClose={starter.cancel} />
             )}
             {selected ? (
               <SkillPanel

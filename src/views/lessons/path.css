@@ -107,19 +107,6 @@
   color: var(--text);
 }
 
-.cp-claude {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 10px 14px;
-  border-radius: var(--radius);
-  background: var(--accent-soft);
-  font-size: 13.5px;
-}
-.cp-claude.error {
-  background: var(--danger-soft);
-}
 .cp-spinner {
   width: 14px;
   height: 14px;
@@ -348,4 +335,40 @@
   font-size: 13px;
   color: var(--text-muted);
   cursor: pointer;
+}
+
+/* Claude at work, or what stopped it (ClaudeStatus.tsx). */
+.cj-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 13.5px;
+}
+.cj-line.error {
+  align-items: flex-start;
+  background: var(--danger-soft);
+}
+.cj-line.error > svg {
+  color: var(--danger, #d70015);
+  flex: none;
+  margin-top: 2px;
+}
+.cj-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.4;
+}
+.cj-detail {
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.cj-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
 }

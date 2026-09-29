@@ -7,7 +7,7 @@
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
-const { findClaude } = require("./claude-setup.cjs");
+const { authInfo, findClaude } = require("./claude-setup.cjs");
 
 /** runId -> child process */
 const runs = new Map();
@@ -22,13 +22,22 @@ function mcpConfig(launch, link) {
   });
 }
 
-function friendlyError(text) {
-  const t = String(text || "");
-  if (/log ?in|\/login|not logged|invalid api key|authentication|OAuth/i.test(t)) {
-    return "Claude Code isn't signed in on this computer. Open a terminal, run `claude` once and sign in, then try again.";
+/** What went wrong, in words, with a code the app can act on ("auth": offer to sign in). */
+function explain(text) {
+  const raw = String(text || "").trim();
+  const said = raw.split(/\r?\n/).find((l) => l.trim()) || "";
+  const quote = said ? ` Claude Code said: “${said.slice(0, 200)}”` : "";
+  if (/invalid api key|please run \/login|not logged in|log ?in to claude|oauth token (has )?expired|token (has )?expired|authentication_error|401\b|unauthori[sz]ed|credit balance is too low/i.test(raw)) {
+    const auth = authInfo();
+    // With a Claude account, runs leave any API key out (see start), so it's the account's sign-in.
+    if (auth.account) return { code: "auth", error: `Claude Code is set up for ${auth.account}, but that sign-in didn't work (it may have expired). Sign in again, then try again.${quote}` };
+    if (auth.apiKey || auth.authToken) {
+      return { code: "auth", error: `Claude Code is using an API key set on this computer (ANTHROPIC_API_KEY), and it was refused. Sign in with your Claude account instead, or fix the key.${quote}` };
+    }
+    return { code: "auth", error: `Claude Code isn't signed in on this computer yet. Sign in once, then try again.${quote}` };
   }
-  if (/usage limit|rate limit|quota/i.test(t)) return "You've reached your Claude usage limit for now. Try again later.";
-  return t.trim().slice(0, 600) || "Claude stopped unexpectedly.";
+  if (/usage limit|rate limit|quota|limit reached/i.test(raw)) return { code: "limit", error: `You've reached your Claude usage limit for now. Try again later.${quote}` };
+  return { code: "other", error: raw.slice(0, 600) || "Claude stopped unexpectedly." };
 }
 
 /**
@@ -60,9 +69,16 @@ function start(opts, launch, onEvent) {
     ...(opts.system ? ["--append-system-prompt", opts.system] : []),
     ...(opts.resume ? ["--resume", opts.resume] : []),
   ];
+  // Basalt uses your Claude sign-in: when Claude Code has one, a stray API key in the
+  // environment mustn't take over (Claude Code prefers the key in -p mode).
+  const env = { ...process.env, ...claude.env };
+  if (authInfo().account) {
+    delete env.ANTHROPIC_API_KEY;
+    delete env.ANTHROPIC_AUTH_TOKEN;
+  }
   const child = spawn(claude.file, args, {
     cwd: opts.cwd,
-    env: { ...process.env, ...claude.env },
+    env,
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
   });
@@ -100,8 +116,8 @@ function start(opts, launch, onEvent) {
         if (block.type === "tool_use") onEvent({ type: "tool", name: String(block.name || "").replace(/^mcp__basalt__/, ""), input: block.input });
       }
     } else if (msg.type === "result") {
-      const error = msg.is_error ? friendlyError(msg.result || msg.subtype) : undefined;
-      finish({ ok: !msg.is_error, result: typeof msg.result === "string" ? msg.result : "", error });
+      const bad = msg.is_error ? explain(msg.result || msg.subtype) : null;
+      finish({ ok: !msg.is_error, result: typeof msg.result === "string" ? msg.result : "", ...(bad ? { error: bad.error, code: bad.code } : {}) });
     }
   };
   child.stdout.on("data", (chunk) => {
@@ -116,11 +132,11 @@ function start(opts, launch, onEvent) {
   child.stderr.on("data", (chunk) => {
     stderr = (stderr + chunk.toString("utf8")).slice(-4000);
   });
-  child.on("error", (err) => finish({ ok: false, error: friendlyError(err.message) }));
+  child.on("error", (err) => finish({ ok: false, ...explain(err.message) }));
   child.on("close", (code, signal) => {
     if (buffer.trim()) handle(buffer.trim());
     if (signal) finish({ ok: false, cancelled: true, error: "Stopped." });
-    else finish({ ok: code === 0, error: code === 0 ? undefined : friendlyError(stderr || `Claude exited with code ${code}.`) });
+    else finish(code === 0 ? { ok: true } : { ok: false, ...explain(stderr || `Claude exited with code ${code}.`) });
   });
   return { id };
 }
@@ -137,4 +153,4 @@ function cancelAll() {
   runs.clear();
 }
 
-module.exports = { start, cancel, cancelAll, defaultCwd: (userData) => path.join(userData, "claude", "work") };
+module.exports = { start, cancel, cancelAll, explain, defaultCwd: (userData) => path.join(userData, "claude", "work") };

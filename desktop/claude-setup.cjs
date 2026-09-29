@@ -125,4 +125,84 @@ async function add(link, launch) {
   return { ok: true, message: "Added Basalt to Claude Code." };
 }
 
-module.exports = { status, add, validLink, findClaude };
+/**
+ * What Claude Code is signed in with on this computer: the Claude account from
+ * `claude` → /login (its email, from ~/.claude.json), and whether an API key
+ * in the environment would take over from it.
+ */
+function authInfo() {
+  const configDir = process.env.CLAUDE_CONFIG_DIR;
+  let account = null;
+  try {
+    const config = JSON.parse(fs.readFileSync(path.join(configDir || os.homedir(), ".claude.json"), "utf8"));
+    const oauth = config && config.oauthAccount;
+    if (oauth && typeof oauth === "object") account = String(oauth.emailAddress || oauth.displayName || "your Claude account");
+  } catch {
+    // No config yet: never signed in.
+  }
+  return {
+    account,
+    apiKey: !!process.env.ANTHROPIC_API_KEY,
+    authToken: !!process.env.ANTHROPIC_AUTH_TOKEN,
+  };
+}
+
+/**
+ * Sign in to Claude Code: a terminal window with `claude` running, where the
+ * first start asks you to sign in (or type /login). Written as a small script
+ * so no shell quoting gets in the way of paths with spaces.
+ */
+function openSignIn() {
+  const claude = findClaude();
+  if (!claude) return { ok: false, message: "Claude Code isn't installed on this computer. Install it first (claude.com/claude-code)." };
+  const dir = path.join(os.tmpdir(), "basalt-claude");
+  fs.mkdirSync(dir, { recursive: true });
+  // An npm install: its claude.cmd shim runs fine in a real terminal.
+  const shim = claude.pre[0] ? path.join(path.dirname(path.dirname(path.dirname(path.dirname(claude.pre[0])))), "claude.cmd") : "";
+  const viaShim = windows && shim && isFile(shim);
+  const cmd = viaShim ? [shim] : [claude.file, ...claude.pre];
+  const env = viaShim ? {} : claude.env;
+  const hello = "Sign in to Claude Code here (type /login if it doesn't ask), then go back to Basalt and press Try again.";
+  try {
+    if (windows) {
+      const script = path.join(dir, "sign-in.cmd");
+      const lines = [
+        "@echo off",
+        "title Sign in to Claude Code",
+        `echo ${hello}`,
+        "echo.",
+        ...Object.entries(env).map(([k, v]) => `set ${k}=${v}`),
+        cmd.map((a) => `"${a}"`).join(" "),
+        "echo.",
+        "echo You can close this window.",
+        "pause >nul",
+      ];
+      fs.writeFileSync(script, lines.join("\r\n") + "\r\n");
+      const { spawn } = require("node:child_process");
+      spawn("cmd.exe", ["/c", "start", "", script], { detached: true, stdio: "ignore", windowsHide: false }).unref();
+      return { ok: true };
+    }
+    const quote = (a) => `'${String(a).replace(/'/g, "'\\''")}'`;
+    const body = ["#!/bin/sh", `echo ${quote(hello)}`, "echo", ...Object.entries(env).map(([k, v]) => `export ${k}=${quote(v)}`), cmd.map(quote).join(" ")].join("\n") + "\n";
+    const { spawn } = require("node:child_process");
+    if (process.platform === "darwin") {
+      const script = path.join(dir, "sign-in.command");
+      fs.writeFileSync(script, body, { mode: 0o755 });
+      spawn("open", ["-a", "Terminal", script], { detached: true, stdio: "ignore" }).unref();
+      return { ok: true };
+    }
+    const script = path.join(dir, "sign-in.sh");
+    fs.writeFileSync(script, body + "exec \"${SHELL:-sh}\"\n", { mode: 0o755 });
+    for (const term of ["x-terminal-emulator", "gnome-terminal", "konsole", "xterm"]) {
+      const found = (process.env.PATH || "").split(path.delimiter).some((d) => isFile(path.join(d, term)));
+      if (!found) continue;
+      spawn(term, term === "gnome-terminal" ? ["--", script] : ["-e", script], { detached: true, stdio: "ignore" }).unref();
+      return { ok: true };
+    }
+    return { ok: false, message: "Open a terminal and run `claude` to sign in." };
+  } catch (err) {
+    return { ok: false, message: `Couldn't open a terminal: ${err.message}. Open one and run \`claude\` to sign in.` };
+  }
+}
+
+module.exports = { status, add, validLink, findClaude, authInfo, openSignIn };

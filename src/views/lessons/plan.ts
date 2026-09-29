@@ -127,6 +127,8 @@ interface PlanAll {
   total: number;
   done: number;
   current: string;
+  /** The job that stopped it (Claude couldn't run), to show why. */
+  failed?: string;
 }
 
 let planAll: PlanAll = { running: false, total: 0, done: 0, current: "" };
@@ -152,7 +154,7 @@ export async function planEverySkill(ws: Workspace) {
   if (planAll.running || !canRunClaude()) return;
   stopPlanAll = false;
   const queue = unplannedSkills(ws).filter((s) => !s.topic);
-  setPlanAll({ running: true, total: queue.length, done: 0, current: "" });
+  setPlanAll({ running: true, total: queue.length, done: 0, current: "", failed: undefined });
   for (const skill of queue) {
     if (stopPlanAll) break;
     // Planned meanwhile (by hand, or as part of another skill)?
@@ -165,7 +167,10 @@ export async function planEverySkill(ws: Workspace) {
     const job = req ? await runRequest(ws, req) : undefined;
     setPlanAll({ done: planAll.done + 1 });
     // Claude couldn't run (signed out, no connection): the rest would fail the same way.
-    if (job?.status === "error") break;
+    if (job?.status === "error") {
+      setPlanAll({ failed: job.key });
+      break;
+    }
   }
   setPlanAll({ running: false, current: "" });
 }

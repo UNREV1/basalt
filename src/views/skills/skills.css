@@ -1273,30 +1273,31 @@ html[data-glass] .sk-page {
   }
 }
 
-/* Waiting for a lesson Claude is writing: a banner over the map. */
-.sk-starting {
+/* Waiting for a lesson Claude is writing: a banner over the map (a ClaudeJobLine,
+   so these rules name both classes to win over .cj-line's). */
+.cj-line.sk-starting {
   position: absolute;
   left: 50%;
   top: 64px;
   transform: translateX(-50%);
   z-index: 6;
-  display: flex;
-  align-items: center;
-  gap: 10px;
   width: min(560px, calc(100% - 24px));
   padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--glass-solid, var(--bg));
+  -webkit-backdrop-filter: var(--glass-blur, none);
+  backdrop-filter: var(--glass-blur, none);
   box-shadow: var(--shadow-lg);
   font-size: 13.5px;
   animation: fade 0.15s ease-out;
 }
-.sk-body.with-panel .sk-starting {
+.sk-body.with-panel .cj-line.sk-starting {
   left: calc(50% - 198px);
 }
-.sk-starting.error {
-  background: var(--danger-soft);
+/* The tint over a solid background, so the map doesn't show through the words. */
+.cj-line.sk-starting.error {
+  background: linear-gradient(var(--danger-soft), var(--danger-soft)), var(--glass-solid, var(--bg));
 }
 .sk-starting strong {
   font-weight: 600;
@@ -1550,8 +1551,8 @@ html[data-glass] .sk-page {
     border-bottom: 1px solid var(--border);
     cursor: default;
   }
-  .sk-starting,
-  .sk-body.with-panel .sk-starting {
+  .cj-line.sk-starting,
+  .sk-body.with-panel .cj-line.sk-starting {
     left: 50%;
     top: 60px;
   }

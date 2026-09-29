@@ -226,18 +226,6 @@ button.lh-card:active {
 .lh-ask-form .btn {
   height: 42px;
 }
-.lh-job {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: var(--radius);
-  background: var(--accent-soft);
-  font-size: 13.5px;
-}
-.lh-job.error {
-  background: var(--danger-soft);
-}
 
 /* Branches */
 .lh-branch-head {

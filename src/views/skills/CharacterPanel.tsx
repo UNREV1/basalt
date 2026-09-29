@@ -10,7 +10,8 @@ import { Avatar, Icon, timeAgo } from "../../components/ui.tsx";
 import { useApp } from "../../lib/hooks.ts";
 import { useSettings } from "../../lib/settings.ts";
 import type { Workspace } from "../../lib/workspace.ts";
-import { AskClaudeFallback } from "../lessons/ClaudeStatus.tsx";
+import { dismissClaudeJob, useClaudeJobs } from "../../lib/claude.ts";
+import { AskClaudeFallback, ClaudeJobLine } from "../lessons/ClaudeStatus.tsx";
 import { canRunClaude, planAllText, planEverySkill, stopPlanningEverySkill, unplannedSkills, usePlanAll } from "../lessons/plan.ts";
 import { QuestCheck, Radar } from "./Overview.tsx";
 import { SkillGlyph } from "./SkillGlyph.tsx";
@@ -102,6 +103,7 @@ export function CharacterPanel({
   const { sheet } = data;
   const [expanded, setExpanded] = useState(false);
   const planAll = usePlanAll();
+  const failedJob = useClaudeJobs().find((j) => j.key === planAll.failed);
   const up = useMemo(() => nextUp(ws, data), [ws, data]);
   const unplanned = useMemo(() => unplannedSkills(ws).filter((s) => !s.topic), [ws, data]);
 
@@ -215,7 +217,7 @@ export function CharacterPanel({
           <Radar areas={sheet.areas} dark={dark} onPick={onShowArea} />
         </section>
 
-        {(unplanned.length > 0 || planAll.running) && (
+        {(unplanned.length > 0 || planAll.running || planAll.failed) && (
           <section className="sk-char-section sk-char-plan">
             <h3>Plan every skill</h3>
             {planAll.running ? (
@@ -229,6 +231,8 @@ export function CharacterPanel({
                   Stop
                 </button>
               </div>
+            ) : planAll.failed && failedJob?.status === "error" ? (
+              <ClaudeJobLine label="Planning every skill" job={failedJob} onRetry={planEverything} onClose={() => dismissClaudeJob(failedJob.key)} />
             ) : (
               <>
                 <p className="small muted">

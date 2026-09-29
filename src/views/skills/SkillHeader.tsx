@@ -25,6 +25,7 @@ import { navigate } from "../../lib/router.ts";
 import { useTheme } from "../../lib/theme.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { useLessonStarter } from "../lessons/start.ts";
+import { ClaudeJobLine } from "../lessons/ClaudeStatus.tsx";
 import { focusSkill } from "./focus.ts";
 import { levelUpMessage } from "./Overview.tsx";
 import { QuestForm, XpBar } from "./SkillPanel.tsx";
@@ -126,18 +127,7 @@ export default function SkillHeader({ ws, pageId }: { ws: Workspace; pageId: str
           <Icon name="play" size={13} /> Start lesson
         </button>
       </div>
-      {starter.starting && (
-        <div className="sk-job" role="status">
-          {starter.job?.status === "error" ? <Icon name="x" size={14} /> : <span className="sk-spinner" aria-hidden />}
-          <span className="grow">
-            {starter.starting.label}
-            {starter.job?.status === "error" ? ` · ${starter.job.error}` : starter.job?.status === "running" ? ` · ${starter.job.activity}…` : "…"}
-          </span>
-          <button className="icon-btn" aria-label="Stop waiting" onClick={starter.cancel}>
-            <Icon name="x" size={14} />
-          </button>
-        </div>
-      )}
+      {starter.starting && <ClaudeJobLine label={starter.starting.label} job={starter.job} note="It opens as soon as it's written." onClose={starter.cancel} />}
 
       <XpBar fraction={stats.progress.fraction} color={color} label="XP toward next level" />
       <div className="sk-level-foot small">

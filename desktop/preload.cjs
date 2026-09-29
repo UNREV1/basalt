@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld("basaltDesktop", {
   /** Claude in the app, through Claude Code (no API key). */
   claude: {
     available: () => ipcRenderer.invoke("basalt:claude-available"),
+    /** Open a terminal with Claude Code, to sign in. */
+    signIn: () => ipcRenderer.invoke("basalt:claude-signin"),
     run: (opts) => ipcRenderer.invoke("basalt:claude-run", opts),
     cancel: (id) => ipcRenderer.invoke("basalt:claude-cancel", String(id)),
     onEvent: (cb) => {

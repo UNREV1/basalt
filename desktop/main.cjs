@@ -178,7 +178,9 @@ function registerIpc() {
     return claudeSetup.add(link, claudeLaunch);
   });
   // Claude in the app: background Claude Code runs with Basalt's connector (desktop/claude-run.cjs).
-  ipcMain.handle("basalt:claude-available", (e) => (fromApp(e) ? { installed: !!claudeSetup.findClaude() } : null));
+  ipcMain.handle("basalt:claude-available", (e) => (fromApp(e) ? { installed: !!claudeSetup.findClaude(), account: claudeSetup.authInfo().account } : null));
+  // Sign in to Claude Code: a terminal with `claude` running.
+  ipcMain.handle("basalt:claude-signin", (e) => (fromApp(e) ? claudeSetup.openSignIn() : null));
   ipcMain.handle("basalt:claude-run", (e, opts) => {
     if (!fromApp(e) || !opts || typeof opts !== "object") return null;
     const { prompt, system, resume, web, link } = opts;

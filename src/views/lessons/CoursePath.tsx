@@ -8,7 +8,7 @@ import { allLessons, courseMap, getCurriculum, getProgress } from "../../../shar
 import { courseAhead, courseMistakes, learnerStats, MISTAKE_WHY } from "../../../shared/learning.ts";
 import { getLessonContent } from "../../../shared/lesson.ts";
 import { displayTitle, pageMeta } from "../../../shared/model.ts";
-import { areaOf, levelForXp, listSkills, themedColor, totalXp } from "../../../shared/skills.ts";
+import { areaOf, levelForXp, listSkills, needsMasteryCheck, themedColor, totalXp } from "../../../shared/skills.ts";
 import { Icon } from "../../components/ui.tsx";
 import { useApp, useY } from "../../lib/hooks.ts";
 import { navigate } from "../../lib/router.ts";
@@ -17,7 +17,7 @@ import { dismissClaudeJob, useClaudeJobs } from "../../lib/claude.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { focusSkill } from "../skills/focus.ts";
 import { aheadEnabled, aheadRequest, canRunClaude, keepAhead, runRequest, setAheadEnabled } from "./plan.ts";
-import { openLesson } from "./player.ts";
+import { openCheck, openLesson } from "./player.ts";
 import { AskClaudeFallback, ClaudeJobLine } from "./ClaudeStatus.tsx";
 import "./path.css";
 
@@ -49,6 +49,8 @@ export function CoursePath({ ws, pageId, page }: { ws: Workspace; pageId: string
   const mastered = refs.filter((r) => getProgress(page, r.lesson.id).status === "mastered").length;
   const next = ahead.next;
   const nextReady = next ? !!getLessonContent(page, next.id) : false;
+  const nextToMaster = next ? (getProgress(page, next.id).toMaster?.length ?? 0) : 0;
+  const checkDue = !!skill && needsMasteryCheck(ws.doc, skill);
   const job = jobs.find((j) => j.key === `ahead:${pageId}`);
   const mistakes = courseMistakes(page).slice(-8).reverse();
 
@@ -89,13 +91,18 @@ export function CoursePath({ ws, pageId, page }: { ws: Workspace; pageId: string
                 </button>
               )}
               <span>
-                {mastered}/{refs.length} lessons
+                {mastered}/{refs.length} lessons mastered
               </span>
             </div>
           </div>
           {next && (
             <button className="btn btn-primary cp-go" disabled={!nextReady} onClick={() => openLesson(pageId, next.id)}>
-              <Icon name="play" size={14} /> {mastered ? "Continue" : "Start"}
+              <Icon name="play" size={14} /> {nextToMaster ? "Master what you missed" : mastered ? "Continue" : "Start"}
+            </button>
+          )}
+          {!next && checkDue && (
+            <button className="btn btn-primary cp-go" onClick={() => openCheck(skill!.id)}>
+              <Icon name="star" size={14} /> Take the mastery check
             </button>
           )}
         </div>
@@ -146,6 +153,7 @@ export function CoursePath({ ws, pageId, page }: { ws: Workspace; pageId: string
                   {mod.lessons.map((lesson, n) => {
                     const p = getProgress(page, lesson.id);
                     const done = p.status === "mastered";
+                    const toMaster = p.toMaster?.length ?? 0;
                     const ready = !!getLessonContent(page, lesson.id);
                     const isNext = next?.id === lesson.id;
                     const due = p.review && p.review.due <= Date.now();
@@ -169,6 +177,8 @@ export function CoursePath({ ws, pageId, page }: { ws: Workspace; pageId: string
                                 <span className="cp-dim">{"★".repeat(3 - starsOf(p.mastery))}</span>
                                 {due && <span className="cp-due"> · review due</span>}
                               </>
+                            ) : toMaster ? (
+                              `${toMaster} still to master${isNext ? " · up next" : ""}`
                             ) : isNext ? (
                               ready ? "Up next" : "Up next · being written"
                             ) : ready ? (
@@ -191,6 +201,26 @@ export function CoursePath({ ws, pageId, page }: { ws: Workspace; pageId: string
             ))}
           </section>
         ))}
+        {skill && (
+          <div className={`cp-check${skill.masteredAt ? " done" : checkDue ? " due" : ""}`}>
+            <Icon name={skill.masteredAt ? "check" : "star"} size={18} />
+            <div className="grow">
+              <strong>{skill.masteredAt ? `${skill.name} mastered` : "Mastery check"}</strong>
+              <span>
+                {skill.masteredAt
+                  ? "You passed the mastery check: what comes next is open."
+                  : checkDue
+                    ? "Every lesson mastered. One question from each: get every one right to master it and move on."
+                    : "Once every lesson is mastered: one question from each, all right, before you move on."}
+              </span>
+            </div>
+            {checkDue && (
+              <button className="btn btn-primary btn-sm" onClick={() => openCheck(skill.id)}>
+                Take it
+              </button>
+            )}
+          </div>
+        )}
         <div className="cp-end">
           {canRunClaude() ? (
             <button className="btn" disabled={job?.status === "running"} onClick={() => write()}>
@@ -229,7 +259,7 @@ export function CoursePath({ ws, pageId, page }: { ws: Workspace; pageId: string
       )}
       {skill && area && (
         <p className="cp-ability-note">
-          Finishing lessons levels up {skill.name} and raises your {area.name} score.
+          Mastering lessons levels up {skill.name} and raises your {area.name} score.
         </p>
       )}
     </div>

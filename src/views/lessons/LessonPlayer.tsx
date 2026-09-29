@@ -4,7 +4,7 @@
 // schedules spaced reviews, and lets Claude write the next lessons ahead.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { getCurriculum, getProgress, allLessons } from "../../../shared/course.ts";
+import { getCurriculum, getProgress, allLessons, setProgress } from "../../../shared/course.ts";
 import {
   explainMistake,
   logMistake,
@@ -23,6 +23,7 @@ import {
   type LessonStep,
   type Phase,
 } from "../../../shared/lesson.ts";
+import { isAspect, masteryCheck, masteryRound, PRACTICE_MASTERED, recordAttempt } from "../../../shared/mastery.ts";
 import { displayTitle, getPage, pageMeta } from "../../../shared/model.ts";
 import {
   abilityModifier,
@@ -31,6 +32,9 @@ import {
   areaOf,
   computeSkillStats,
   formatModifier,
+  getSkill,
+  needsMasteryCheck,
+  updateSkill,
   LESSON_MASTERED_XP,
   levelForXp,
   listSkills,
@@ -41,10 +45,10 @@ import {
 } from "../../../shared/skills.ts";
 import { Icon } from "../../components/ui.tsx";
 import type { Workspace } from "../../lib/workspace.ts";
-import { writeProgress } from "../course/model.ts";
+import { TUTOR_ORIGIN } from "../course/model.ts";
 import { Markdown } from "../tutor/ai-ui.tsx";
 import { keepAhead } from "./plan.ts";
-import { closePlayer, openLesson, touchSession, usePlayer, type PlayerTarget } from "./player.ts";
+import { closePlayer, openCheck, openLesson, touchSession, usePlayer, type PlayerTarget } from "./player.ts";
 import {
   answerTexts,
   ChoiceAnswer,
@@ -77,21 +81,45 @@ interface SessionStep {
   step: LessonStep;
   courseId: string;
   lessonId: string;
+  /** Its step number in its lesson, when it's something to master (see shared/mastery.ts). */
+  index?: number;
+  lessonTitle?: string;
 }
 
 interface Session {
+  /** A whole lesson, a round of what it still needs mastered, a skill's mastery check, or a review. */
+  kind: "lesson" | "round" | "check" | "review";
   title: string;
   subtitle: string;
   loop: Phase[] | null;
   steps: SessionStep[];
   review: boolean;
+  skillId?: string;
 }
 
+/** Bonus XP for passing a skill's mastery check. */
+const MASTERY_CHECK_XP = 50;
+
 function buildSession(ws: Workspace, target: PlayerTarget): Session | null {
+  if (target.mode === "check") {
+    const skill = getSkill(ws.doc, target.skillId);
+    const items = skill ? masteryCheck(ws.doc, skill.courseIds) : [];
+    if (!skill || !items.length) return null;
+    return {
+      kind: "check",
+      title: `Mastery check: ${skill.name}`,
+      subtitle: `One question from each of its ${items.length} lesson${items.length === 1 ? "" : "s"}. Get every one right to master it`,
+      loop: null,
+      review: false,
+      skillId: skill.id,
+      steps: items.map((it) => ({ step: it.step, courseId: it.courseId, lessonId: it.lessonId, index: it.index, lessonTitle: it.lessonTitle })),
+    };
+  }
   if (target.mode === "review") {
     const items = reviewSession(ws.doc);
     if (!items.length) return null;
     return {
+      kind: "review",
       title: "Review",
       subtitle: `${items.length} question${items.length === 1 ? "" : "s"} from lessons due for review`,
       loop: null,
@@ -104,14 +132,29 @@ function buildSession(ws: Workspace, target: PlayerTarget): Session | null {
   const c = page ? getCurriculum(page) : null;
   const ref = c ? allLessons(c).find((l) => l.lesson.id === target.lessonId) : undefined;
   if (!page || !content || !ref) return null;
+  // Something still to master from before: a round of just that, each after its explanation.
+  const toMaster = getProgress(page, target.lessonId).toMaster ?? [];
+  const round = toMaster.length ? masteryRound(content.steps, toMaster) : [];
+  if (round.some((r) => r.index !== undefined)) {
+    const n = round.filter((r) => r.index !== undefined).length;
+    return {
+      kind: "round",
+      title: ref.lesson.title,
+      subtitle: `Master what you missed: ${n} to go`,
+      loop: null,
+      review: false,
+      steps: round.map((r) => ({ step: r.step, courseId: target.courseId, lessonId: target.lessonId, index: r.index })),
+    };
+  }
   const skillLike = content.steps.some((s) => s.type === "practice");
   const hasPhases = content.steps.some((s) => s.phase);
   return {
+    kind: "lesson",
     title: ref.lesson.title,
     subtitle: displayTitle(pageMeta(page)) || c!.topic,
     loop: hasPhases ? (skillLike ? SKILL_LOOP : SUBJECT_LOOP) : null,
     review: false,
-    steps: content.steps.map((step) => ({ step, courseId: target.courseId, lessonId: target.lessonId })),
+    steps: content.steps.map((step, index) => ({ step, courseId: target.courseId, lessonId: target.lessonId, index })),
   };
 }
 
@@ -191,7 +234,7 @@ function Player({ ws, target }: { ws: Workspace; target: PlayerTarget }) {
       bodyRef.current?.scrollTo({ top: 0 });
       return;
     }
-    setFinished(finish(ws, target, session!, { firstTry, practice }));
+    setFinished(finish(ws, target, session!, { firstTry, practice, teach }));
   };
 
   // What the big button does right now.
@@ -248,8 +291,14 @@ function Player({ ws, target }: { ws: Workspace; target: PlayerTarget }) {
     return (
       <PlayerFrame onClose={closePlayer} progress={0} counter="">
         <div className="lp-empty">
-          <h2>{target.mode === "review" ? "Nothing to review right now" : "This lesson isn’t written yet"}</h2>
-          <p>{target.mode === "review" ? "Lessons come back for review 1 day, 3 days, a week and a month after you finish them." : "Claude writes lessons ahead of you; check back in a minute."}</p>
+          <h2>{target.mode === "review" ? "Nothing to review right now" : target.mode === "check" ? "Nothing to check yet" : "This lesson isn’t written yet"}</h2>
+          <p>
+            {target.mode === "review"
+              ? "Lessons come back for review 1 day, 3 days, a week and a month after you finish them."
+              : target.mode === "check"
+                ? "The mastery check asks a question from each of the skill's lessons, once they're written."
+                : "Claude writes lessons ahead of you; check back in a minute."}
+          </p>
           <button className="btn btn-primary" onClick={closePlayer}>
             Back
           </button>
@@ -529,18 +578,39 @@ interface Result {
   /** Skills this lesson unlocked, and ones it finished learning (a lesson can complete a skill). */
   unlocked?: Skill[];
   learnt?: Skill[];
+  /** A lesson: how many of its aspects are still to master (0: mastered). */
+  toMaster?: number;
+  /** Every lesson of this skill is mastered now: its mastery check is next. */
+  checkReady?: Skill;
+  /** The mastery check: passed, or the lessons it sent back to master (and where to start). */
+  check?: { passed: boolean; missed: string[]; first?: { courseId: string; lessonId: string } };
 }
 
 function finish(
   ws: Workspace,
   target: PlayerTarget,
   session: Session,
-  s: { firstTry: Record<number, boolean>; practice: Record<number, PracticeState> },
+  s: { firstTry: Record<number, boolean>; practice: Record<number, PracticeState>; teach: Record<number, TeachState> },
 ): Result {
   const doc = ws.doc;
   const answerIdx = session.steps.map((x, n) => (isAnswerStep(x.step) ? n : -1)).filter((n) => n >= 0);
   const right = answerIdx.filter((n) => s.firstTry[n]).length;
   const minutesLearning = touchSession();
+  // Every aspect mastered? A question right first time, every key point covered, practice done and gone well.
+  const gotIt = (n: number): boolean => {
+    const step = session.steps[n].step;
+    if (isAnswerStep(step)) return !!s.firstTry[n];
+    if (step.type === "teach") {
+      const t = s.teach[n];
+      return !!t && t.compared && t.text.trim().length >= 15 && t.covered.length >= step.keyPoints.length;
+    }
+    if (step.type === "practice") {
+      const p = s.practice[n];
+      return !!p && p.done && p.rating >= PRACTICE_MASTERED && p.focusHit.length >= step.focus.length;
+    }
+    return true;
+  };
+  const aspectIdx = session.steps.map((x, n) => (x.index !== undefined && isAspect(x.step) ? n : -1)).filter((n) => n >= 0);
   if (target.mode === "review") {
     // Right first time: the next, longer interval. Wrong: back to tomorrow.
     let gained = 0;
@@ -557,22 +627,82 @@ function finish(
     }
     return { right, total: answerIdx.length, stars: starsFor(right, answerIdx.length), firstTime: false, skill: null, xpBefore: 0, gained, practiceMinutes: 0, minutesLearning, reviewed: { right, total: answerIdx.length } };
   }
-  const page = getPage(doc, target.courseId)!;
-  const prev = getProgress(page, target.lessonId);
-  const firstTime = prev.status !== "mastered";
-  const score = answerIdx.length ? right / answerIdx.length : 1;
-  const skill = listSkills(doc).find((k) => k.courseIds.includes(target.courseId)) ?? null;
-  const xpBefore = skill ? totalXp(doc, skill.id) : 0;
-  // For the unlock moment: which skills were open, and learnt, before this lesson counted.
+  // For the unlock moment: which skills were open, and learnt, before this counted.
   const statsBefore = computeSkillStats(doc);
   const skillsBefore = listSkills(doc);
   const learntBefore = new Set(skillsBefore.filter((k) => skillDone(doc, skillsBefore, k, statsBefore)).map((k) => k.id));
-  writeProgress(page, target.lessonId, {
-    status: "mastered",
-    mastery: Math.max(prev.mastery, score),
-    quizzes: [...prev.quizzes, { at: Date.now(), score }],
-  });
-  if (firstTime) scheduleReview(page, target.lessonId);
+  const opened = () => {
+    const statsAfter = computeSkillStats(doc);
+    const skillsAfter = listSkills(doc);
+    return {
+      unlocked: skillsAfter.filter((k) => statsBefore.get(k.id)?.unlocked === false && statsAfter.get(k.id)?.unlocked),
+      learnt: skillsAfter.filter((k) => !learntBefore.has(k.id) && skillDone(doc, skillsAfter, k, statsAfter)),
+    };
+  };
+
+  if (target.mode === "check") {
+    // One question from every lesson: all right, and the skill is mastered. A miss sends its lesson back.
+    const skill = getSkill(doc, target.skillId) ?? null;
+    const xpBefore = skill ? totalXp(doc, skill.id) : 0;
+    const missed: string[] = [];
+    let first: { courseId: string; lessonId: string } | undefined;
+    doc.transact(() => {
+      for (const n of aspectIdx) {
+        if (gotIt(n)) continue;
+        const x = session.steps[n];
+        const page = getPage(doc, x.courseId);
+        if (!page) continue;
+        // A lesson you'd mastered goes back on the list for what you missed; one you hadn't
+        // taken yet (testing out) you still take whole.
+        const was = getProgress(page, x.lessonId).status;
+        if (was === "mastered" || was === "skipped") recordAttempt(page, x.lessonId, [{ key: String(x.index), mastered: false }], { whole: false });
+        first ??= { courseId: x.courseId, lessonId: x.lessonId };
+        if (x.lessonTitle && !missed.includes(x.lessonTitle)) missed.push(x.lessonTitle);
+      }
+    }, TUTOR_ORIGIN);
+    const passed = aspectIdx.length > 0 && aspectIdx.every(gotIt);
+    if (skill && passed) {
+      // Testing out: passed before every lesson was done, so the rest count as known already.
+      doc.transact(() => {
+        for (const courseId of skill.courseIds) {
+          const page = getPage(doc, courseId);
+          const c = page ? getCurriculum(page) : null;
+          if (!page || !c) continue;
+          for (const { lesson } of allLessons(c)) {
+            const p = getProgress(page, lesson.id);
+            if (p.status !== "mastered" && p.status !== "skipped") setProgress(page, lesson.id, { status: "skipped", toMaster: [] });
+          }
+        }
+      }, TUTOR_ORIGIN);
+      updateSkill(doc, skill.id, { masteredAt: Date.now() });
+      addXp(doc, skill.id, { amount: MASTERY_CHECK_XP, source: "quiz", note: `Mastery check · ${skill.name}` });
+    }
+    const got = aspectIdx.filter(gotIt).length;
+    return {
+      right: got,
+      total: aspectIdx.length,
+      stars: starsFor(got, aspectIdx.length),
+      firstTime: false,
+      skill,
+      xpBefore,
+      gained: skill ? totalXp(doc, skill.id) - xpBefore : 0,
+      practiceMinutes: 0,
+      minutesLearning,
+      check: { passed, missed, first },
+      ...opened(),
+    };
+  }
+
+  const page = getPage(doc, target.courseId)!;
+  const score = answerIdx.length ? right / answerIdx.length : 1;
+  const skill = listSkills(doc).find((k) => k.courseIds.includes(target.courseId)) ?? null;
+  const xpBefore = skill ? totalXp(doc, skill.id) : 0;
+  const outcomes = aspectIdx.map((n) => ({ key: String(session.steps[n].index), mastered: gotIt(n) }));
+  let attempt!: ReturnType<typeof recordAttempt>;
+  doc.transact(() => {
+    attempt = recordAttempt(page, target.lessonId, outcomes, { whole: session.kind === "lesson", score });
+  }, TUTOR_ORIGIN);
+  if (attempt.firstTime) scheduleReview(page, target.lessonId);
   // Practice time: the timer if they used it, otherwise the planned minutes they said they practised.
   let practiceMinutes = 0;
   for (const [n, p] of Object.entries(s.practice)) {
@@ -582,12 +712,22 @@ function finish(
   if (skill && practiceMinutes) logPractice(doc, skill.id, practiceMinutes, `Practice · ${session.title}`);
   // Keep the next lessons (and the path) ready before the learner gets there.
   keepAhead(ws, target.courseId);
-  const gained = skill ? totalXp(doc, skill.id) - xpBefore : firstTime ? LESSON_MASTERED_XP : 0;
-  const statsAfter = computeSkillStats(doc);
-  const skillsAfter = listSkills(doc);
-  const unlocked = skillsAfter.filter((k) => statsBefore.get(k.id)?.unlocked === false && statsAfter.get(k.id)?.unlocked);
-  const learnt = skillsAfter.filter((k) => !learntBefore.has(k.id) && skillDone(doc, skillsAfter, k, statsAfter));
-  return { right, total: answerIdx.length, stars: starsFor(right, answerIdx.length), firstTime, skill, xpBefore, gained, practiceMinutes, minutesLearning, unlocked, learnt };
+  const gained = skill ? totalXp(doc, skill.id) - xpBefore : attempt.firstTime ? LESSON_MASTERED_XP : 0;
+  const now = skill ? getSkill(doc, skill.id) : undefined;
+  return {
+    right,
+    total: answerIdx.length,
+    stars: starsFor(right, answerIdx.length),
+    firstTime: attempt.firstTime,
+    skill,
+    xpBefore,
+    gained,
+    practiceMinutes,
+    minutesLearning,
+    toMaster: attempt.toMaster.length,
+    checkReady: now && needsMasteryCheck(doc, now) ? now : undefined,
+    ...opened(),
+  };
 }
 
 function Completion({ ws, target, session, result }: { ws: Workspace; target: PlayerTarget; session: Session; result: Result }) {
@@ -639,6 +779,30 @@ function Completion({ ws, target, session, result }: { ws: Workspace; target: Pl
     return n ? { id: n.id, title: n.title, ready: !!getLessonContent(page, n.id) } : null;
   }, [doc, target]);
 
+  const toMaster = result.toMaster ?? 0;
+  const them = (n: number) => (n === 1 ? "it" : "them");
+  const heading = result.reviewed
+    ? "Review done"
+    : result.check
+      ? result.check.passed
+        ? `${skill?.name ?? "Skill"} mastered`
+        : "Not mastered yet"
+      : toMaster
+        ? "Almost there"
+        : "Lesson mastered";
+  const summary = result.reviewed
+    ? `${result.right} of ${result.total} right on the first try. The ones you missed come back tomorrow; the rest move to a longer gap.`
+    : result.check
+      ? result.check.passed
+        ? `All ${result.total} right: you've mastered every lesson of ${skill?.name ?? "it"}, and what comes next is open.`
+        : `${result.right} of ${result.total} right. Still to master: ${result.check.missed.join(", ")}. Master ${them(result.check.missed.length)}, then take the check again.`
+      : toMaster
+        ? `${result.total ? `${result.right} of ${result.total} right first time. ` : ""}To master this lesson, get the ${toMaster === 1 ? "one" : toMaster} you missed right too: ${toMaster === 1 ? "it comes" : "they come"} back next, after the part that explains ${them(toMaster)}.`
+        : result.checkReady
+          ? `Every lesson of ${result.checkReady.name} mastered. Last step before moving on: the mastery check, one question from each lesson.`
+          : result.total
+            ? `${result.right} of ${result.total} right on the first try, and every part of it mastered.`
+            : `Every part of “${session.title}” mastered.`;
   const breakDue = result.minutesLearning >= 25;
   return (
     <div className="lp-body">
@@ -650,19 +814,15 @@ function Completion({ ws, target, session, result }: { ws: Workspace; target: Pl
             </span>
           ))}
         </div>
-        <h1>{result.reviewed ? "Review done" : "Lesson complete"}</h1>
-        <p className="lp-done-sub">
-          {result.total
-            ? `${result.right} of ${result.total} right on the first try${result.reviewed ? ". The ones you missed come back tomorrow; the rest move to a longer gap." : "."}`
-            : session.title}
-        </p>
+        <h1>{heading}</h1>
+        <p className="lp-done-sub">{summary}</p>
 
         {!result.reviewed && skill && area && (
           <div className="lp-reward">
             <div className="lp-reward-row">
               <Icon name="bolt" size={16} />
               <span className="grow">
-                {result.firstTime ? "Lesson" : "Replay"} · {skill.icon} {skill.name}
+                {result.check ? "Mastery check" : result.firstTime ? "Lesson mastered" : toMaster ? "Lesson" : "Replay"} · {skill.icon} {skill.name}
               </span>
               <strong>+{Math.max(0, result.gained)} XP</strong>
             </div>
@@ -736,13 +896,28 @@ function Completion({ ws, target, session, result }: { ws: Workspace; target: Pl
         )}
 
         <div className="lp-done-actions">
-          {nextLesson?.ready && (
+          {toMaster > 0 && target.mode === "lesson" && (
+            <button className="btn btn-primary" onClick={() => openLesson(target.courseId, target.lessonId)}>
+              Master the {toMaster === 1 ? "one" : toMaster} you missed
+            </button>
+          )}
+          {result.check && !result.check.passed && result.check.first && (
+            <button className="btn btn-primary" onClick={() => openLesson(result.check!.first!.courseId, result.check!.first!.lessonId)}>
+              Master what you missed
+            </button>
+          )}
+          {result.checkReady && (
+            <button className="btn btn-primary" onClick={() => openCheck(result.checkReady!.id)}>
+              Take the mastery check
+            </button>
+          )}
+          {!toMaster && !result.checkReady && nextLesson?.ready && (
             <button className="btn btn-primary" onClick={() => openLesson((target as { courseId: string }).courseId, nextLesson.id)}>
               Next: {nextLesson.title}
             </button>
           )}
-          {nextLesson && !nextLesson.ready && <p className="lp-done-sub">Claude is preparing “{nextLesson.title}”.</p>}
-          <button className={`btn${nextLesson?.ready ? "" : " btn-primary"}`} onClick={closePlayer}>
+          {!toMaster && !result.checkReady && nextLesson && !nextLesson.ready && <p className="lp-done-sub">Claude is preparing “{nextLesson.title}”.</p>}
+          <button className={`btn${nextLesson?.ready || toMaster || result.checkReady || result.check?.first ? "" : " btn-primary"}`} onClick={closePlayer}>
             {target.mode === "lesson" ? "Back to the course" : "Done"}
           </button>
         </div>

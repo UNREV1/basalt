@@ -59,6 +59,10 @@ export interface LessonProgress {
   updatedAt: number;
   /** Spaced review: which interval comes next and when it's due (see shared/learning.ts). */
   review?: { stage: number; due: number };
+  /** What's still to master (step numbers): questions missed, key points not covered, practice not done well (see shared/mastery.ts). */
+  toMaster?: string[];
+  /** When it was first mastered (its XP counts from then). */
+  masteredAt?: number;
 }
 
 export interface ChatMessage {

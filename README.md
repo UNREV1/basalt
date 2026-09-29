@@ -3,7 +3,7 @@
 **Learn anything by doing, like Brilliant, and level up like a D&D character.** Plus notes and canvases for everything else, free and private, on every device.
 
 - **Interactive lessons:** one idea at a time, with questions, sliders, live graphs, diagrams and hands-on practice, and instant feedback on every answer.
-- **A method that works:** every lesson walks the learning loop (preview → understand → explain in your own words → recall → apply), skills add deliberate practice with feedback, and what you learn comes back for spaced review after 1 day, 3 days, a week and a month.
+- **A method that works:** every lesson walks the learning loop (preview → understand → explain in your own words → recall → apply), skills add deliberate practice with feedback, you master every part of a skill (and pass its mastery check) before the next one opens, and what you learn comes back for spaced review after 1 day, 3 days, a week and a month.
 - **Claude, with your own Claude subscription (no API key):** ask for any skill or topic and Claude researches it, maps the branch you'll follow in your skill tree, builds its courses and keeps lessons written ahead of you at your pace.
 - **A D&D character sheet:** six abilities, scores and modifiers that grow with every lesson, a class, a d20 roll for bonus XP.
 
@@ -123,6 +123,12 @@ The home screen. *Continue* picks up your next lesson; *Review* brings back what
 **How a lesson works.** Lessons open full screen, one step at a time: a short explanation, then something to do (pick an answer, type one, drag a slider on a live graph, put steps in order, match pairs). Every answer gets instant feedback and the reason why; a miss gives a hint, then the answer, and asks *why* you missed it (didn't know it, misread, slipped, mixed it up), which goes into the course's error log.
 - **Subjects** walk *preview → understand → explain → recall → apply*: you predict before you're taught, explain the idea in your own words and compare it with a model answer (Feynman), recall it with no hints, then apply it to something new.
 - **Skills** walk *preview → understand → practice → reflect*: a clear goal, just enough technique, a timed practice session with focus points, then honest feedback and one thing to change next time.
+- **Mastery before moving on:**
+  - A lesson counts only once you've mastered every part of it: every question right first time, every key point of your own explanation covered, and every practice done and gone well.
+  - Whatever you missed comes straight back in a short round, each item after the explanation that teaches it, until you get it right.
+  - When every lesson of a skill is mastered, its **mastery check** asks one question from each lesson, and you need all of them right. A miss sends that lesson back to master, and you retake the check.
+  - Only then is the skill learnt, and what comes after it unlocks.
+  - Already know it? *I know this: test out* opens the check straight away. Pass it and every lesson counts as known.
 - **Review later:** finished lessons come back after 1 day, 3 days, a week, a month and three months, mixed across courses (interleaving). Questions you got wrong come first; a miss starts the gaps over.
 - **Rewards:** stars for first-try accuracy, XP in the skill the course trains (and so your ability score), a d20 roll for bonus XP (a natural 20 doubles it), and a nudge to take a break after 25 minutes.
 

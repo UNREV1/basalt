@@ -12,13 +12,13 @@ import { findLibraryCourse, installCourse } from "../../../shared/library/instal
 import type { LibraryCourse } from "../../../shared/library/types.ts";
 import { getPage } from "../../../shared/model.ts";
 import { adoptPlanned, missingFor, nextLeaf, nextStep, skillMapOf } from "../../../shared/skill-map.ts";
-import { allParts, computeSkillStats, listSkills, nextStepToward, requirementText, skillDone, type Requirement } from "../../../shared/skills.ts";
+import { allParts, computeSkillStats, listSkills, needsMasteryCheck, nextStepToward, requirementText, skillDone, type Requirement } from "../../../shared/skills.ts";
 import { isJobRunning, useClaudeJobs, type ClaudeJob } from "../../lib/claude.ts";
 import { getSettings } from "../../lib/settings.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { LIBRARY } from "./library.ts";
 import { aheadRequest, canRunClaude, planSkillRequest, runRequest, type ClaudeRequest } from "./plan.ts";
-import { openLesson } from "./player.ts";
+import { openCheck, openLesson } from "./player.ts";
 
 export type StartPlan =
   /** A written lesson is ready to play. */
@@ -29,6 +29,8 @@ export type StartPlan =
   | { kind: "library"; course: LibraryCourse }
   /** Nothing planned yet: Claude plans the skill (its parts and lesson titles) and writes the first lesson. */
   | { kind: "build"; req: ClaudeRequest }
+  /** Every lesson is mastered: the skill's mastery check comes before moving on. */
+  | { kind: "check"; skillId: string }
   /** Every part of this topic is learnt. */
   | { kind: "done"; name: string }
   /** Nothing to play and Claude can't run here: the course page shows what to do. */
@@ -78,6 +80,8 @@ export function planSkillStart(ws: Workspace, skillId: string): StartPlan {
 
   const courses = skill.courseIds.filter((id) => isCourse(getPage(ws.doc, id)));
   if (courses.length) {
+    // Every lesson mastered: prove it on the mastery check before moving on.
+    if (needsMasteryCheck(ws.doc, skill)) return { kind: "check", skillId };
     // The course learnt most recently first, then the order they were linked.
     const last = new Map<string, number>();
     for (const f of finishedLessons(ws.doc)) if (!last.has(f.courseId)) last.set(f.courseId, f.at);
@@ -153,6 +157,10 @@ export function useLessonStarter(ws: Workspace, ui: StartUi) {
         return;
       case "build":
         run(plan.req, target, "Claude is planning this skill and writing your first lesson");
+        return;
+      case "check":
+        setStarting(null);
+        openCheck(plan.skillId);
         return;
       case "done":
         ui.toast(`You've learnt all of ${plan.name}`);

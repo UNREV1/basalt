@@ -522,4 +522,5 @@ Style:
 - order: "items" in the correct order (the app shuffles them). match: 3–5 "pairs" of left/right.
 - teach: "prompt", "keyPoints", "model". practice: "prompt" (the task), "minutes", "focus" (what to pay attention to), "goal".
 - reveal: a question to think about, then the answer in "body". Use sparingly.
+- Mastery before moving on: the learner must master every question, every key point of the teach step and every practice before the lesson counts, and a skill's mastery check later asks one question from each lesson. So every objective and every detail that matters gets its own question, and each question tests exactly one idea that the lesson teaches before it.
 - Be accurate. No filler, no "In this lesson we will…".`;

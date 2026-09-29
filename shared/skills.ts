@@ -26,6 +26,7 @@ import * as Y from "yjs";
 import { randomId } from "./crypto.ts";
 import { isGlyph } from "./glyphs.ts";
 import { allLessons, getCurriculum, getProgress } from "./course.ts";
+import { hasMasteryCheck } from "./mastery.ts";
 import { createPage, ensureBuiltinType, findSystemPage, getPage, todayKey, trashPage } from "./model.ts";
 
 /** Transaction origin for every write made through this module. */
@@ -95,6 +96,8 @@ export interface Skill {
   glyph?: string;
   /** Its place in the built-in skill tree (shared/skill-catalog.ts), once started from there. */
   catalog?: string;
+  /** When it passed its mastery check (shared/mastery.ts): every lesson mastered, then one question from each, all right. */
+  masteredAt?: number;
 }
 
 export interface SkillArea {
@@ -449,6 +452,7 @@ export function normalizeSkill(raw: Partial<Skill> & { id: string }): Skill {
   if (typeof raw.topic === "string" && raw.topic && raw.topic !== raw.id) out.topic = raw.topic;
   if (isGlyph(raw.glyph)) out.glyph = raw.glyph;
   if (typeof raw.catalog === "string" && raw.catalog) out.catalog = raw.catalog.slice(0, 200);
+  if (Number(raw.masteredAt) > 0) out.masteredAt = Number(raw.masteredAt);
   return out;
 }
 
@@ -833,13 +837,16 @@ export function courseXp(doc: Y.Doc, courseId: string): CourseXp {
   out.title = (page.get("title") as string) || "";
   const curriculum = page.get("course") instanceof Y.Map ? getCurriculum(page) : null;
   if (!curriculum) return out;
+  let earned = 0;
   for (const { lesson } of allLessons(curriculum)) {
     out.total++;
-    const status = getProgress(page, lesson.id).status;
-    if (status === "mastered") out.mastered++;
-    else if (status === "skipped") out.skipped++;
+    const p = getProgress(page, lesson.id);
+    if (p.status === "mastered") out.mastered++;
+    else if (p.status === "skipped") out.skipped++;
+    // XP stays once earned, even while a lesson is back on the list to master again.
+    if (p.status === "mastered" || (p.masteredAt && p.status !== "skipped")) earned++;
   }
-  out.xp = out.mastered * LESSON_MASTERED_XP + out.skipped * LESSON_SKIPPED_XP;
+  out.xp = earned * LESSON_MASTERED_XP + out.skipped * LESSON_SKIPPED_XP;
   return out;
 }
 
@@ -1048,8 +1055,10 @@ export interface Requirement {
   have: number;
   /** A topic as prerequisite: every one of its parts must be learnt. */
   parts?: { done: number; total: number };
-  /** A skill with lessons as prerequisite: all of them must be done. */
+  /** A skill with lessons as prerequisite: all of them must be mastered… */
   lessons?: { done: number; total: number };
+  /** …and then its mastery check passed. */
+  check?: boolean;
 }
 
 /**
@@ -1090,7 +1099,8 @@ export function nextStepToward(doc: Y.Doc, skillId: string, stats = computeSkill
 /** "Mnemonics level 2 (now 1)", or "all of Arithmetic (3/5 learnt)". */
 export function requirementText(m: Requirement, opts: { now?: boolean } = {}): string {
   if (m.parts) return `all of ${m.name}${opts.now === false ? "" : ` (${m.parts.done}/${m.parts.total} learnt)`}`;
-  if (m.lessons) return `${m.name}${opts.now === false ? "" : ` (${m.lessons.done}/${m.lessons.total} lessons)`}`;
+  if (m.check) return `the mastery check for ${m.name}`;
+  if (m.lessons) return `${m.name}${opts.now === false ? "" : ` (${m.lessons.done}/${m.lessons.total} lessons mastered)`}`;
   return `${m.name} level ${m.need}${opts.now === false ? "" : ` (now ${m.have})`}`;
 }
 
@@ -1152,13 +1162,12 @@ export function computeSkillStats(doc: Y.Doc, now = Date.now(), skills = listSki
         if (tp.done < tp.total) missing.push({ parentId: p, name: parent.name, need: s.requiredLevel, have: pb.level, parts: tp });
         continue;
       }
-      // A prerequisite you learn with lessons is met once they're all done (or its goal is
-      // reached): the things you need to progress are learnt, not just started.
-      const lessons = parent.courseIds.map((c) => courseXp(doc, c)).filter((c) => c.total > 0);
-      if (lessons.length) {
-        const done = lessons.reduce((a, c) => a + c.mastered + c.skipped, 0);
-        const total = lessons.reduce((a, c) => a + c.total, 0);
-        if (done < total && !pb.goalReached) missing.push({ parentId: p, name: parent.name, need: s.requiredLevel, have: pb.level, lessons: { done, total } });
+      // A prerequisite you learn with lessons is met once it's mastered: every lesson (every
+      // aspect of each), then its mastery check. Mastered, not just started or finished.
+      const lessons = lessonsMastered(doc, parent);
+      if (lessons.total) {
+        if (lessons.done < lessons.total) missing.push({ parentId: p, name: parent.name, need: s.requiredLevel, have: pb.level, lessons });
+        else if (needsMasteryCheck(doc, parent, lessons)) missing.push({ parentId: p, name: parent.name, need: s.requiredLevel, have: pb.level, lessons, check: true });
       } else if (pb.level < s.requiredLevel) missing.push({ parentId: p, name: parent.name, need: s.requiredLevel, have: pb.level });
     }
     out.set(s.id, { ...b, unlocked: missing.length === 0, missing });
@@ -1416,15 +1425,28 @@ export function allParts(skills: Skill[], topicId: string): Skill[] {
 }
 
 /**
- * A skill counts as learnt when its goal is reached, or when every lesson of
- * its courses is done; a topic, when all its parts are.
+ * A skill with lessons counts as learnt once it's mastered: every lesson
+ * mastered (every aspect of it, see shared/mastery.ts) and its mastery check
+ * passed. A skill without lessons, when its goal is reached; a topic, when all
+ * its parts are learnt.
  */
 export function skillDone(doc: Y.Doc, skills: Skill[], skill: Skill, stats?: Map<string, Pick<SkillStats, "goalReached">>): boolean {
   const parts = partsOf(skills, skill.id);
   if (parts.length) return parts.every((p) => skillDone(doc, skills, p, stats));
-  if (stats?.get(skill.id)?.goalReached) return true;
+  const lessons = lessonsMastered(doc, skill);
+  if (lessons.total) return lessons.done >= lessons.total && !needsMasteryCheck(doc, skill, lessons);
+  return !!stats?.get(skill.id)?.goalReached;
+}
+
+/** How many of a skill's lessons are mastered (or known already), out of all of them. */
+export function lessonsMastered(doc: Y.Doc, skill: Skill): { done: number; total: number } {
   const courses = skill.courseIds.map((c) => courseXp(doc, c)).filter((c) => c.total > 0);
-  return courses.length > 0 && courses.every((c) => c.mastered + c.skipped >= c.total);
+  return { done: courses.reduce((a, c) => a + c.mastered + c.skipped, 0), total: courses.reduce((a, c) => a + c.total, 0) };
+}
+
+/** Every lesson is mastered, and the mastery check is all that's left. */
+export function needsMasteryCheck(doc: Y.Doc, skill: Skill, lessons = lessonsMastered(doc, skill)): boolean {
+  return lessons.total > 0 && lessons.done >= lessons.total && !skill.masteredAt && hasMasteryCheck(doc, skill.courseIds);
 }
 
 /** How much of a topic is learnt: its innermost skills (the ones with lessons), done out of total. */

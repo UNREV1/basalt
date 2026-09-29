@@ -564,7 +564,7 @@ test("what you need to progress: a prerequisite with lessons must be learnt, and
 
   let st = computeSkillStats(doc);
   assert.equal(st.get(ratios.id)!.unlocked, false);
-  assert.equal(requirementText(st.get(ratios.id)!.missing[0]), "Fractions (0/2 lessons)");
+  assert.equal(requirementText(st.get(ratios.id)!.missing[0]), "Fractions (0/2 lessons mastered)");
   assert.equal(nextStepToward(doc, rates.id)?.id, fractions.id, "the way to Rates starts with Fractions");
 
   // One lesson makes level 2, but half a skill isn't learnt: Ratios stays locked.

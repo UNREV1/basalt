@@ -251,6 +251,41 @@
   align-self: flex-start;
   margin-top: 2px;
 }
+/* The mastery check at the end of the path: every lesson mastered, then one question from each. */
+.cp-check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px auto 0;
+  max-width: 520px;
+  padding: 12px 14px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  color: var(--text-muted);
+}
+.cp-check > .grow {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.cp-check strong {
+  color: var(--text);
+}
+.cp-check span {
+  font-size: 13px;
+}
+.cp-check.due {
+  border-style: solid;
+  border-color: var(--c);
+  color: var(--text);
+}
+.cp-check.due > svg,
+.cp-check.done > svg {
+  color: var(--c);
+}
+.cp-check.done {
+  border-style: solid;
+}
 .cp-end {
   display: grid;
   justify-items: center;

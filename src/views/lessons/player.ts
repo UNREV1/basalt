@@ -3,7 +3,11 @@
 
 import { useSyncExternalStore } from "react";
 
-export type PlayerTarget = { mode: "lesson"; courseId: string; lessonId: string; nonce: number } | { mode: "review"; nonce: number };
+export type PlayerTarget =
+  | { mode: "lesson"; courseId: string; lessonId: string; nonce: number }
+  | { mode: "review"; nonce: number }
+  /** A skill's mastery check: a question from every lesson (see shared/mastery.ts). */
+  | { mode: "check"; skillId: string; nonce: number };
 
 let current: PlayerTarget | null = null;
 let nonce = 0;
@@ -22,6 +26,11 @@ export function usePlayer(): PlayerTarget | null {
 
 export function openLesson(courseId: string, lessonId: string) {
   current = { mode: "lesson", courseId, lessonId, nonce: ++nonce };
+  emit();
+}
+
+export function openCheck(skillId: string) {
+  current = { mode: "check", skillId, nonce: ++nonce };
   emit();
 }
 

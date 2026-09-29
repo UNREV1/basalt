@@ -29,6 +29,7 @@ import {
   nextStepToward,
   partsOf,
   requirementText,
+  lessonsMastered,
   skillDone,
   topicProgress,
   type Skill,
@@ -46,6 +47,8 @@ import { SkillGlyph } from "./SkillGlyph.tsx";
 import { AskClaudeFallback } from "../lessons/ClaudeStatus.tsx";
 import { planSkillRequest } from "../lessons/plan.ts";
 import { planSkillStart } from "../lessons/start.ts";
+import { openCheck } from "../lessons/player.ts";
+import { hasMasteryCheck } from "../../../shared/mastery.ts";
 
 const SOURCE_LABEL: Record<XpSource, string> = {
   practice: "Practice",
@@ -255,6 +258,9 @@ function LearnSection({
     case "course-page":
       primary = go("Open the course", undefined, "open");
       break;
+    case "check":
+      primary = go("Take the mastery check", <>Every lesson mastered. One question from each of them: get every one right to master {skill.name} and move on.</>, "star");
+      break;
     case "done":
       primary = <p className="sk-learn-done">✓ You've learnt all of {skill.name}.</p>;
       break;
@@ -286,9 +292,18 @@ function LearnSection({
   const leaf = !parts.length;
   const learnt = skillDone(ws.doc, data.skills, skill, data.stats);
   const open = data.stats.get(skill.id)?.unlocked !== false;
-  // Testing out of what you already know: only what's open to you, like an RPG.
+  // Testing out of what you already know: only what's open to you, like an RPG. A skill
+  // with lessons proves it on its mastery check (pass it, and every lesson counts as
+  // known); one without, by counting its goal as reached.
+  const leaves = leaf ? [skill] : allParts(data.skills, skill.id).filter((p) => !hasParts(p));
+  const withLessons = (p: Skill) => lessonsMastered(ws.doc, p).total > 0;
+  const testOut = leaf && withLessons(skill) && hasMasteryCheck(ws.doc, skill.courseIds);
+  const canKnow = testOut || (!leaves.some(withLessons) && leaves.length > 0);
   const knowIt = () => {
-    const leaves = leaf ? [skill] : allParts(data.skills, skill.id).filter((p) => !hasParts(p));
+    if (testOut) {
+      openCheck(skill.id);
+      return;
+    }
     ws.doc.transact(() => {
       for (const p of leaves) if (!skillDone(ws.doc, data.skills, p, data.stats)) updateSkill(ws.doc, p.id, { goalLevel: Math.max(1, data.stats.get(p.id)?.level ?? 1) });
     });
@@ -298,9 +313,14 @@ function LearnSection({
       title={tp ? `Learn · ${tp.done}/${tp.total} learnt` : "Learn"}
       aside={
         open &&
-        !learnt && (
-          <button className="btn btn-ghost btn-sm" title="Count it as learnt: what comes after it unlocks" onClick={knowIt}>
-            {leaf ? "I know this already" : "I know all of this"}
+        !learnt &&
+        canKnow && (
+          <button
+            className="btn btn-ghost btn-sm"
+            title={testOut ? "Prove it on the mastery check: get every question right and it counts as learnt" : "Count it as learnt: what comes after it unlocks"}
+            onClick={knowIt}
+          >
+            {testOut ? "I know this: test out" : leaf ? "I know this already" : "I know all of this"}
           </button>
         )
       }

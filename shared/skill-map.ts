@@ -41,6 +41,8 @@ export interface MapEntry {
   children: string[];
   /** What has to be learnt first (map ids): the catalog's and your own prerequisites. */
   needs: string[];
+  /** Related skills in other trees (map ids): linked, not required. */
+  related: string[];
   /** Its general topic's name: the path it belongs to. */
   branch?: string;
   locked: boolean;
@@ -114,6 +116,7 @@ export function buildSkillMap(skills: Skill[], state: (s: Skill) => SkillState):
       parent: e.parent ? byKey.get(e.parent) : undefined,
       children: [],
       needs,
+      related: e.related.map((k) => byKey.get(k)!),
       branch: field.name,
       locked: false,
       done: false,
@@ -131,6 +134,7 @@ export function buildSkillMap(skills: Skill[], state: (s: Skill) => SkillState):
       parent: s.topic && known.has(s.topic) ? s.topic : undefined,
       children: [],
       needs: s.parents.filter((p) => known.has(p)),
+      related: [],
       branch: s.branch,
       locked: false,
       done: false,
@@ -186,17 +190,123 @@ export function entryGlyph(e: Pick<MapEntry, "name" | "ability" | "cat" | "real"
   return GLYPHS[glyphFor({ name: field.name, category: e.ability })];
 }
 
-/** The first thing to learn inside a skill: its first part (in order) that isn't learnt yet, or itself. */
-export function nextLeaf(map: SkillMap, id: string, seen = new Set<string>()): MapEntry | undefined {
-  const e = map.byId.get(id);
-  if (!e || seen.has(id)) return undefined;
-  seen.add(id);
-  if (!e.children.length) return e.done ? undefined : e;
-  for (const c of e.children) {
-    const hit = nextLeaf(map, c, seen);
-    if (hit) return hit;
+/**
+ * The first thing to learn inside a skill: its first step (in order) that's open
+ * and not learnt yet; failing that, the first one not learnt; or itself.
+ */
+export function nextLeaf(map: SkillMap, id: string): MapEntry | undefined {
+  const leaves: MapEntry[] = [];
+  const seen = new Set<string>();
+  const walk = (x: string) => {
+    const e = map.byId.get(x);
+    if (!e || seen.has(x)) return;
+    seen.add(x);
+    if (!e.children.length) {
+      if (!e.done) leaves.push(e);
+      return;
+    }
+    e.children.forEach(walk);
+  };
+  walk(id);
+  return leaves.find((l) => !l.locked) ?? leaves[0];
+}
+
+// ---- search --------------------------------------------------------------------------
+
+/** Everyday words for what the tree calls something else. */
+const SYNONYMS: Record<string, string[]> = {
+  diet: ["nutrition", "diets", "eating"],
+  diets: ["nutrition", "diet"],
+  food: ["nutrition", "cooking", "eating"],
+  eating: ["nutrition", "diet"],
+  weight: ["weight management", "nutrition"],
+  "weight loss": ["weight management", "losing fat"],
+  fat: ["losing fat", "weight management"],
+  health: ["health", "nutrition", "vitality", "medicine", "healthy"],
+  healthy: ["health", "nutrition", "vitality"],
+  fitness: ["athletics", "calisthenics", "endurance", "strength"],
+  gym: ["athletics", "strength training", "barbell"],
+  workout: ["athletics", "calisthenics", "strength training"],
+  exercise: ["athletics", "calisthenics", "endurance"],
+  running: ["running", "endurance"],
+  sleep: ["vitality", "sleep"],
+  math: ["mathematics"],
+  maths: ["mathematics"],
+  code: ["programming", "computer science"],
+  coding: ["programming", "computer science"],
+  software: ["programming", "software development"],
+  computer: ["computer science", "programming"],
+  money: ["personal finance", "economics", "investing"],
+  finance: ["personal finance", "finance"],
+  business: ["entrepreneurship", "leadership", "economics"],
+  science: ["natural sciences", "formal sciences", "physics", "chemistry", "nature"],
+  biology: ["nature"],
+  art: ["visual arts", "drawing", "painting"],
+  music: ["music making", "musical instrument", "music theory"],
+  guitar: ["musical instrument"],
+  piano: ["musical instrument"],
+  language: ["languages"],
+  speaking: ["public speaking", "performance"],
+  mind: ["mind", "psychology", "perception"],
+  meditation: ["perception", "meditation"],
+  stress: ["stress resilience"],
+  focus: ["concentration"],
+  fighting: ["combat", "martial arts", "boxing"],
+  cook: ["cooking"],
+  garden: ["gardening"],
+  pets: ["animal handling"],
+  history: ["history"],
+};
+
+export interface SearchHit {
+  entry: MapEntry;
+  score: number;
+  /** Where it is: "Formal sciences › Mathematics". */
+  where: string;
+}
+
+/**
+ * Find skills: by name first, then by where they are (searching "nutrition"
+ * finds everything inside Nutrition), their description, and everyday words
+ * ("diet" finds Nutrition). The broadest matches come first.
+ */
+export function searchMap(map: SkillMap, query: string, limit = Infinity): SearchHit[] {
+  const q = query.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const terms = [q, ...(SYNONYMS[q] ?? []), ...q.split(/\s+/).flatMap((w) => (w !== q ? (SYNONYMS[w] ?? []) : []))];
+  const tierBonus = (e: MapEntry) =>
+    e.tier === "field" ? 9 : e.tier === "general" ? 8 : e.tier === "sub" ? 6 : e.tier === "advanced" ? 5 : e.tier === "detail" ? 2 : 4;
+  const hits: SearchHit[] = [];
+  for (const e of map.entries) {
+    const name = e.name.toLowerCase();
+    let best = 0;
+    for (const [i, t] of terms.entries()) {
+      const syn = i > 0 ? 0.8 : 1;
+      let sc = 0;
+      if (name === t) sc = 100;
+      else if (name.startsWith(t)) sc = 80;
+      else if (new RegExp(`\\b${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`).test(name)) sc = 70;
+      else if (name.includes(t)) sc = 55;
+      else if (e.description.toLowerCase().includes(t)) sc = 35;
+      else {
+        // Inside something that matches: "nutrition" finds its diets and steps too.
+        const path = trail(map, e.id).slice(0, -1);
+        if (path.some((p) => p.name.toLowerCase().includes(t))) sc = 25;
+      }
+      best = Math.max(best, sc * syn);
+    }
+    if (best > 0) {
+      hits.push({
+        entry: e,
+        score: best + tierBonus(e),
+        where: trail(map, e.id)
+          .slice(0, -1)
+          .map((p) => p.name)
+          .join(" › "),
+      });
+    }
   }
-  return undefined;
+  return hits.sort((a, b) => b.score - a.score || a.entry.name.length - b.entry.name.length).slice(0, limit);
 }
 
 /** For a locked skill: the next thing you can learn on the way to it. */

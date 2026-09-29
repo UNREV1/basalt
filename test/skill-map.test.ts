@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import * as Y from "yjs";
 import { CATALOG, CATALOG_BY_KEY } from "../shared/skill-catalog.ts";
-import { adoptPlanned, isPlanned, missingFor, nextLeaf, nextStep, skillMapOf, startTreeOver, trail } from "../shared/skill-map.ts";
+import { adoptPlanned, isPlanned, missingFor, nextLeaf, nextStep, searchMap, skillMapOf, startTreeOver, trail } from "../shared/skill-map.ts";
 import { createSkill, getSkill, listSkills, setParents, updateSkill } from "../shared/skills.ts";
 
 const key = (name: string, field?: string) => {
@@ -11,7 +11,7 @@ const key = (name: string, field?: string) => {
   return hit.key;
 };
 
-test("catalog: general topics > sub-topics > details > advanced, every step in order, needs across trees", () => {
+test("catalog: areas > fields > topics (branching) > steps > advanced, every step in order, needs across trees", () => {
   const keys = new Set<string>();
   for (const e of CATALOG) {
     assert.ok(!keys.has(e.key), `unique key ${e.key}`);
@@ -20,13 +20,23 @@ test("catalog: general topics > sub-topics > details > advanced, every step in o
     if (e.parent) assert.ok(CATALOG_BY_KEY.has(e.parent));
     assert.ok(["str", "dex", "con", "int", "wis", "cha"].includes(e.ability), `${e.name} has an ability`);
   }
-  // Every ability has general topics, and each general topic has sub-topics with details.
+  // Every ability has areas; each area has fields; each field has topics with steps.
   for (const a of ["str", "dex", "con", "int", "wis", "cha"]) assert.ok(CATALOG.some((e) => e.tier === "general" && e.ability === a), a);
-  for (const g of CATALOG.filter((e) => e.tier === "general")) {
-    const subs = CATALOG.filter((e) => e.parent === g.key && e.tier === "sub");
-    assert.ok(subs.length >= 2, `${g.name} has sub-topics`);
-    for (const s of subs) assert.ok(CATALOG.filter((e) => e.parent === s.key).length >= 3, `${s.name} has details`);
+  for (const g of CATALOG.filter((e) => e.tier === "general")) assert.ok(CATALOG.some((e) => e.parent === g.key && e.tier === "field"), `${g.name} has fields`);
+  for (const f of CATALOG.filter((e) => e.tier === "field")) {
+    assert.equal(CATALOG_BY_KEY.get(f.parent!)!.tier, "general");
+    const subs = CATALOG.filter((e) => e.parent === f.key && e.tier === "sub");
+    assert.ok(subs.length >= 2, `${f.name} has topics`);
+    for (const s of subs) assert.ok(CATALOG.filter((e) => e.parent === s.key).length >= 3, `${s.name} has steps`);
   }
+  assert.equal(CATALOG_BY_KEY.get(CATALOG_BY_KEY.get(key("Mathematics"))!.parent!)!.name, "Formal sciences");
+  // Topics branch and join: Pre-algebra leads to both Algebra and Geometry; Trigonometry needs both.
+  assert.deepEqual(CATALOG_BY_KEY.get(key("Algebra"))!.needs, [key("Pre-algebra")]);
+  assert.deepEqual(CATALOG_BY_KEY.get(key("Geometry"))!.needs, [key("Pre-algebra")]);
+  assert.deepEqual(CATALOG_BY_KEY.get(key("Trigonometry"))!.needs, [key("Algebra"), key("Geometry")]);
+  // Related skills in other trees are linked, without locking.
+  assert.ok(CATALOG_BY_KEY.get(key("Baking and pastry"))!.related.includes(key("Reactions", "Chemistry")));
+  assert.ok(CATALOG.filter((e) => e.needs.some((n) => CATALOG_BY_KEY.get(n)!.field !== e.field)).length > 80, "plenty of links across trees");
   // No skipping: each detail needs the one before it.
   const arith = CATALOG.filter((e) => e.parent === key("Arithmetic"));
   assert.deepEqual(
@@ -69,7 +79,7 @@ test("skill map: the built-in tree is planned on an empty map, with nothing skip
   assert.equal(nextStep(map, id("Algebra"))!.name, "Counting and place value");
   assert.deepEqual(
     trail(map, id("Linear equations")).map((e) => e.name),
-    ["Mathematics", "Algebra", "Linear equations"],
+    ["Formal sciences", "Mathematics", "Algebra", "Linear equations"],
   );
   const sd = id("Software development");
   assert.equal(map.byId.get(sd)!.locked, true);
@@ -88,12 +98,13 @@ test("skill map: your skills take their place in the tree, and starting a planne
   assert.equal(sd.cat?.key, key("Software development"));
   assert.equal(sd.locked, true);
 
-  // Starting "Counting and place value" makes Mathematics, Arithmetic and its five steps yours, in order.
+  // Starting "Counting and place value" makes Formal sciences, Mathematics, Arithmetic and its five steps yours, in order.
   const first = adoptPlanned(doc, map, map.byKey.get(key("Counting and place value"))!)!;
   const skills = listSkills(doc);
   const byName = (n: string) => skills.find((s) => s.name === n)!;
   assert.equal(getSkill(doc, first)!.name, "Counting and place value");
   assert.equal(byName("Arithmetic").topic, byName("Mathematics").id);
+  assert.equal(byName("Mathematics").topic, byName("Formal sciences").id);
   assert.equal(byName("Fractions").topic, byName("Arithmetic").id);
   assert.deepEqual(byName("Fractions").parents, [byName("Multiplication and division").id]);
   assert.equal(byName("Fractions").catalog, key("Fractions"));
@@ -125,7 +136,20 @@ test("start the tree over: skills in the tree keep their progress and take their
   assert.deepEqual(getSkill(doc, climbing.id)!.parents, []);
   const map = skillMapOf(doc);
   const lead = map.byId.get(leadership.id)!;
-  assert.equal(lead.tier, "advanced");
-  assert.equal(lead.parent, map.byKey.get(key("Persuasion")));
-  assert.equal(lead.locked, true);
+  assert.equal(lead.tier, "field");
+  assert.equal(map.byId.get(lead.parent!)!.name, "Influence");
+  assert.equal(lead.locked, false);
+});
+
+test("search: names, what's inside a match, and everyday words, broadest first", () => {
+  const map = skillMapOf(new Y.Doc());
+  const first = (q: string) => searchMap(map, q, 1)[0]?.entry.name;
+  assert.equal(first("math"), "Mathematics");
+  assert.equal(first("diet"), "Nutrition");
+  assert.equal(first("coding"), "Programming");
+  assert.equal(first("software development"), "Software development");
+  const nutrition = searchMap(map, "nutrition").map((h) => h.entry.name);
+  assert.ok(nutrition.includes("Mediterranean diet"), "inside a match");
+  assert.equal(searchMap(map, "diet", 3)[1].where, "Health › Nutrition");
+  assert.deepEqual(searchMap(map, "x"), []);
 });

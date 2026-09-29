@@ -9,7 +9,7 @@ import { Icon } from "../../components/ui.tsx";
 import { SkillGlyph } from "./SkillGlyph.tsx";
 import type { SkillTreeData } from "./useSkillData.ts";
 
-const TIER: Record<string, string> = { general: "General topic", sub: "Sub-topic", detail: "Step", advanced: "Advanced skill" };
+const TIER: Record<string, string> = { general: "Area", field: "Field", sub: "Topic", detail: "Step", advanced: "Advanced skill" };
 
 function Row({ e, color, onSelect }: { e: MapEntry; color: string; onSelect: (id: string) => void }) {
   return (
@@ -52,6 +52,9 @@ export function PlannedPanel({
   const inside = e.children.map((c) => map.byId.get(c)!).filter(Boolean);
   const needs = e.needs.map((n) => map.byId.get(n)).filter((n): n is MapEntry => !!n);
   const leadsTo = map.entries.filter((x) => x.needs.includes(id));
+  const related = [...e.related, ...map.entries.filter((x) => x.related.includes(id)).map((x) => x.id)]
+    .map((r) => map.byId.get(r))
+    .filter((r): r is MapEntry => !!r);
   const area = areaOf(e);
 
   return (
@@ -115,7 +118,7 @@ export function PlannedPanel({
         {inside.length > 0 && (
           <section className="sk-section">
             <header className="sk-section-head">
-              <h3>{e.tier === "general" ? "Sub-topics, in order" : "Steps, in order"}</h3>
+              <h3>{e.tier === "general" ? "Fields" : e.tier === "field" ? "Topics, in order" : "Steps, in order"}</h3>
             </header>
             <div className="sk-plan-list">
               {inside.map((x) => (
@@ -132,6 +135,19 @@ export function PlannedPanel({
             </header>
             <div className="sk-plan-list">
               {needs.map((x) => (
+                <Row key={x.id} e={x} color={colorOf(x)} onSelect={onSelect} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {related.length > 0 && (
+          <section className="sk-section">
+            <header className="sk-section-head">
+              <h3>Related</h3>
+            </header>
+            <div className="sk-plan-list">
+              {related.map((x) => (
                 <Row key={x.id} e={x} color={colorOf(x)} onSelect={onSelect} />
               ))}
             </div>

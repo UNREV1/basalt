@@ -21,7 +21,9 @@ import { GenerateTreeModal } from "./GenerateTree.tsx";
 import { AddSkillModal, AreasModal, applyTemplate, TemplateGrid, TemplatesModal } from "./SkillDialogs.tsx";
 import { SkillPanel } from "./SkillPanel.tsx";
 import { PlannedPanel } from "./PlannedPanel.tsx";
-import { startTreeOver } from "../../../shared/skill-map.ts";
+import { searchMap, startTreeOver } from "../../../shared/skill-map.ts";
+
+const TIER_NAME: Record<string, string> = { general: "Area", field: "Field", sub: "Topic", detail: "Step", advanced: "Advanced" };
 import { fmt, plural, useSkillTree } from "./useSkillData.ts";
 import type { SkillTemplate } from "./templates.ts";
 import { takeSkillFocus } from "./focus.ts";
@@ -156,17 +158,22 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
     window.setTimeout(() => setEffects((fx) => fx.filter((f) => !keys.has(f.key))), 1500);
   }, [data.stats]);
 
+  // Search: names first, then what's inside a match ("nutrition" lights up its diets), descriptions and everyday words.
+  const hits = useMemo(() => searchMap(data.map, search).filter((h) => !areaFilter || h.entry.ability === areaFilter), [search, areaFilter, data.map]);
+  const [searchOpen, setSearchOpen] = useState(false);
   const matches = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = search.trim();
     if (!q && !areaFilter) return null;
+    if (q.length >= 2) return new Set(hits.map((h) => h.entry.id));
     const set = new Set<string>();
-    for (const e of data.map.entries) {
-      if (areaFilter && e.ability !== areaFilter) continue;
-      if (q && !`${e.name} ${e.description}`.toLowerCase().includes(q)) continue;
-      set.add(e.id);
-    }
+    for (const e of data.map.entries) if (!areaFilter || e.ability === areaFilter) set.add(e.id);
     return set;
-  }, [search, areaFilter, data.map]);
+  }, [search, areaFilter, data.map, hits]);
+  const goTo = (id: string) => {
+    setSelectedId(id);
+    setSearchOpen(false);
+    apiRef.current?.centerOn(id);
+  };
 
   const side = !!selectedId || charOpen;
   const center = useMemo(
@@ -261,27 +268,50 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
             <label className="sk-search">
               <Icon name="search" size={14} />
               <input
-                placeholder="Find a skill"
+                placeholder="Find a skill, a field, anything"
                 aria-label="Find a skill"
+                role="combobox"
+                aria-expanded={searchOpen && hits.length > 0}
+                aria-controls="sk-search-results"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setSearchOpen(true);
+                }}
+                onFocus={() => setSearchOpen(true)}
+                onBlur={() => window.setTimeout(() => setSearchOpen(false), 150)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && matches?.size) {
-                    // The most general match first: "math" finds Mathematics before its steps.
-                    const rank = (t?: string) => (t === "general" ? 0 : t === "sub" || t === "advanced" ? 1 : t === "detail" ? 2 : 1);
-                    const first = data.map.entries.filter((x) => matches.has(x.id)).sort((a, b) => rank(a.tier) - rank(b.tier))[0];
-                    if (first) {
-                      setSelectedId(first.id);
-                      apiRef.current?.centerOn(first.id);
-                    }
-                  }
-                  if (e.key === "Escape") setSearch("");
+                  // The best match first: "math" finds Mathematics before its steps.
+                  if (e.key === "Enter" && hits[0]) goTo(hits[0].entry.id);
+                  if (e.key === "Escape") (setSearch(""), setSearchOpen(false));
                 }}
               />
               {search && (
                 <button className="sk-search-clear" aria-label="Clear search" onClick={() => setSearch("")}>
                   <Icon name="x" size={12} />
                 </button>
+              )}
+              {searchOpen && search.trim().length >= 2 && (
+                <div className="sk-search-results" id="sk-search-results" role="listbox" aria-label="Matches">
+                  {hits.length === 0 && <div className="sk-search-empty">Nothing in the tree matches “{search.trim()}”.</div>}
+                  {hits.slice(0, 8).map((h) => (
+                    <button
+                      key={h.entry.id}
+                      role="option"
+                      aria-selected={false}
+                      className="sk-search-row"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => goTo(h.entry.id)}
+                    >
+                      <span className="grow" style={{ minWidth: 0 }}>
+                        <span className="sk-search-name ellipsis">{h.entry.name}</span>
+                        <span className="sk-search-where ellipsis">{h.where || TIER_NAME[h.entry.tier ?? ""] || "Your skill"}</span>
+                      </span>
+                      <span className="sk-search-tier">{TIER_NAME[h.entry.tier ?? ""] ?? "Skill"}</span>
+                    </button>
+                  ))}
+                  {hits.length > 8 && <div className="sk-search-more">{hits.length - 8} more lit up on the map</div>}
+                </div>
               )}
             </label>
             <select className="select sk-area-filter" aria-label="Filter by ability" value={areaFilter} onChange={(e) => (e.target.value ? showArea(e.target.value) : setAreaFilter(""))}>

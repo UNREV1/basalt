@@ -40,7 +40,7 @@ import { QuestCheck } from "../skills/Overview.tsx";
 import { SkillGlyph } from "../skills/SkillGlyph.tsx";
 import { focusSkill } from "../skills/focus.ts";
 import { useSkillTree } from "../skills/useSkillData.ts";
-import { trail } from "../../../shared/skill-map.ts";
+import { searchMap, trail } from "../../../shared/skill-map.ts";
 import { AskClaudeFallback, ClaudeJobLine } from "./ClaudeStatus.tsx";
 import { ABILITY_ORDER, LIBRARY } from "./library.ts";
 import { branchRequest, canRunClaude, runRequest } from "./plan.ts";
@@ -321,10 +321,9 @@ function AskCard({ ws }: { ws: Workspace }) {
       navigate({ name: "view", wsId: ws.id, view: "skills" });
     },
   });
-  // It's probably in the skill tree already: the most general matches first.
+  // It's probably in the skill tree already: the best matches first.
   const q = goal.trim().toLowerCase();
-  const rank = (t?: string) => (t === "general" ? 0 : t === "sub" || t === "advanced" ? 1 : 2);
-  const found = q.length >= 2 ? tree.entries.filter((e) => e.name.toLowerCase().includes(q)).sort((a, b) => rank(a.tier) - rank(b.tier) || a.name.length - b.name.length).slice(0, 5) : [];
+  const found = searchMap(tree, goal, 5).map((h) => h.entry);
   const go = () => {
     const exact = found.find((e) => e.name.toLowerCase() === q);
     if (exact) {
@@ -371,7 +370,7 @@ function AskCard({ ws }: { ws: Workspace }) {
                 <span className="grow" style={{ minWidth: 0 }}>
                   <span className="lh-found-name ellipsis">{e.name}</span>
                   <span className="small muted ellipsis">
-                    {where || "General topic"}
+                    {where || (e.tier === "general" ? "Area" : "Your skill")}
                     {e.locked ? " · locked" : e.done ? " · learnt" : ""}
                   </span>
                 </span>

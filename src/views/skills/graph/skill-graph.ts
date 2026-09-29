@@ -56,15 +56,15 @@ export interface SGNode {
   glyph?: string;
   /** In the built-in tree but not started yet. */
   planned?: boolean;
-  /** Its level in the built-in tree: general topic › sub-topic › detail, or advanced. */
-  tier?: "general" | "sub" | "detail" | "advanced";
+  /** Its level in the built-in tree: area › field › topic › step, or advanced. */
+  tier?: "general" | "field" | "sub" | "detail" | "advanced";
 }
 
 export interface SGLink {
   source: string;
   target: string;
-  /** prereq: needed first; part: a topic → one of its parts; course: skill → its course. */
-  kind: "prereq" | "part" | "course";
+  /** prereq: needed first; part: a topic → one of its parts; course: skill → its course; related: linked, not needed. */
+  kind: "prereq" | "part" | "course" | "related";
   /** Prerequisite reached its required level (a part: its topic is unlocked). */
   met: boolean;
   /** Shapes the layout and the highlighted path, but isn't drawn. */
@@ -126,9 +126,10 @@ const radius = (n: SGNode) => {
   if (n.kind === "course") return 9;
   const grow = (max: number, per: number) => (n.planned ? 0 : Math.min(max, Math.sqrt(Math.max(1, n.level)) * per));
   // The built-in tree: general topics biggest, then sub-topics and advanced skills, then the details between them.
-  if (n.tier === "general") return 22 + grow(8, 1.5);
-  if (n.tier === "sub" || n.tier === "advanced") return 15 + grow(6, 1.2);
-  if (n.tier === "detail") return 8.5 + grow(6, 1.2);
+  if (n.tier === "general") return 24 + grow(8, 1.5);
+  if (n.tier === "field") return 19 + grow(8, 1.4);
+  if (n.tier === "sub" || n.tier === "advanced") return 14 + grow(6, 1.2);
+  if (n.tier === "detail") return 8 + grow(6, 1.2);
   return n.learnt ? 18 + Math.min(14, Math.sqrt(n.learnt.total) * 3) : 12 + Math.min(16, Math.sqrt(Math.max(1, n.level)) * 3.2);
 };
 /** Optional node fields, cleared before each update so a removed one doesn't linger. */
@@ -177,6 +178,8 @@ export class SkillGraph {
   private edgeSet = new Set<string>();
   /** Nodes that just arrived: they start at their place instead of flying in. */
   private fresh = new Set<string>();
+  /** Clusters: each group's circle and name (areas, and the fields in them), drawn behind the skills. */
+  private groups: { x: number; y: number; r: number; label: string; color: string; level: number }[] = [];
   /** The pointer is over you, in the middle of the radial map. */
   private hoverCenter = false;
   private abilityOrder: string[] = [];
@@ -295,7 +298,7 @@ export class SkillGraph {
     this.needs = new Map();
     for (const l of links) if (l.kind === "prereq") this.needs.set(l.target, [...(this.needs.get(l.target) ?? []), l.source]);
     for (const l of links) {
-      if (l.kind === "course") continue;
+      if (l.kind === "course" || l.kind === "related") continue;
       this.children.set(l.source, [...(this.children.get(l.source) ?? []), l.target]);
       this.parents.set(l.target, [...(this.parents.get(l.target) ?? []), l.source]);
     }
@@ -385,117 +388,188 @@ export class SkillGraph {
   private computeSlots(visible: Node[]) {
     this.slots = new Map();
     this.guides = [];
-    const layout = this.opts.layout;
     this.branchEdges = [];
     this.edgeSet = new Set();
-    if (layout === "clusters") return;
+    this.groups = [];
     this.branchOf = new Map();
+    const layout = this.opts.layout;
     const hubs = this.abilityOrder.filter((a) => visible.some((n) => n.kind === "ability" && n.id === a));
     if (!hubs.length) return;
     const byId = new Map(visible.map((n) => [n.id, n]));
     if (layout === "radial") return this.radialSlots(visible, byId, hubs);
+    if (layout === "tree") return this.treeSlots(visible, byId, hubs);
+    return this.clusterSlots(visible, byId, hubs);
+  }
 
-    // Subjects: skills made of parts that aren't parts themselves (Mathematics).
-    // Each gets a block: a lane per topic, the topic on top, its parts below.
-    const subjects = visible.filter((n) => n.kind === "skill" && !this.partOf.has(n.id) && this.partsOf(n.id, byId).length > 0);
-    const inBlock = new Map<string, number>(); // node → level under its subject (subject 0, topic 1, part 2…)
-    const walk = (id: string, level: number) => {
-      inBlock.set(id, level);
-      for (const p of this.partsOf(id, byId)) if (!inBlock.has(p.id)) walk(p.id, level + 1);
-    };
-    for (const s of subjects) walk(s.id, 0);
-    const depthOf = (n: Node) => n.depth;
+  /** What a skill is directly part of, if that's on the map. */
+  private containerOf(id: string, byId: Map<string, Node>): string | undefined {
+    const c = this.partOf.get(id);
+    return c && byId.get(c)?.kind === "skill" ? c : undefined;
+  }
 
-    const tiers = new Map<string, Node[][]>(hubs.map((a) => [a, []]));
-    for (const n of visible) {
-      if (n.kind !== "skill" || (layout === "tree" && inBlock.has(n.id))) continue;
-      const rows = tiers.get(n.ability);
-      if (rows) (rows[depthOf(n)] ??= []).push(n);
+  /**
+   * Tree: an outline read left to right, from the general to the detailed: each
+   * ability, its areas, their fields, and every topic on a row of its own, with
+   * the steps you learn in it strung after it in order. It scrolls down like a
+   * table of contents.
+   */
+  private treeSlots(visible: Node[], byId: Map<string, Node>, hubs: string[]) {
+    const skills = visible.filter((n) => n.kind === "skill");
+    const kids = new Map<string, Node[]>();
+    const top = new Map<string, Node[]>();
+    for (const n of skills) {
+      const c = this.containerOf(n.id, byId);
+      if (c) kids.set(c, [...(kids.get(c) ?? []), n]);
+      else top.set(n.ability, [...(top.get(n.ability) ?? []), n]);
     }
-    // Order each tier by where its prerequisites sit (0..1 across their ability),
-    // tier by tier so every parent is ranked before its children.
-    const maxDepth = Math.max(0, ...[...tiers.values()].map((rows) => rows.length - 1));
-    const rank = new Map<string, number>();
-    const key = (n: Node) => {
-      const ps = (this.parents.get(n.id) ?? []).map((id) => rank.get(id)).filter((v): v is number => v !== undefined);
-      return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : 0.5;
+    const hasKids = (id: string) => (kids.get(id)?.length ?? 0) > 0;
+    // A topic's steps are the parts with nothing inside them; they string out after it.
+    const isStep = (n: Node) => !!this.containerOf(n.id, byId) && !hasKids(n.id) && n.tier !== "advanced" && n.tier !== "sub" && n.tier !== "field";
+    const COL = 290;
+    const ROW = 34;
+    const BEAD = 26;
+    const FIRST_BEAD = 230;
+    let row = 0;
+    const put = (n: Node, depth: number): number => {
+      const inside = kids.get(n.id) ?? [];
+      const steps = inside.filter(isStep);
+      const rest = inside.filter((c) => !isStep(c));
+      const x = depth * COL;
+      if (!rest.length) {
+        // A row of its own, its steps after it like beads on a string.
+        const y = row++ * ROW;
+        this.slots.set(n.id, { x, y });
+        steps.forEach((st, i) => {
+          this.slots.set(st.id, { x: x + FIRST_BEAD + i * BEAD, y });
+          const prev = i ? steps[i - 1].id : n.id;
+          this.branchEdges.push([prev, st.id]);
+          this.edgeSet.add(`${prev}>${st.id}`);
+        });
+        return y;
+      }
+      // Its parts below it, each on its own rows; it sits level with the first of them.
+      const ys = rest.map((c) => {
+        this.branchEdges.push([n.id, c.id]);
+        this.edgeSet.add(`${n.id}>${c.id}`);
+        return put(c, depth + 1);
+      });
+      const y = ys[0];
+      this.slots.set(n.id, { x, y });
+      if (steps.length) {
+        // (A topic with parts of both kinds: its loose steps get a row of their own.)
+        const sy = row++ * ROW;
+        steps.forEach((st, i) => {
+          this.slots.set(st.id, { x: x + COL + i * BEAD, y: sy });
+          this.branchEdges.push([i ? steps[i - 1].id : n.id, st.id]);
+          this.edgeSet.add(`${i ? steps[i - 1].id : n.id}>${st.id}`);
+        });
+      }
+      return y;
     };
-    for (let d = 0; d <= maxDepth; d++) {
-      for (const rows of tiers.values()) {
-        const row = rows[d];
-        if (!row) continue;
-        row.sort((a, b) => key(a) - key(b) || b.level - a.level || a.label.localeCompare(b.label));
-        row.forEach((n, i) => rank.set(n.id, row.length > 1 ? i / (row.length - 1) : 0.5));
-      }
+    for (const h of hubs) {
+      const list = top.get(h) ?? [];
+      const start = row;
+      const ys = list.map((n) => {
+        this.branchEdges.push([h, n.id]);
+        this.edgeSet.add(`${h}>${n.id}`);
+        return put(n, 1);
+      });
+      this.slots.set(h, { x: 0, y: ys[0] ?? start * ROW });
+      if (!list.length) row++;
+      row += 1.5;
     }
-    const CELL = 74;
+    this.branchOf = new Map(this.branchEdges.map(([f, t]) => [t, f]));
+  }
 
-    if (layout === "tree") {
-      const PER_ROW = 4;
-      const ROW_H = 78;
-      const LANE = 196;
-      const PART_H = 70;
-      // The lanes of each subject: its topics, each with everything inside it, in order.
-      const lanesOf = (subject: Node): Node[][] => {
-        const direct = this.partsOf(subject.id, byId);
-        const flat = (t: Node): Node[] => this.partsOf(t.id, byId).flatMap((p) => [p, ...flat(p)]);
-        if (direct.every((t) => !this.partsOf(t.id, byId).length)) {
-          // Parts without topics: stacked, five to a lane.
-          const out: Node[][] = [];
-          for (let i = 0; i < direct.length; i += 5) out.push(direct.slice(i, i + 5));
-          return out;
+  /**
+   * Clusters: like skills together. Each field gets a space of its own inside its
+   * area's, each area inside its ability's, sized to how much is in it and kept
+   * apart from the rest; the skills spread out inside their field's space.
+   */
+  private clusterSlots(visible: Node[], byId: Map<string, Node>, hubs: string[]) {
+    const skills = visible.filter((n) => n.kind === "skill");
+    // Each skill's field and area: the containers above it (for your own skills, their topmost topic).
+    const chain = (n: Node): Node[] => {
+      const out: Node[] = [];
+      for (let c = this.containerOf(n.id, byId), i = 0; c && i < 16; c = this.containerOf(c, byId), i++) out.unshift(byId.get(c)!);
+      return out;
+    };
+    type Group = { id: string; label: string; color: string; members: Node[]; children: Map<string, Group>; r: number; x: number; y: number };
+    const group = (id: string, label: string, color: string): Group => ({ id, label, color, members: [], children: new Map(), r: 0, x: 0, y: 0 });
+    const root = group("", "", "");
+    for (const h of hubs) {
+      const hub = byId.get(h)!;
+      root.children.set(h, group(h, hub.label, hub.color));
+    }
+    const topics = new Map<string, Node>();
+    for (const n of skills) {
+      const up = [...chain(n), n];
+      const area = up.find((x) => x.tier === "general") ?? up[0];
+      const field = up.find((x) => x.tier === "field") ?? (up.length > 1 ? up[1] : area);
+      const ab = root.children.get(n.ability) ?? [...root.children.values()][0];
+      if (!ab) continue;
+      let ag = ab.children.get(area.id);
+      if (!ag) ab.children.set(area.id, (ag = group(area.id, area.label, area.color)));
+      // An area's own node heads its circle; a field's sits in the middle of its own.
+      if (n === area && n.tier === "general") continue;
+      let fg = ag.children.get(field.id);
+      if (!fg) ag.children.set(field.id, (fg = group(field.id, field.label, field.color)));
+      if (n === field && n.tier) continue;
+      // Inside a field, each topic with its steps around it.
+      const i = up.indexOf(field);
+      const topic = up[i + 1] ?? n;
+      let tg = fg.children.get(topic.id);
+      if (!tg) fg.children.set(topic.id, (tg = group(topic.id, topic.label, topic.color)));
+      if (n === topic) topics.set(topic.id, n);
+      else tg.members.push(n);
+    }
+    // Sizes, from the inside out: a topic by its steps; the rest as rings of what they hold.
+    const size = (g: Group): number => {
+      if (!g.children.size) return (g.r = 16 + Math.sqrt(g.members.length) * 11);
+      const kids = [...g.children.values()];
+      const rs = kids.map(size);
+      const gap = 18;
+      const ring = kids.length === 1 ? 0 : Math.max(Math.max(...rs) * 1.05, rs.reduce((a, r) => a + 2 * r + gap, 0) / (Math.PI * 2));
+      return (g.r = ring + Math.max(...rs) + 24);
+    };
+    size(root);
+    const place = (g: Group, x: number, y: number, a0: number) => {
+      g.x = x;
+      g.y = y;
+      const kids = [...g.children.values()];
+      if (!kids.length) return;
+      const rs = kids.map((k) => k.r);
+      const total = rs.reduce((a, r) => a + 2 * r + 18, 0);
+      const ring = kids.length === 1 ? 0 : Math.max(Math.max(...rs) * 1.05, total / (Math.PI * 2));
+      let a = a0;
+      kids.forEach((k, i) => {
+        const span = ((2 * rs[i] + 18) / total) * Math.PI * 2;
+        const mid = a + span / 2;
+        place(k, x + Math.cos(mid) * ring, y + Math.sin(mid) * ring, mid + Math.PI);
+        a += span;
+      });
+    };
+    place(root, 0, 0, -Math.PI / 2);
+    for (const [h, ag] of root.children) {
+      this.slots.set(h, { x: ag.x, y: ag.y });
+      for (const area of ag.children.values()) {
+        this.groups.push({ x: area.x, y: area.y, r: area.r, label: area.label, color: area.color, level: 1 });
+        for (const f of area.children.values()) {
+          if (area.children.size > 1 || f.id !== area.id) this.groups.push({ x: f.x, y: f.y, r: f.r, label: f.label, color: f.color, level: 2 });
+          // A field's node in the middle of its space; each topic in its own spot, its steps round it in order.
+          if (byId.get(f.id)?.tier === "field") this.slots.set(f.id, { x: f.x, y: f.y });
+          for (const tg of f.children.values()) {
+            if (topics.has(tg.id)) this.slots.set(tg.id, { x: tg.x, y: tg.y });
+            tg.members.forEach((n, i) => {
+              const ang = -Math.PI / 2 + (i / Math.max(1, tg.members.length)) * Math.PI * 2;
+              const rr = tg.r - 10;
+              this.slots.set(n.id, { x: tg.x + Math.cos(ang) * rr, y: tg.y + Math.sin(ang) * rr });
+            });
+          }
         }
-        return direct.map((t) => [t, ...flat(t)]);
-      };
-      type Column = { kind: "ability"; id: string; width: number } | { kind: "subject"; node: Node; lanes: Node[][]; width: number };
-      const columns: Column[] = [];
-      for (const a of hubs) {
-        columns.push({ kind: "ability", id: a, width: Math.max(1, Math.min(PER_ROW, ...(tiers.get(a) ?? []).map((r) => r?.length ?? 0))) * CELL });
-        for (const s of subjects.filter((x) => x.ability === a)) {
-          const lanes = lanesOf(s);
-          columns.push({ kind: "subject", node: s, lanes, width: Math.max(1, lanes.length) * LANE });
-        }
+        // The area's own node heads its circle.
+        if (byId.get(area.id)?.tier === "general") this.slots.set(area.id, { x: area.x, y: area.y - area.r + 28 });
       }
-      const GAP = 56;
-      const total = columns.reduce((a, c) => a + c.width, 0) + GAP * (columns.length - 1);
-      let x = -total / 2;
-      const center = new Map<Column, number>();
-      for (const c of columns) {
-        center.set(c, x + c.width / 2);
-        x += c.width + GAP;
-      }
-      let y = 0;
-      for (let d = 0; d <= maxDepth; d++) {
-        const sub = Math.max(1, ...hubs.map((a) => Math.ceil((tiers.get(a)?.[d]?.length ?? 0) / PER_ROW)));
-        // Tier lines only where tiers are the whole story (subject blocks have lanes).
-        if (!subjects.length) this.guides.push({ at: y - ROW_H / 2, label: `Tier ${d + 1}` });
-        for (const c of columns) {
-          if (c.kind !== "ability") continue;
-          const row = tiers.get(c.id)?.[d] ?? [];
-          const lines = Math.max(1, Math.ceil(row.length / PER_ROW));
-          const per = Math.ceil(row.length / lines);
-          row.forEach((n, i) => {
-            const line = Math.floor(i / per);
-            const inLine = Math.min(per, row.length - line * per);
-            const j = i - line * per;
-            this.slots.set(n.id, { x: center.get(c)! + (j - (inLine - 1) / 2) * CELL, y: y + line * ROW_H });
-          });
-        }
-        y += sub * ROW_H + 40;
-      }
-      for (const c of columns) {
-        if (c.kind === "ability") this.slots.set(c.id, { x: center.get(c)!, y: -120 });
-        else {
-          // The subject at the top, then its lanes: topic, then its parts one under another.
-          const cx = center.get(c)!;
-          this.slots.set(c.node.id, { x: cx, y: 0 });
-          c.lanes.forEach((lane, li) => {
-            const lx = cx - c.width / 2 + LANE * (li + 0.5);
-            lane.forEach((n, j) => this.slots.set(n.id, { x: lx, y: ROW_H * 1.4 + j * PART_H + (j > 0 ? 18 : 0) }));
-          });
-        }
-      }
-      return;
     }
   }
 
@@ -720,11 +794,12 @@ export class SkillGraph {
       return { x: hub.x * 0.72, y: hub.y * 0.72 };
     };
     // Like Obsidian's graph: skills push each other apart and links pull like springs, so
-    // dragging one tugs its neighbours along. The layout's slots only guide the shape
-    // (strongly in the tree, gently in the radial map, not at all in clusters).
+    // dragging one tugs its neighbours along. The layouts hold their shape differently:
+    // the tree firmly (an outline), the radial map firmly (general to detail, ring by
+    // ring), clusters loosely (each skill drawn to its field's space, groups kept apart).
     const radial = layout === "radial";
-    // The radial map holds its shape firmly (general to detail, ring by ring); dragging still tugs neighbours.
-    const pull = radial ? 0.55 : structured ? 0.35 : 0.09;
+    const tree = layout === "tree";
+    const pull = radial ? 0.55 : tree ? 0.9 : 0.12;
     // Radial: each skill also hangs on a spring from the one it branches out of.
     const springs = radial
       ? this.branchEdges
@@ -736,6 +811,11 @@ export class SkillGraph {
       const b = this.slots.get(String((l.target as Node).id ?? l.target));
       return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 95;
     };
+    const sameField = (l: Link) => {
+      const a = this.byId.get(String((l.source as Node).id ?? l.source));
+      const b = this.byId.get(String((l.target as Node).id ?? l.target));
+      return !!a && !!b && a.branch === b.branch;
+    };
     // New arrivals start where they belong; when that's most of the map, there's little left to settle.
     let placed = 0;
     for (const n of visible) {
@@ -744,21 +824,36 @@ export class SkillGraph {
       if (slot) ((n.x = slot.x + (Math.random() - 0.5) * 6), (n.y = slot.y + (Math.random() - 0.5) * 6), placed++);
     }
     this.fresh.clear();
-    if (radial && placed > visible.length / 2) heat = Math.min(heat, 0.12);
+    // (Clusters always get a little room to spread out.)
+    if (structured && placed > visible.length / 2) heat = Math.min(heat, 0.12);
     this.sim
       .nodes(visible)
       .force(
         "link",
         forceLink<Node, Link>([...links, ...springs])
           .id((d) => d.id)
-          .distance((l) => (l.kind === "course" ? 34 : radial ? gap(l) : 78))
-          .strength((l) => (l.kind === "course" ? 0.9 : radial ? (springs.includes(l) ? 0.12 : 0) : structured ? 0.05 : 0.35)),
+          .distance((l) => (l.kind === "course" ? 34 : radial ? gap(l) : tree ? 40 : l.kind === "part" ? 42 : 70))
+          .strength((l) =>
+            l.kind === "course"
+              ? 0.9
+              : radial
+                ? springs.includes(l)
+                  ? 0.12
+                  : 0
+                : tree
+                  ? 0
+                  : l.kind === "part"
+                    ? 0.05
+                    : l.kind === "prereq" && sameField(l)
+                      ? 0.02
+                      : 0,
+          ),
       )
       .force(
         "charge",
         forceManyBody<Node>()
-          .strength((d) => (d.kind === "course" ? -30 : d.kind === "ability" ? (structured ? -160 : -500) : radial ? -30 : structured ? -60 : -210))
-          .distanceMax(radial ? 70 : structured ? 180 : 600),
+          .strength((d) => (d.kind === "course" ? -30 : tree ? 0 : radial ? -30 : -26))
+          .distanceMax(radial ? 70 : 90),
       )
       .force(
         "x",
@@ -768,9 +863,9 @@ export class SkillGraph {
         "y",
         forceY<Node>((d) => target(d).y).strength((d) => (d.kind === "skill" ? pull : 0)),
       )
-      .force("collide", forceCollide<Node>((d) => d.r + (d.kind === "course" ? 4 : radial ? 4 : structured ? 6 : 14)).iterations(2));
+      .force("collide", forceCollide<Node>((d) => (tree ? 0 : d.r + (d.kind === "course" ? 4 : radial ? 4 : 3))).iterations(2));
     // The radial map starts in place: stop once it's close enough, instead of creeping for seconds.
-    this.sim.alphaMin(radial ? 0.02 : 0.001);
+    this.sim.alphaMin(structured ? 0.02 : 0.005);
     this.sim.alpha(Math.max(this.sim.alpha(), heat));
     if (this.reduced) {
       this.sim.stop();
@@ -818,12 +913,15 @@ export class SkillGraph {
       x1 = Math.max(x1, n.x! + n.r + 30);
       y1 = Math.max(y1, n.y! + n.r + 46);
     }
-    if (!ids?.length && this.opts.layout === "tree" && this.guides.length) {
-      for (const p of this.slots.values()) x0 = Math.min(x0, p.x - 80);
-    }
     if (!ids?.length) this.autoFit = true;
     const aw = this.w - this.inset.left - this.inset.right;
     const ah = this.h - this.inset.top - this.inset.bottom;
+    // The tree is an outline: fit its width (labels included) and start at the top.
+    if (!ids?.length && this.opts.layout === "tree") {
+      const k = clamp(aw / (x1 - x0 + 260), 0.35, 1.1);
+      this.animateTo({ k, x: this.inset.left + 20 - x0 * k, y: this.inset.top + 30 - y0 * k }, animate);
+      return;
+    }
     const k = clamp(Math.min(aw / (x1 - x0), ah / (y1 - y0)), MIN_K, ids?.length === 1 ? 1.4 : 1.6);
     const to = {
       k,
@@ -1070,19 +1168,51 @@ export class SkillGraph {
       ctx.lineCap = "butt";
     }
 
-    // Hub spokes: faint lines from each skill to its ability (just the first
-    // tier in the tree, where deeper skills hang off their prerequisites).
-    if (this.opts.layout !== "radial") {
-      for (const n of this.nodes) {
-        if (n.kind !== "skill" || n.x === undefined || (this.opts.layout !== "clusters" && n.depth > 0) || this.isPart(n)) continue;
-        const hub = this.byId.get(n.ability);
-        if (!hub || hub.x === undefined) continue;
+    // Tree: elbow connectors, general on the left to detailed on the right; a topic's steps strung after it.
+    if (this.opts.layout === "tree") {
+      const batches = new Map<string, Path2D>();
+      for (const [from, id] of this.branchEdges) {
+        const to = this.byId.get(id);
+        const f = this.byId.get(from);
+        if (!to || !f || to.x === undefined || f.x === undefined) continue;
+        if (!onScreen(f, 600) && !onScreen(to, 600)) continue;
+        const lit = path?.has(id) ?? false;
+        const key = alpha(to.color, dim(id) ? 0.1 : lit ? 0.9 : to.locked ? 0.3 : 0.55);
+        let p = batches.get(key);
+        if (!p) batches.set(key, (p = new Path2D()));
+        p.moveTo(f.x, f.y!);
+        if (Math.abs(f.y! - to.y!) < 1) p.lineTo(to.x, to.y!);
+        else {
+          const mx = f.x + 36;
+          p.lineTo(mx - 8, f.y!);
+          p.quadraticCurveTo(mx, f.y!, mx, f.y! + Math.sign(to.y! - f.y!) * 8);
+          p.lineTo(mx, to.y! - Math.sign(to.y! - f.y!) * 8);
+          p.quadraticCurveTo(mx, to.y!, mx + 8, to.y!);
+          p.lineTo(to.x, to.y!);
+        }
+      }
+      ctx.lineWidth = 1.6;
+      for (const [color, p] of batches) {
+        ctx.strokeStyle = color;
+        ctx.stroke(p);
+      }
+    }
+
+    // Clusters: each area's and field's space, behind its skills, so the groups read at a glance.
+    if (this.opts.layout === "clusters") {
+      for (const g of this.groups) {
+        const c = this.toScreen({ x: g.x, y: g.y });
+        const r = g.r * t.k;
+        if (c.x + r < 0 || c.x - r > this.w || c.y + r < 0 || c.y - r > this.h) continue;
         ctx.beginPath();
-        ctx.moveTo(hub.x, hub.y!);
-        ctx.lineTo(n.x, n.y!);
-        ctx.strokeStyle = alpha(n.color, dim(n.id) ? 0.03 : 0.1);
-        ctx.lineWidth = 1 / t.k;
+        ctx.arc(g.x, g.y, g.r, 0, Math.PI * 2);
+        ctx.fillStyle = alpha(g.color, g.level === 1 ? 0.035 : 0.06);
+        ctx.fill();
+        ctx.strokeStyle = alpha(g.color, g.level === 1 ? 0.28 : 0.2);
+        ctx.lineWidth = (g.level === 1 ? 1.6 : 1.1) / t.k;
+        if (g.level === 1) ctx.setLineDash([6 / t.k, 5 / t.k]);
         ctx.stroke();
+        ctx.setLineDash([]);
       }
     }
 
@@ -1091,12 +1221,46 @@ export class SkillGraph {
       const s = l.source as Node;
       const d = l.target as Node;
       if (l.hidden || s.x === undefined || d.x === undefined || !showCourse(s) || !showCourse(d)) continue;
-      // Radial: a link along a branch is the branch itself.
-      if (this.opts.layout === "radial" && l.kind !== "course" && this.edgeSet.has(`${s.id}>${d.id}`)) continue;
+      // A link along a branch is the branch itself.
+      if (this.opts.layout !== "clusters" && l.kind !== "course" && this.edgeSet.has(`${s.id}>${d.id}`)) continue;
       if (!onScreen(s, 600) && !onScreen(d, 600)) continue;
-      if (t.k < 0.32 && d.tier === "detail" && !(path?.has(d.id) ?? false)) continue;
-      // Between trees: only for the skill you're on, or close up.
-      if (s.tier !== undefined && d.tier !== undefined && s.branch !== d.branch && l.kind === "prereq" && focus !== s.id && focus !== d.id && t.k < 0.6) continue;
+      const onPath = (path?.has(d.id) && path?.has(s.id)) ?? false;
+      if (t.k < 0.32 && d.tier === "detail" && !onPath) continue;
+      // Related (linked, not needed): quiet threads between trees, close enough in.
+      if (l.kind === "related") {
+        if (t.k < 0.16 && !onPath && focus !== s.id && focus !== d.id) continue;
+        ctx.beginPath();
+        ctx.moveTo(s.x, s.y!);
+        const mx = (s.x + d.x) / 2 - (d.y! - s.y!) * 0.12;
+        const my = (s.y! + d.y!) / 2 + (d.x - s.x) * 0.12;
+        ctx.quadraticCurveTo(mx, my, d.x, d.y!);
+        ctx.strokeStyle = alpha(d.color, focus === s.id || focus === d.id ? 0.7 : 0.22);
+        ctx.lineWidth = 1.2 / Math.sqrt(t.k);
+        ctx.setLineDash(t.k >= 0.5 ? [2 / t.k, 4 / t.k] : []);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        continue;
+      }
+      // Tree: steps are on their own row already; what a topic needs arcs down the left, topic to topic.
+      if (this.opts.layout === "tree" && l.kind === "part") continue;
+      if (this.opts.layout === "tree" && l.kind === "prereq") {
+        const topicOf = (n: Node) => (n.tier === "detail" && this.partOf.has(n.id) ? (this.byId.get(this.partOf.get(n.id)!) ?? n) : n);
+        const a = topicOf(s);
+        const b = d;
+        if (a === b || a.x === undefined) continue;
+        const lit = (path?.has(a.id) && path?.has(b.id)) ?? false;
+        const crossing = a.branch !== b.branch;
+        // (Arcs into other trees run far down the outline: only for the skill you're on.)
+        if (!lit && focus !== a.id && focus !== b.id && (crossing || t.k < 0.45)) continue;
+        const bend = Math.min(a.x, b.x!) - 28 - Math.min(120, Math.abs(b.y! - a.y!) * 0.12);
+        ctx.beginPath();
+        ctx.moveTo(a.x - a.r, a.y!);
+        ctx.bezierCurveTo(bend, a.y!, bend, b.y!, b.x! - b.r - 3, b.y!);
+        ctx.strokeStyle = alpha(b.color, lit ? 0.85 : crossing ? 0.25 : 0.4);
+        ctx.lineWidth = (lit ? 2 : 1.2) / Math.sqrt(t.k);
+        ctx.stroke();
+        continue;
+      }
       const faded = dim(s.id) || dim(d.id);
       const arrow = l.kind !== "course";
       const lit = path && path.has(s.id) && path.has(d.id);
@@ -1119,8 +1283,8 @@ export class SkillGraph {
       ctx.strokeStyle = faded ? alpha(theme.edge.startsWith("#") ? theme.edge : "#888888", 0.12) : lit ? d.color : base;
       // Radial: links across branches (not along one) are quieter, the branches carry the shape.
       const across = this.opts.layout === "radial" && l.kind === "prereq";
-      // Between trees (math → physics): there, but quiet unless it's on the path you're looking at.
-      const between = across && s.tier !== undefined && d.tier !== undefined && s.branch !== d.branch;
+      // Between trees (math → physics): always there, quiet unless it's on the path you're looking at.
+      const between = l.kind === "prereq" && s.tier !== undefined && d.tier !== undefined && s.branch !== d.branch;
       ctx.globalAlpha = faded ? (between ? 0.12 : 0.35) : l.kind === "course" ? 0.55 : l.kind === "part" ? 0.6 : between && !lit ? 0.22 : across && !lit ? 0.45 : 0.85;
       ctx.lineWidth = (lit ? 2.6 : l.kind === "prereq" ? 1.6 : 1.1) / Math.sqrt(t.k);
       if (!l.met && arrow && t.k >= 0.5) ctx.setLineDash([5 / t.k, 4 / t.k]);
@@ -1428,12 +1592,45 @@ export class SkillGraph {
       discs.set(n.id, b);
       if (n.kind === "ability") placed.push(b);
     }
-    // General to detail as you zoom in: general topics first, then sub-topics, then the details.
+    // General to detail as you zoom in: areas first, then fields, then topics, then the steps.
+    const layout = this.opts.layout;
     const zoomFor = (n: Node) =>
-      n.kind === "course" ? 1.1 : n.tier === "general" ? 0.08 : n.tier === "sub" || n.tier === "advanced" ? 0.26 : n.tier === "detail" ? 0.62 : 0.45;
-    const tierRank = (n: Node) => (n.tier === "general" ? 3000 : n.tier === "sub" || n.tier === "advanced" ? 2000 : n.tier === "detail" ? 1000 : 1500);
+      n.kind === "course"
+        ? 1.1
+        : n.tier === "general"
+          ? 0.06
+          : n.tier === "field"
+            ? layout === "tree" ? 0.06 : 0.12
+            : n.tier === "sub" || n.tier === "advanced"
+              ? layout === "tree" ? 0.2 : 0.26
+              : n.tier === "detail"
+                ? layout === "tree" ? 0.85 : 0.62
+                : 0.45;
+    const tierRank = (n: Node) =>
+      n.tier === "general" ? 3000 : n.tier === "field" ? 2800 : n.tier === "sub" || n.tier === "advanced" ? 2000 : n.tier === "detail" ? 1000 : 1500;
+    // Clusters: the areas and fields are named on their circles instead.
+    if (layout === "clusters") {
+      for (const g of [...this.groups].sort((a, b) => a.level - b.level)) {
+        const c = this.toScreen({ x: g.x, y: g.y });
+        const r = g.r * t.k;
+        if (r < (g.level === 1 ? 26 : 34) || c.x + r < 0 || c.x - r > this.w || c.y + r < 0 || c.y - r > this.h) continue;
+        const label = g.level === 1 ? g.label.toUpperCase() : g.label;
+        ctx.font = g.level === 1 ? `800 12px ${theme.font}` : `750 13px ${theme.font}`;
+        const w = ctx.measureText(label).width;
+        const y = g.level === 1 ? c.y - r - 7 : c.y - r + 17;
+        const box = { x0: c.x - w / 2 - 3, y0: y - 12, x1: c.x + w / 2 + 3, y1: y + 4 };
+        if (placed.some((o) => overlaps(box, o))) continue;
+        placed.push(box);
+        ctx.textAlign = "center";
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = theme.bg;
+        ctx.strokeText(label, c.x, y);
+        ctx.fillStyle = g.level === 1 ? g.color : theme.text;
+        ctx.fillText(label, c.x, y);
+      }
+    }
     const candidates = shown
-      .filter((n) => n.kind !== "ability")
+      .filter((n) => n.kind !== "ability" && !(layout === "clusters" && (n.tier === "general" || n.tier === "field") && n !== this.hover && this.opts.selectedId !== n.id))
       .map((n) => {
         const important = this.hover === n || this.opts.selectedId === n.id || (path?.has(n.id) ?? false) || (this.opts.matches?.has(n.id) ?? false);
         // Only the skill you're on always gets its label; the rest of its path gives way when crowded.
@@ -1446,7 +1643,12 @@ export class SkillGraph {
               : (important ? 1e4 : 0) + (n.kind === "course" ? 0 : tierRank(n) + n.level * 4 + (n.goal ? 20 : 0) + (n.learnt ? 400 : 0));
         return { n, important, forced, rank };
       })
-      .filter(({ n, important, forced }) => forced || (important && t.k >= zoomFor(n) * 0.5) || (this.opts.labels && !dim(n.id) && t.k >= zoomFor(n)))
+      .filter(
+        ({ n, important, forced }) =>
+          forced ||
+          (important && t.k >= zoomFor(n) * (layout === "tree" && n.tier === "detail" ? 1 : 0.5)) ||
+          (this.opts.labels && !dim(n.id) && t.k >= zoomFor(n)),
+      )
       .sort((a, b) => b.rank - a.rank)
       .slice(0, 400);
     ctx.textAlign = "center";
@@ -1477,20 +1679,24 @@ export class SkillGraph {
     }
     for (const { n, forced } of candidates) {
       const s = this.toScreen({ x: n.x!, y: n.y! });
-      const big = n.tier === "general" || (!n.tier && !!n.learnt);
-      ctx.font = `${n.kind === "course" ? 500 : big ? 800 : n.learnt ? 700 : 600} ${n.kind === "course" ? 11 : big ? 14.5 : n.learnt ? 13 : 12}px ${theme.font}`;
+      const big = n.tier === "general" || n.tier === "field" || (!n.tier && !!n.learnt);
+      ctx.font = `${n.kind === "course" ? 500 : big ? 800 : n.learnt ? 700 : 600} ${n.kind === "course" ? 11 : n.tier === "general" ? 15.5 : big ? 14 : n.learnt ? 13 : 12}px ${theme.font}`;
       const label = n.label.length > 28 ? `${n.label.slice(0, 27)}…` : n.label;
       const w = ctx.measureText(label).width;
       const gap = (n.r + (n.goal ? 10 : 7)) * t.k;
       // Radial: a path's steps sit in a line, so their labels run across the path, slanted at
       // most 60° (still readable), one beside the next like the rungs of a ladder.
       const isStep = n.tier === "detail" || (!n.tier && this.partOf.has(n.id) && !n.learnt);
-      // Zoomed out, a general topic's name runs out along its own path, so they fan round the circle.
-      const outward = n.tier === "general" && t.k < 0.45;
-      if (this.opts.layout === "radial" && (isStep || outward) && n.x! * n.x! + n.y! * n.y! > 1) {
-        let phi = Math.atan2(n.y!, n.x!);
+      // Zoomed out, an area's or field's name runs out along its own path, so they fan round the circle.
+      const outward = layout === "radial" && (n.tier === "general" || n.tier === "field") && t.k < 0.45;
+      // Tree: a topic's steps are beads on its row, so their names slant up from them.
+      const treeStep = layout === "tree" && isStep;
+      if (((layout === "radial" && isStep) || outward || treeStep) && n.x! * n.x! + n.y! * n.y! > 1) {
+        let phi = treeStep ? -0.7 : Math.atan2(n.y!, n.x!);
         let flip = false;
-        if (outward) {
+        if (treeStep) {
+          // (fixed slant)
+        } else if (outward) {
           if (Math.cos(phi) < 0) ((phi += Math.PI), (flip = true));
         } else {
           phi += Math.PI / 2;
@@ -1524,6 +1730,25 @@ export class SkillGraph {
         ctx.fillStyle = n.planned && n.locked ? theme.muted : theme.text;
         ctx.fillText(label, flip ? -off : off, 4);
         ctx.restore();
+        continue;
+      }
+      // Tree: to the right of it, like an outline (an area's or field's under it: its first part is on its row).
+      if (layout === "tree") {
+        // (Above an area or field: the outline's free space, since its first part shares its row.)
+        // (Right-aligned, ending at its own node, so the next column stays clear.)
+        const under = n.tier === "general" || n.tier === "field";
+        const x = under ? s.x + n.r * t.k : s.x + n.r * t.k + 7;
+        const y = under ? s.y - n.r * t.k - 13 : s.y;
+        const x0 = under ? x - w : x;
+        const box = { x0: x0 - 2, y0: y - 8 - (under ? 4 : 0), x1: x0 + w + 3, y1: y + 7 };
+        if (!forced && (placed.some((o) => overlaps(box, o)) || hitsSlant(corners(box), box))) continue;
+        placed.push(box);
+        ctx.textAlign = under ? "right" : "left";
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = theme.bg;
+        ctx.strokeText(label, x, y + 4.5);
+        ctx.fillStyle = n.kind === "course" || (n.planned && n.locked) ? theme.muted : theme.text;
+        ctx.fillText(label, x, y + 4.5);
         continue;
       }
       // Below, above, then beside.

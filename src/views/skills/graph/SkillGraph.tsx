@@ -54,7 +54,7 @@ function loadPrefs(): Prefs {
 /** Longest chain of links above each node (roots are 0). */
 function depths(ids: string[], links: SGLink[]): Map<string, number> {
   const up = new Map<string, string[]>();
-  for (const l of links) if (l.kind !== "course") up.set(l.target, [...(up.get(l.target) ?? []), l.source]);
+  for (const l of links) if (l.kind !== "course" && l.kind !== "related") up.set(l.target, [...(up.get(l.target) ?? []), l.source]);
   const memo = new Map<string, number>();
   const visit = (id: string, seen: Set<string>): number => {
     if (memo.has(id)) return memo.get(id)!;
@@ -234,6 +234,8 @@ export function SkillGraphView({
         const met = e.cat ? need.done : !missing;
         for (const f of need.children.length ? exits(n) : [n]) links.push({ source: f, target: e.id, kind: "prereq", met });
       }
+      // Related skills in other trees: linked, not needed.
+      for (const r of e.related) if (map.byId.has(r)) links.push({ source: e.id, target: r, kind: "related", met: true });
       // A topic → its parts: drawn to the ones you start with, the rest only shape the layout.
       if (e.parent && map.byId.has(e.parent)) {
         const siblings = new Set(map.byId.get(e.parent)!.children);
@@ -283,7 +285,20 @@ export function SkillGraphView({
     return { nodes, links, order: abilities.map((a) => a.id) };
   }, [data, dark, ws, busy, peers]);
 
-  const branches = useMemo(() => [...new Set(data.map.entries.map((e) => e.branch).filter((b): b is string => !!b))].sort(), [data.map]);
+  // Paths to filter by: the fields, grouped by their area; then paths of your own.
+  const branches = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    for (const e of data.map.entries) {
+      if (e.tier !== "field") continue;
+      const area = e.parent ? data.map.byId.get(e.parent)?.name : undefined;
+      groups.set(area ?? "Other", [...(groups.get(area ?? "Other") ?? []), e.name]);
+    }
+    const catalog = new Set([...groups.values()].flat());
+    const own = [...new Set(data.map.entries.map((e) => e.branch).filter((b): b is string => !!b && !catalog.has(b)))].sort();
+    const areaNames = new Set(data.map.entries.filter((e) => e.tier === "general").map((e) => e.name));
+    if (own.filter((b) => !areaNames.has(b)).length) groups.set("Your paths", own.filter((b) => !areaNames.has(b)));
+    return [...groups];
+  }, [data.map]);
 
   // Search / ability filter from the toolbar, plus this view's status and path filters.
   const visibleMatches = useMemo(() => {
@@ -477,12 +492,16 @@ export function SkillGraphView({
             <option value="branch">In a path</option>
           </select>
           {branches.length > 0 && (
-            <select className="select sg-select" value={branch} onChange={(e) => setBranch(e.target.value)} aria-label="Path">
-              <option value="">Every path</option>
-              {branches.map((b) => (
-                <option key={b} value={b}>
-                  {b}
-                </option>
+            <select className="select sg-select" value={branch} onChange={(e) => setBranch(e.target.value)} aria-label="Field">
+              <option value="">Every field</option>
+              {branches.map(([area, list]) => (
+                <optgroup key={area} label={area}>
+                  {list.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           )}
@@ -557,8 +576,9 @@ export function SkillGraphView({
               <span className="sg-key road" /> A learning path Claude planned for you, named where it starts.
             </li>
             <li>
-              <span className="sg-key tier" /> Radial: general topics nearest you, and each path runs straight out from there: a sub-topic, the steps
-              you learn before the next one, then the next, and advanced skills after everything they need, from any tree. Nothing is skipped.
+              <span className="sg-key tier" /> From the general to the detailed: areas (like Formal sciences), their fields (Mathematics), topics
+              (Algebra, which branch and join), the steps inside each, then advanced skills after everything they need, from any tree. Nothing is
+              skipped. Radial: out from you. Tree: left to right, like an outline. Clusters: each field in its own space, inside its area.
             </li>
             <li>
               <span className="sg-key dashed" /> Light and outlined: planned in Basalt's skill tree, not started yet. Click to start it.
@@ -641,7 +661,7 @@ function hoverInfo(
   const st = s ? data.stats.get(s.id) : undefined;
   if (!s || !st) {
     // Planned: in the built-in tree, not started yet.
-    const kind = e.tier === "general" ? "General topic" : e.tier === "sub" ? "Sub-topic" : e.tier === "advanced" ? "Advanced" : "Step";
+    const kind = e.tier === "general" ? "Area" : e.tier === "field" ? "Field" : e.tier === "sub" ? "Topic" : e.tier === "advanced" ? "Advanced" : "Step";
     const lines = [`${area?.attribute ?? area?.name ?? ""} · ${kind} · not started`];
     if (where) lines.push(where);
     if (node.learnt) lines.push(`${node.learnt.total} step${node.learnt.total === 1 ? "" : "s"} inside`);

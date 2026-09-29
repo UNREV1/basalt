@@ -56,8 +56,8 @@ export interface SGNode {
   glyph?: string;
   /** In the built-in tree but not started yet. */
   planned?: boolean;
-  /** Its level in the built-in tree: area › field › topic › step, or advanced. */
-  tier?: "general" | "field" | "sub" | "detail" | "advanced";
+  /** Its level in the built-in tree: area › field › topic › step, then advanced and expert (the top of a field). */
+  tier?: "general" | "field" | "sub" | "detail" | "advanced" | "expert";
 }
 
 export interface SGLink {
@@ -128,6 +128,7 @@ const radius = (n: SGNode) => {
   // The built-in tree: general topics biggest, then sub-topics and advanced skills, then the details between them.
   if (n.tier === "general") return 24 + grow(8, 1.5);
   if (n.tier === "field") return 19 + grow(8, 1.4);
+  if (n.tier === "expert") return 17 + grow(6, 1.2);
   if (n.tier === "sub" || n.tier === "advanced") return 14 + grow(6, 1.2);
   if (n.tier === "detail") return 8 + grow(6, 1.2);
   return n.learnt ? 18 + Math.min(14, Math.sqrt(n.learnt.total) * 3) : 12 + Math.min(16, Math.sqrt(Math.max(1, n.level)) * 3.2);
@@ -424,7 +425,7 @@ export class SkillGraph {
     }
     const hasKids = (id: string) => (kids.get(id)?.length ?? 0) > 0;
     // A topic's steps are the parts with nothing inside them; they string out after it.
-    const isStep = (n: Node) => !!this.containerOf(n.id, byId) && !hasKids(n.id) && n.tier !== "advanced" && n.tier !== "sub" && n.tier !== "field";
+    const isStep = (n: Node) => !!this.containerOf(n.id, byId) && !hasKids(n.id) && n.tier !== "advanced" && n.tier !== "expert" && n.tier !== "sub" && n.tier !== "field";
     const COL = 290;
     const ROW = 34;
     const BEAD = 26;
@@ -574,13 +575,14 @@ export class SkillGraph {
   }
 
   /**
-   * Radial: you in the middle, the abilities around you, and every path growing
-   * straight out from the general to the detailed. A general topic sits on the
-   * first ring; out along its path come its first sub-topic, the steps you learn
-   * there one after another, then the next sub-topic and its steps, and so on:
-   * the path is the order, and nothing is skipped. Advanced skills fork off after
-   * everything they need (from any tree) and carry on out beside it. Each path
-   * gets a slice of the circle as wide as its forks.
+   * Radial: you in the middle, then rings, evenly spaced and each evenly filled:
+   * the abilities, their areas, the fields in each. From each field its paths
+   * grow straight out, general to detailed: a topic, the steps you learn there
+   * one after another, then the next topic and its steps, up through the
+   * advanced skills to the expert ones at the top. The path is the order, and
+   * nothing is skipped. Every step along a path is the same distance, and paths
+   * are packed so that nodes at the same distance from the middle are the same
+   * distance apart (a radial tidy tree).
    */
   private radialSlots(visible: Node[], byId: Map<string, Node>, hubs: string[]) {
     const skills = visible.filter((n) => n.kind === "skill");
@@ -596,7 +598,10 @@ export class SkillGraph {
     }
     const hasParts = (id: string) => (parts.get(id)?.length ?? 0) > 0;
     // Steps: the parts you learn along the way (details, and parts with no parts of their own).
-    const isStep = (id: string) => !!container(id) && !hasParts(id) && byId.get(id)?.tier !== "advanced";
+    const isStep = (id: string) => {
+      const t = byId.get(id)?.tier;
+      return !!container(id) && !hasParts(id) && t !== "advanced" && t !== "expert";
+    };
     const steps = (id: string) => (parts.get(id) ?? []).filter((p) => isStep(p.id));
     const needsOf = (id: string) => (this.needs.get(id) ?? []).filter(isSkill);
     // The part of `c` that `id` is in (itself, or the topic above it that's directly in `c`).
@@ -604,159 +609,175 @@ export class SkillGraph {
       for (let x: string | undefined = id, i = 0; x && i < 64; x = container(x), i++) if (container(x) === c) return x;
       return undefined;
     };
-    // Distances out from the middle (world units).
-    const FIRST = 58; // a topic → its first step
-    const STEP = 36; // one step → the next
-    const ONWARD = 64; // the last step → what comes after
-
-    const dist = new Map<string, number>();
-    const depth = new Map<string, number>();
-    const from = new Map<string, string>();
-    const visiting = new Set<string>();
-    // Where whatever comes after `id` starts: past its steps, and past its last sub-topic.
-    const endOf = (id: string): number => {
-      const c = container(id);
-      if (c && isStep(id)) return endOf(c);
-      const k = steps(id).length;
-      let e = distOf(id) + (k ? FIRST + (k - 1) * STEP : 0);
-      for (const p of parts.get(id) ?? []) if (!isStep(p.id)) e = Math.max(e, endOf(p.id) - ONWARD);
-      return e + ONWARD;
+    // What comes after a skill grows out of its last step (you finish them to go on).
+    const exitOf = (id: string) => {
+      const list = steps(id);
+      return list.length ? list[list.length - 1].id : id;
     };
-    let R1 = 0;
-    const distOf = (id: string): number => {
-      const known = dist.get(id);
+
+    // 1. The shape: what each skill grows out of, and its level (hops out from the middle
+    // along the branches as drawn; the abilities are level 1).
+    const from = new Map<string, string>();
+    const depth = new Map<string, number>();
+    const level = new Map<string, number>();
+    const parent = new Map<string, string>();
+    const visiting = new Set<string>();
+    const levelOf = (id: string): number => {
+      const known = level.get(id);
       if (known !== undefined) return known;
       const n = byId.get(id);
-      if (!n || n.kind !== "skill") return 0;
-      if (visiting.has(id)) return R1;
+      if (!n || n.kind !== "skill") return 1;
+      if (visiting.has(id)) return 2;
       visiting.add(id);
-      let d: number;
       let f: string;
       let dep: number;
       const c = container(id);
       if (c && isStep(id)) {
+        levelOf(c);
         const list = steps(c);
         const i = list.indexOf(n);
-        d = distOf(c) + FIRST + i * STEP;
         // Out of the step before it, else out of its topic.
         f = i > 0 ? list[i - 1].id : c;
         dep = (depth.get(c) ?? 1) + 1;
       } else if (c) {
-        // A sub-topic (or advanced skill) inside a general topic: after the one it follows.
+        // A topic (or advanced skill) inside a field: after the one it follows that ends furthest out.
+        levelOf(c);
         let best: string | undefined;
         let bestEnd = -Infinity;
         for (const x of new Set(needsOf(id).map((q) => within(q, c)).filter((q): q is string => !!q && q !== id))) {
-          const e = endOf(x);
+          const e = levelOf(exitOf(x));
           if (e > bestEnd) ((bestEnd = e), (best = x));
         }
-        const k = steps(c).length;
-        d = Math.max(distOf(c) + (k ? FIRST + (k - 1) * STEP : 0) + ONWARD, best ? bestEnd : -Infinity);
-        // Advanced skills also wait for what they need from other trees.
-        if (n.tier === "advanced") for (const q of needsOf(id)) d = Math.max(d, endOf(q));
         f = best ?? c;
         dep = (depth.get(c) ?? 1) + 1;
       } else {
-        // A skill of its own: after everything it needs, growing out of what it needs most in its ability.
-        // (A general topic is always on the first ring.)
-        d = R1;
+        // A skill of its own: out of what it needs that ends furthest out in its ability, else its
+        // ability. (An area always grows out of its ability.)
         let best: string | undefined;
         let bestEnd = -Infinity;
         for (const q of n.tier === "general" ? [] : needsOf(id)) {
-          const e = endOf(q);
-          d = Math.max(d, e);
-          if (byId.get(q)!.ability === n.ability && e > bestEnd) ((bestEnd = e), (best = q));
+          if (byId.get(q)!.ability !== n.ability) continue;
+          const e = levelOf(exitOf(q));
+          if (e > bestEnd) ((bestEnd = e), (best = q));
         }
         const bc = best ? container(best) : undefined;
         f = best ? (bc && isStep(best) ? bc : best) : n.ability;
         dep = 1;
       }
+      const src = isSkill(f) && !isStep(id) ? exitOf(f) : f;
+      const lv = (isSkill(src) ? levelOf(src) : 1) + 1;
       visiting.delete(id);
-      dist.set(id, d);
-      depth.set(id, dep);
       from.set(id, f);
-      return d;
+      depth.set(id, dep);
+      level.set(id, lv);
+      parent.set(id, src);
+      return lv;
     };
-    // First, the shape (who grows out of whom) with a provisional first ring.
-    R1 = 300;
-    for (const n of skills) distOf(n.id);
-
-    // What grows on out of each node (its steps run along its own path instead).
-    const onward = new Map<string, Node[]>();
-    for (const n of skills) {
-      if (isStep(n.id)) continue;
-      const f = from.get(n.id)!;
-      onward.set(f, [...(onward.get(f) ?? []), n]);
-    }
-    for (const list of onward.values()) list.sort((a, b) => dist.get(a.id)! - dist.get(b.id)!);
-    const widths = new Map<string, number>();
-    const widthOf = (id: string): number => {
-      if (widths.has(id)) return widths.get(id)!;
-      widths.set(id, 1);
-      const next = onward.get(id) ?? [];
-      // The path itself carries straight on through the first thing after it.
-      const w = Math.max(1, next.reduce((a, c) => a + widthOf(c.id), 0));
-      widths.set(id, w);
-      return w;
-    };
-    const raw = hubs.map((h) => widthOf(h));
-    const sum = raw.reduce((a, b) => a + b, 0) || 1;
-    // Every ability gets a fair slice, however few skills it has yet.
-    const weight = raw.map((w) => Math.max(w, 2, sum * 0.05));
-    const total = weight.reduce((a, b) => a + b, 0);
-    const unit = (Math.PI * 2) / total;
-
-    // The first ring: far enough out that neighbouring paths don't touch.
-    const firsts = hubs.flatMap((h) => onward.get(h) ?? []);
-    let need = 300;
-    for (const n of firsts) need = Math.max(need, 56 / (Math.min(widthOf(n.id), 3) * unit));
-    // And in proportion to how far the paths reach, so the general topics aren't crowded at the core.
-    const reach = Math.max(0, ...[...dist.values()]) - R1;
-    need = Math.min(Math.max(need, reach * 0.3), 2400);
-    if (Math.abs(need - R1) > 1) {
-      R1 = need;
-      dist.clear();
-      depth.clear();
-      from.clear();
-      for (const n of skills) distOf(n.id);
-    }
-    const R0 = clamp(Math.max(140, 64 / (Math.min(...weight) * unit)), 140, Math.max(140, R1 - 110));
+    for (const n of skills) levelOf(n.id);
     this.ringOf = depth;
     this.branchOf = from;
-    const at = (ang: number, r: number): Pt => ({ x: Math.cos(ang) * r, y: Math.sin(ang) * r });
 
-    const place = (id: string, a0: number, a1: number) => {
-      const mid = (a0 + a1) / 2;
-      const n = byId.get(id)!;
-      this.slots.set(id, at(mid, n.kind === "ability" ? R0 : dist.get(id)!));
-      // Its steps, in order, straight out along its path.
-      for (const p of steps(id)) this.slots.set(p.id, at(mid, dist.get(p.id)!));
-      const next = onward.get(id) ?? [];
-      let a = mid - (next.reduce((s, c) => s + widthOf(c.id), 0) * unit) / 2;
-      for (const c of next) {
-        const w = widthOf(c.id) * unit;
-        place(c.id, a, a + w);
-        a += w;
-      }
-    };
-    let a = -Math.PI / 2 - (weight[0] * unit) / 2;
-    hubs.forEach((h, i) => {
-      place(h, a, a + weight[i] * unit);
-      a += weight[i] * unit;
-    });
-
-    // The branches as drawn: a step out of the one before it; what follows a topic
-    // out of its last step (you finish them to go on); everything else out of its source.
-    const exitsOf = (id: string) => {
-      const list = steps(id);
-      return list.length ? [list[list.length - 1].id] : [id];
-    };
+    // What grows directly out of each node, in order.
+    const ROOT = "\u0000root";
+    const kids = new Map<string, string[]>([[ROOT, hubs]]);
     for (const n of skills) {
-      const f = from.get(n.id)!;
-      const sources = !isStep(n.id) && byId.get(f)?.kind === "skill" ? exitsOf(f) : [f];
-      for (const src of sources) {
-        this.branchEdges.push([src, n.id]);
-        this.edgeSet.add(`${src}>${n.id}`);
+      const p = parent.get(n.id)!;
+      if (p !== n.id) kids.set(p, [...(kids.get(p) ?? []), n.id]);
+    }
+    const lvOf = (id: string) => (id === ROOT ? 0 : isSkill(id) ? level.get(id)! : 1);
+
+    // Every node at each level, in order round the circle (the tree's own order, so branches never cross).
+    const byLevel: string[][] = [];
+    const walk = (id: string) => {
+      for (const c of kids.get(id) ?? []) {
+        (byLevel[lvOf(c)] ??= []).push(c);
+        walk(c);
       }
+    };
+    walk(ROOT);
+
+    // 2. Distances out from the middle: rings an equal step apart (the abilities, their areas,
+    // the fields, then where the paths start), then every step along a path the same distance
+    // on. The rings are as close in as they can be while every level still has room.
+    const TAU = Math.PI * 2;
+    const GAP = 14;
+    const STEP = 46;
+    const width = (id: string) => 2 * (byId.get(id)?.r ?? (id === ROOT ? 0 : 30)) + GAP;
+    const room = (lv: number) => (byLevel[lv] ?? []).reduce((sum, id) => sum + width(id), 0);
+    let ring = 150;
+    for (let lv = 1; lv < byLevel.length; lv++) {
+      // (The first rings are shared out evenly; the paths are packed, so they keep some slack.)
+      const need = room(lv) * (lv <= 3 ? 1.35 : 1.25);
+      ring = Math.max(ring, lv <= 4 ? need / (TAU * lv) : (need / TAU - (lv - 4) * STEP) / 4);
+    }
+    const radiusAt = (lv: number) => (lv <= 4 ? lv * ring : 4 * ring + (lv - 4) * STEP);
+
+    // 3. Angles, ring by ring from the middle out. The abilities, areas and fields are spread
+    // evenly round their rings; along the paths each node sits straight out from the one it
+    // grows from (brothers and sisters side by side), moved aside only as far as it must be
+    // to keep its gap from its neighbours.
+    const angle = new Map<string, number>();
+    for (let lv = 1; lv < byLevel.length; lv++) {
+      const ids = byLevel[lv] ?? [];
+      if (!ids.length) continue;
+      const R = radiusAt(lv);
+      // Where each would like to be: straight out, siblings either side.
+      const want: number[] = [];
+      for (let i = 0; i < ids.length; ) {
+        const p = lv === 1 ? ROOT : parent.get(ids[i])!;
+        let j = i;
+        while (j < ids.length && (lv === 1 ? ROOT : parent.get(ids[j])!) === p) j++;
+        let span = 0;
+        for (let k = i; k < j; k++) span += width(ids[k]) / R;
+        let a = (lv === 1 ? -Math.PI / 2 : angle.get(p)!) - (span - width(ids[i]) / R) / 2;
+        for (let k = i; k < j; k++) {
+          want[k] = a;
+          if (k + 1 < j) a += (width(ids[k]) + width(ids[k + 1])) / 2 / R;
+        }
+        i = j;
+      }
+      if (lv <= 3) {
+        // Evenly round the ring, turned to sit as close as it can to where they'd like to be.
+        const gap = TAU / ids.length;
+        const turn = ids.reduce((sum, _, i) => sum + (want[i] - want[0] - i * gap), 0) / ids.length;
+        ids.forEach((id, i) => angle.set(id, want[0] + turn + i * gap));
+        continue;
+      }
+      // Packed: as close to where they'd like to be as the gaps allow (least squares, in order).
+      const sep = ids.map((id, i) => (i ? (width(ids[i - 1]) + width(id)) / 2 / R : 0));
+      const offset: number[] = [];
+      sep.forEach((g, i) => (offset[i] = (i ? offset[i - 1] : 0) + g));
+      // Pool adjacent violators on want - offset, which must not decrease.
+      const blocks: { sum: number; n: number }[] = [];
+      for (let i = 0; i < ids.length; i++) {
+        blocks.push({ sum: want[i] - offset[i], n: 1 });
+        while (blocks.length > 1 && blocks[blocks.length - 2].sum / blocks[blocks.length - 2].n > blocks[blocks.length - 1].sum / blocks[blocks.length - 1].n) {
+          const b = blocks.pop()!;
+          blocks[blocks.length - 1].sum += b.sum;
+          blocks[blocks.length - 1].n += b.n;
+        }
+      }
+      let i = 0;
+      for (const b of blocks) for (let k = 0; k < b.n; k++, i++) angle.set(ids[i], b.sum / b.n + offset[i]);
+      // Round the back of the circle the two ends must clear each other too.
+      const first = angle.get(ids[0])!;
+      const last = angle.get(ids[ids.length - 1])!;
+      const limit = TAU - (width(ids[0]) + width(ids[ids.length - 1])) / 2 / R;
+      if (last - first > limit) {
+        const mid = (first + last) / 2;
+        for (const id of ids) angle.set(id, mid + ((angle.get(id)! - mid) * limit) / (last - first));
+      }
+    }
+
+    const at = (ang: number, r: number): Pt => ({ x: Math.cos(ang) * r, y: Math.sin(ang) * r });
+    for (const h of hubs) this.slots.set(h, at(angle.get(h)!, radiusAt(1)));
+    for (const n of skills) this.slots.set(n.id, at(angle.get(n.id)!, radiusAt(level.get(n.id)!)));
+
+    // The branches as drawn: each skill out of the one it grows from.
+    for (const n of skills) {
+      const src = parent.get(n.id)!;
+      this.branchEdges.push([src, n.id]);
+      this.edgeSet.add(`${src}>${n.id}`);
     }
   }
 
@@ -1601,13 +1622,13 @@ export class SkillGraph {
           ? 0.06
           : n.tier === "field"
             ? layout === "tree" ? 0.06 : 0.12
-            : n.tier === "sub" || n.tier === "advanced"
+            : n.tier === "sub" || n.tier === "advanced" || n.tier === "expert"
               ? layout === "tree" ? 0.2 : 0.26
               : n.tier === "detail"
                 ? layout === "tree" ? 0.85 : 0.62
                 : 0.45;
     const tierRank = (n: Node) =>
-      n.tier === "general" ? 3000 : n.tier === "field" ? 2800 : n.tier === "sub" || n.tier === "advanced" ? 2000 : n.tier === "detail" ? 1000 : 1500;
+      n.tier === "general" ? 3000 : n.tier === "field" ? 2800 : n.tier === "expert" ? 2200 : n.tier === "sub" || n.tier === "advanced" ? 2000 : n.tier === "detail" ? 1000 : 1500;
     // Clusters: the areas and fields are named on their circles instead.
     if (layout === "clusters") {
       for (const g of [...this.groups].sort((a, b) => a.level - b.level)) {

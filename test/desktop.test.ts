@@ -153,3 +153,27 @@ echo "Login successful."
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("desktop: updates install themselves only when you're not using Basalt", () => {
+  const { goodMoment, AWAY_SECONDS, BACKGROUND_MS } = require("../desktop/updater.cjs");
+  const win = (s: { focused?: boolean; minimized?: boolean; visible?: boolean }) => ({
+    isDestroyed: () => false,
+    isFocused: () => s.focused ?? false,
+    isMinimized: () => s.minimized ?? false,
+    isVisible: () => s.visible ?? true,
+  });
+  const now = 10_000_000;
+  // In use: focused, recently active.
+  assert.equal(goodMoment(win({ focused: true }), 0, now, 5), false);
+  // Stepped away from the computer (no keyboard or mouse), even with Basalt in front.
+  assert.equal(goodMoment(win({ focused: true }), 0, now, AWAY_SECONDS), true);
+  // In the background, but only just.
+  assert.equal(goodMoment(win({}), now - 1000, now, 5), false);
+  // In the background (or minimized) a while: you're doing something else.
+  assert.equal(goodMoment(win({}), now - BACKGROUND_MS, now, 5), true);
+  assert.equal(goodMoment(win({ minimized: true }), now - BACKGROUND_MS, now, 5), true);
+  // No window at all.
+  assert.equal(goodMoment(null, 0, now, 0), true);
+  // And Claude working on something holds it back.
+  assert.equal(require("../desktop/claude-run.cjs").busy(), false);
+});

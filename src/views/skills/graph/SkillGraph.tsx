@@ -661,7 +661,7 @@ function hoverInfo(
   const st = s ? data.stats.get(s.id) : undefined;
   if (!s || !st) {
     // Planned: in the built-in tree, not started yet.
-    const kind = e.tier === "general" ? "Area" : e.tier === "field" ? "Field" : e.tier === "sub" ? "Topic" : e.tier === "advanced" ? "Advanced" : "Step";
+    const kind = e.tier === "general" ? "Area" : e.tier === "field" ? "Field" : e.tier === "sub" ? "Topic" : e.tier === "advanced" ? "Advanced" : e.tier === "expert" ? "Expert" : "Step";
     const lines = [`${area?.attribute ?? area?.name ?? ""} · ${kind} · not started`];
     if (where) lines.push(where);
     if (node.learnt) lines.push(`${node.learnt.total} step${node.learnt.total === 1 ? "" : "s"} inside`);

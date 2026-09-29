@@ -9,7 +9,7 @@ import { Icon } from "../../components/ui.tsx";
 import { SkillGlyph } from "./SkillGlyph.tsx";
 import type { SkillTreeData } from "./useSkillData.ts";
 
-const TIER: Record<string, string> = { general: "Area", field: "Field", sub: "Topic", detail: "Step", advanced: "Advanced skill" };
+const TIER: Record<string, string> = { general: "Area", field: "Field", sub: "Topic", detail: "Step", advanced: "Advanced skill", expert: "Expert skill" };
 
 function Row({ e, color, onSelect }: { e: MapEntry; color: string; onSelect: (id: string) => void }) {
   return (
@@ -89,6 +89,9 @@ export function PlannedPanel({
           </nav>
         )}
         {e.description && <p className="small muted">{e.description}</p>}
+        {e.tier === "expert" && (
+          <p className="small muted">The top of {path.find((p) => p.tier === "field")?.name ?? "its field"}: PhD-level study, or mastery.</p>
+        )}
 
         <section className="sk-section">
           {e.done ? (

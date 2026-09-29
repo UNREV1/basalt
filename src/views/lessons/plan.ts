@@ -6,6 +6,7 @@
 
 import { useSyncExternalStore } from "react";
 import { getCurriculum } from "../../../shared/course.ts";
+import { CATALOG_BY_KEY } from "../../../shared/skill-catalog.ts";
 import { courseAhead, courseMistakes, learnerStats, learningMap, MISTAKE_WHY, type LearnerStats } from "../../../shared/learning.ts";
 import { displayTitle, getPage, pageMeta } from "../../../shared/model.ts";
 import { skillMapOf, trail } from "../../../shared/skill-map.ts";
@@ -112,7 +113,15 @@ export function planSkillRequest(ws: Workspace, skillId: string, opts: { lessons
     const where = trail(skillMapOf(ws.doc), skill.id)
       .map((e) => e.name)
       .join(" › ");
-    const prompt = `Plan the lessons for my skill "${skill.name}" (skill id ${skill.id}), a step in my skill tree: ${where}.
+    const cat = CATALOG_BY_KEY.get(skill.catalog);
+    const tier = cat?.tier === "detail" ? CATALOG_BY_KEY.get(cat.parent!)?.tier : cat?.tier;
+    const level =
+      tier === "expert"
+        ? " It's expert level, the top of its field: teach it at PhD level (graduate study and research) or, for a practical skill, at the level of professionals, elite performers and coaches."
+        : tier === "advanced"
+          ? " It's an advanced skill: build on everything before it, at the level of a university course or a serious practitioner."
+          : "";
+    const prompt = `Plan the lessons for my skill "${skill.name}" (skill id ${skill.id}), a step in my skill tree: ${where}.${level}
 1. Call get_skill_tree to see what comes before and after it, and research it (web search) enough to be accurate.
 2. Give it a course outline with plan_courses: 1–3 modules of 3–6 short lessons, each a title and a one-line objective, that start where the step before it left off and end ready for the next. Don't add skills or parts: the tree is planned already.
 3. ${lessons ? `Write the first ${stats.aheadTarget} lessons with write_interactive_lesson, following its style guide and the learning loop.` : "Don't write any lessons yet: titles only."}

@@ -23,7 +23,7 @@ import { SkillPanel } from "./SkillPanel.tsx";
 import { PlannedPanel } from "./PlannedPanel.tsx";
 import { searchMap, startTreeOver } from "../../../shared/skill-map.ts";
 
-const TIER_NAME: Record<string, string> = { general: "Area", field: "Field", sub: "Topic", detail: "Step", advanced: "Advanced" };
+const TIER_NAME: Record<string, string> = { general: "Area", field: "Field", sub: "Topic", detail: "Step", advanced: "Advanced", expert: "Expert" };
 import { fmt, plural, useSkillTree } from "./useSkillData.ts";
 import type { SkillTemplate } from "./templates.ts";
 import { takeSkillFocus } from "./focus.ts";

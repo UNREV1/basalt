@@ -153,4 +153,7 @@ function cancelAll() {
   runs.clear();
 }
 
-module.exports = { start, cancel, cancelAll, explain, defaultCwd: (userData) => path.join(userData, "claude", "work") };
+/** Whether Claude is working on something right now (so an update waits for it). */
+const busy = () => runs.size > 0;
+
+module.exports = { start, cancel, cancelAll, busy, explain, defaultCwd: (userData) => path.join(userData, "claude", "work") };

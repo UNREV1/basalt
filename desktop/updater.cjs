@@ -1,20 +1,34 @@
 // Keeps the desktop app up to date from the public GitHub releases of
-// UNREV1/basalt (built by .github/workflows/desktop.yml).
+// UNREV1/basalt (built by .github/workflows/desktop.yml), without you having
+// to do anything:
 //
-//   Windows (installed) and Linux AppImage: updates download in the
-//   background and install on restart — Basalt asks whether to restart now.
+//   Windows (installed) and Linux AppImage: Basalt checks every hour, downloads
+//   a new version in the background and installs it by itself, restarting
+//   when you're not using it (you locked the screen, stepped away, or Basalt
+//   has been in the background a while) and never while Claude is working on
+//   something. Otherwise it installs when you quit. Afterwards a small
+//   notification says what version you're on.
+//   Installed for all users (in Program Files), Windows asks permission to
+//   change the app, so Basalt installs those updates when you quit instead of
+//   while you're away (where the question would wait for you).
 //   The portable Windows .exe can't replace itself, so Basalt says a new
 //   version is out and opens the download page.
 
-const { app, dialog, net, shell } = require("electron");
+const { app, dialog, net, shell, powerMonitor, Notification } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 
 const OWNER = "UNREV1";
 const REPO = "basalt";
 const RELEASES_PAGE = `https://github.com/${OWNER}/${REPO}/releases/latest`;
-const CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
+const CHECK_EVERY_MS = 60 * 60 * 1000;
 const FIRST_CHECK_AFTER_MS = 15 * 1000;
+/** How often a downloaded update looks for a good moment to install. */
+const WAIT_STEP_MS = 60 * 1000;
+/** No keyboard or mouse for this long: you've stepped away. */
+const AWAY_SECONDS = 10 * 60;
+/** Basalt minimized, hidden or in the background this long: you're doing something else. */
+const BACKGROUND_MS = 5 * 60 * 1000;
 
 const settingsFile = () => path.join(app.getPath("userData"), "desktop-settings.json");
 
@@ -52,36 +66,89 @@ function canInstallItself() {
   return false;
 }
 
+/** Whether replacing the app needs an administrator's permission (installed for all users). */
+function needsPermission() {
+  if (process.platform !== "win32") return false;
+  const probe = path.join(path.dirname(process.execPath), `.basalt-update-check-${process.pid}`);
+  try {
+    fs.writeFileSync(probe, "");
+    fs.unlinkSync(probe);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Whether now is a good moment to restart into the new version: you're away
+ * from the computer, or Basalt has been out of the way for a while.
+ * @param {Electron.BrowserWindow | null} win
+ * @param {number} backgroundSince - when Basalt last lost focus (0: it has focus)
+ */
+function goodMoment(win, backgroundSince, now = Date.now(), idleSeconds = powerMonitor.getSystemIdleTime()) {
+  if (idleSeconds >= AWAY_SECONDS) return true;
+  if (!win || win.isDestroyed()) return true;
+  const outOfTheWay = win.isMinimized() || !win.isVisible() || !win.isFocused();
+  return outOfTheWay && backgroundSince > 0 && now - backgroundSince >= BACKGROUND_MS;
+}
+
 /**
  * @param {() => Electron.BrowserWindow | null} getWindow
+ * @param {{ isBusy?: () => boolean }} [opts] - isBusy: something is running that a restart would cut short
  */
-function createUpdater(getWindow) {
+function createUpdater(getWindow, opts = {}) {
+  const isBusy = opts.isBusy ?? (() => false);
   const selfInstall = canInstallItself();
+  const askPermission = selfInstall && needsPermission();
   let autoUpdater = null;
   let busy = false;
   let readyVersion = null;
   const told = new Set(); // versions already announced this session
   let timer = null;
+  let waiting = null;
+  let backgroundSince = 0;
+  let installing = false;
 
   const box = (options) => {
     const win = getWindow();
     return win ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options);
   };
 
+  function install() {
+    if (installing || !readyVersion) return;
+    installing = true;
+    clearInterval(waiting);
+    // Silent, and Basalt opens again straight after.
+    setImmediate(() => autoUpdater.quitAndInstall(true, true));
+  }
+
+  /** Installs at the next good moment; installed for all users, when you quit (autoInstallOnAppQuit). */
+  function installWhenAway() {
+    if (askPermission || !isAutomatic()) return;
+    clearInterval(waiting);
+    const attempt = () => {
+      const win = getWindow();
+      // (Basalt may never have had focus: count from now.)
+      if (win && !win.isDestroyed() && !win.isFocused() && !backgroundSince) backgroundSince = Date.now();
+      if (!isBusy() && goodMoment(win, backgroundSince)) install();
+    };
+    waiting = setInterval(attempt, WAIT_STEP_MS);
+    attempt();
+  }
+
   function offerRestart(version) {
-    readyVersion = version;
-    if (told.has(version)) return;
-    told.add(version);
     box({
       type: "info",
       title: "Update ready",
       message: `Basalt ${version} is ready`,
-      detail: "Restart Basalt to finish updating. If you choose Later, it updates the next time you quit.",
+      detail: askPermission
+        ? "It installs by itself when you quit Basalt (Windows asks for permission, as Basalt is installed for everyone on this computer)."
+        : "It installs by itself when you're not using Basalt, or when you quit.",
       buttons: ["Restart now", "Later"],
       defaultId: 0,
       cancelId: 1,
     }).then(({ response }) => {
-      if (response === 0) setImmediate(() => autoUpdater.quitAndInstall(true, true));
+      if (response === 0) install();
     });
   }
 
@@ -106,7 +173,10 @@ function createUpdater(getWindow) {
     autoUpdater.autoDownload = true;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.logger = null;
-    autoUpdater.on("update-downloaded", (info) => offerRestart(info.version));
+    autoUpdater.on("update-downloaded", (info) => {
+      readyVersion = info.version;
+      installWhenAway();
+    });
     autoUpdater.on("error", () => {
       // Offline or GitHub unreachable: try again at the next check.
     });
@@ -129,15 +199,12 @@ function createUpdater(getWindow) {
       if (manual) box({ type: "info", message: "Updates are only available in the installed app." });
       return;
     }
-    if (busy) return;
+    if (busy || installing) return;
     busy = true;
     try {
       if (selfInstall) {
         if (readyVersion) {
-          if (manual) {
-            told.delete(readyVersion);
-            offerRestart(readyVersion);
-          }
+          if (manual) offerRestart(readyVersion);
           return;
         }
         const result = await autoUpdater.checkForUpdates();
@@ -150,7 +217,9 @@ function createUpdater(getWindow) {
           box({
             type: "info",
             message: newer ? `Downloading Basalt ${version}…` : "Basalt is up to date",
-            detail: newer ? "You'll be asked to restart when it's ready." : `You have the latest version (${app.getVersion()}).`,
+            detail: newer
+              ? "It installs by itself when it's ready: when you're not using Basalt, or when you quit."
+              : `You have the latest version (${app.getVersion()}).`,
           });
         }
       } else {
@@ -183,6 +252,34 @@ function createUpdater(getWindow) {
     timer = setInterval(() => check(false), CHECK_EVERY_MS);
   }
 
+  /** Says which version you're on, once, after an update installed itself. */
+  function sayUpdated() {
+    const now = app.getVersion();
+    const { lastVersion } = readSettings();
+    if (lastVersion === now) return;
+    writeSettings({ lastVersion: now });
+    if (!lastVersion || compareVersions(now, lastVersion) <= 0 || !Notification.isSupported()) return;
+    new Notification({ title: `Basalt updated to ${now}`, body: "Updated in the background. You're on the latest version.", silent: true }).show();
+  }
+
+  function start() {
+    sayUpdated();
+    schedule();
+    // Coming back from sleep: a good time to look for a new version.
+    powerMonitor.on("resume", () => setTimeout(() => check(false), FIRST_CHECK_AFTER_MS));
+    // Locking the screen means you've stepped away.
+    powerMonitor.on("lock-screen", () => {
+      if (readyVersion && !askPermission && isAutomatic() && !isBusy()) install();
+    });
+    // Keep track of how long Basalt has been in the background.
+    app.on("browser-window-blur", () => {
+      if (!backgroundSince) backgroundSince = Date.now();
+    });
+    app.on("browser-window-focus", () => {
+      backgroundSince = 0;
+    });
+  }
+
   function isAutomatic() {
     return readSettings().autoUpdate !== false;
   }
@@ -191,10 +288,12 @@ function createUpdater(getWindow) {
     writeSettings({ autoUpdate: on });
     if (autoUpdater) autoUpdater.autoDownload = on;
     schedule();
+    if (on && readyVersion) installWhenAway();
+    else clearInterval(waiting);
   }
 
   return {
-    start: schedule,
+    start,
     check,
     isAutomatic,
     setAutomatic,
@@ -203,4 +302,4 @@ function createUpdater(getWindow) {
   };
 }
 
-module.exports = { createUpdater, compareVersions };
+module.exports = { createUpdater, compareVersions, goodMoment, AWAY_SECONDS, BACKGROUND_MS };

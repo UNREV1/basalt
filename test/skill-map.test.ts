@@ -64,6 +64,31 @@ test("catalog: areas > fields > topics (branching) > steps > advanced, every ste
   for (const e of CATALOG) assert.ok(visit(e.key), `no loop through ${e.name}`);
 });
 
+test("catalog: every branch goes all the way, through advanced skills to expert (PhD level or mastery) ones", () => {
+  for (const f of CATALOG.filter((e) => e.tier === "field")) {
+    const items = CATALOG.filter((e) => e.parent === f.key);
+    const experts = items.filter((e) => e.tier === "expert");
+    assert.ok(experts.length >= 1 && experts.length <= 4, `${f.name} has expert skills at the top`);
+    const next = (k: string) => items.filter((x) => x.needs.includes(k));
+    for (const x of items) {
+      if (x.tier === "sub") assert.ok(next(x.key).length, `${f.name} / ${x.name} leads on`);
+      if (x.tier === "advanced") assert.ok(next(x.key).some((n) => n.tier !== "sub"), `${f.name} / ${x.name} leads on to more advanced skills`);
+      if (x.tier === "expert") assert.ok(x.needs.some((n) => CATALOG_BY_KEY.get(n)!.field === f.key && CATALOG_BY_KEY.get(n)!.tier !== "sub"), `${x.name} tops a branch`);
+    }
+    // From any topic you can climb to the top.
+    const reaches = (k: string, seen = new Set<string>()): boolean =>
+      CATALOG_BY_KEY.get(k)!.tier === "expert" || (!seen.has(k) && (seen.add(k), next(k).some((n) => reaches(n.key, seen))));
+    for (const x of items) assert.ok(reaches(x.key), `${f.name} / ${x.name} reaches an expert skill`);
+  }
+  // PhD level where it's academic: math ends in research, after the graduate courses.
+  const research = CATALOG_BY_KEY.get(key("Mathematical research"))!;
+  assert.equal(research.tier, "expert");
+  assert.ok(research.needs.includes(key("Graduate analysis")));
+  assert.ok(CATALOG_BY_KEY.get(key("Graduate analysis"))!.needs.includes(key("Real analysis")));
+  // And nutrition goes on to clinical and research level.
+  assert.ok(["Clinical dietetics", "Nutrition research"].every((n) => CATALOG_BY_KEY.get(key(n, "Nutrition"))!.tier === "expert"));
+});
+
 test("skill map: the built-in tree is planned on an empty map, with nothing skipped", () => {
   const doc = new Y.Doc();
   const map = skillMapOf(doc);

@@ -21,7 +21,7 @@ let relay = null;
 let appUrl = "";
 /** How Claude starts Basalt's connector (see mcpLaunch). */
 let claudeLaunch;
-const updater = createUpdater(() => win);
+const updater = createUpdater(() => win, { isBusy: () => claudeRun.busy() });
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

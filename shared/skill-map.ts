@@ -275,7 +275,7 @@ export function searchMap(map: SkillMap, query: string, limit = Infinity): Searc
   if (q.length < 2) return [];
   const terms = [q, ...(SYNONYMS[q] ?? []), ...q.split(/\s+/).flatMap((w) => (w !== q ? (SYNONYMS[w] ?? []) : []))];
   const tierBonus = (e: MapEntry) =>
-    e.tier === "field" ? 9 : e.tier === "general" ? 8 : e.tier === "sub" ? 6 : e.tier === "advanced" ? 5 : e.tier === "detail" ? 2 : 4;
+    e.tier === "field" ? 9 : e.tier === "general" ? 8 : e.tier === "sub" ? 6 : e.tier === "advanced" ? 5 : e.tier === "expert" ? 5 : e.tier === "detail" ? 2 : 4;
   const hits: SearchHit[] = [];
   for (const e of map.entries) {
     const name = e.name.toLowerCase();

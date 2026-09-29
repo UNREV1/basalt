@@ -45,7 +45,9 @@ First launch, once:
 
 The desktop app is the full Basalt with its sync server built in: your notes live on your computer (Help → *Show data folder*), it works offline, and **Share** gives phones and tablets on your Wi-Fi an invite link / QR code to join. For access from anywhere, see *Put it on the internet for free* below.
 
-**Updates:** Basalt checks for a new version a few seconds after it starts and every few hours. The installed Windows app and the Linux AppImage download it in the background and ask to restart (or update when you next quit); the portable .exe shows a *Download* prompt. *Help → Check for updates…* checks right away, and *Help → Update automatically* turns it off. Your notes are never touched by an update.
+**Updates happen by themselves.** Basalt checks for a new version a few seconds after it starts, every hour, and when your computer wakes up. The installed Windows app and the Linux AppImage download it in the background and install it without asking. Basalt restarts into the new version while you're not using it: when you lock the screen, step away for 10 minutes, or leave Basalt in the background for 5 minutes. It never restarts while Claude is working on something, and otherwise it updates when you quit. A small notification then says which version you're on. The portable .exe can't replace itself, so it shows a *Download* prompt instead.
+
+If Basalt is installed for everyone on the computer (in Program Files), Windows has to give permission to change it. Those updates install when you quit, and Windows asks you then. To update without any question, reinstall Basalt and choose *Only for me*. *Help → Check for updates…* checks right away, and *Help → Update automatically* turns automatic updates off. Your notes are never touched by an update.
 
 **Build the .exe yourself** (on Windows; Node.js 22.18+):
 
@@ -130,11 +132,16 @@ The home screen. *Continue* picks up your next lesson; *Review* brings back what
 - **Topics** inside each field. They branch and join: Pre-algebra leads to both Algebra and Geometry, and Trigonometry needs both.
 - **Steps** you learn inside each topic, in order.
 - **Advanced skills** after them.
+- **Expert skills** at the top of every field:
+  - In academic fields, PhD level: Mathematics goes on through Real and Complex analysis to Graduate analysis, algebra and geometry, then Mathematical research.
+  - In practical fields, mastery: elite competition, coaching and the science behind it, for example Strength coaching and Strength science.
+
+Every branch goes all the way: each topic leads on to an advanced skill, and each advanced skill leads on to an expert one. That's about 3,300 skills in all.
 
 Nothing is skipped: each step needs the one before it, and a topic needs everything it follows. An advanced skill needs everything it builds on, from any tree: Software development comes after Frontend, Backend and Databases in Programming, Algorithms in Computer science, and Discrete mathematics. Related skills in other trees are linked too, like Baking to Chemistry, without locking anything.
 
 The map has three layouts:
-- **Radial:** areas nearest you, each path running outward.
+- **Radial:** you in the middle, then evenly spaced rings: your abilities, their areas and the fields in each, every ring evenly filled. From each field its paths run straight out, from the first topic to the expert skills, with every step the same distance apart.
 - **Tree:** a left-to-right outline you scroll like a table of contents.
 - **Clusters:** each field in its own space inside its area, its topics grouped with their steps.
 
@@ -210,7 +217,7 @@ Real life, with the progression mechanics of D&D (but none of the video-game loo
     - Finishing a lesson that opens new skills shows *Unlocked!*, and the map pulses them.
   - **Topics** like Arithmetic have a double rim, and their badge shows how many parts you've learnt.
   - **Layouts:**
-    - **Radial** (default): you in the middle, your six abilities around you, and every path branching out from there. A subject grows into its topics and each topic into its parts, one ring further out each step. Click yourself in the middle for your character.
+    - **Radial** (default): you in the middle, with evenly spaced rings for your six abilities, their areas and their fields, each ring evenly filled. Every path branches out from there, one equal step further out each time: a subject grows into its topics, and each topic into its parts. Click yourself in the middle for your character.
     - **Tree:** a column per ability, and a planned subject gets a lane per topic.
     - **Clusters:** skills gather around their ability.
   - **Physics like Obsidian's graph:** skills push each other apart and links pull like springs. Drag one and its neighbours follow, then everything settles.

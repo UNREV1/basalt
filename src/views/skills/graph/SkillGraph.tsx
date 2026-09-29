@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "rea
 import { allLessons, getCurriculum, getProgress } from "../../../../shared/course.ts";
 import { displayTitle, getPage, pageMeta } from "../../../../shared/model.ts";
 import { allParts, formatModifier, requirementText, skillDone, themedColor } from "../../../../shared/skills.ts";
+import { usePalette } from "../../../lib/theme.ts";
 import { entryGlyph, missingFor, nextLeaf, trail, type SkillMap } from "../../../../shared/skill-map.ts";
 import type { Skill } from "../../../../shared/skills.ts";
 import { Icon } from "../../../components/ui.tsx";
@@ -156,6 +157,7 @@ export function SkillGraphView({
       return next;
     });
 
+  const palette = usePalette();
   // Nodes and links from the map: the built-in tree with your skills in it.
   const model = useMemo(() => {
     const nodes: SGNode[] = [];
@@ -286,7 +288,9 @@ export function SkillGraphView({
       }
     }
     return { nodes, links, order: abilities.map((a) => a.id) };
-  }, [data, dark, ws, busy, peers]);
+    // (palette: themedColor draws from it.)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, dark, palette, ws, busy, peers]);
 
   // Paths to filter by: the fields, grouped by their area; then paths of your own.
   const branches = useMemo(() => {
@@ -410,7 +414,7 @@ export function SkillGraphView({
       gold: dark ? "#f0b93a" : "#e0a100",
       font: v("--font", "system-ui, sans-serif"),
     });
-  }, [dark]);
+  }, [dark, palette]);
 
   const nodeById = useMemo(() => new Map(model.nodes.map((n) => [n.id, n])), [model]);
   const hovered = useMemo(() => (hoverId ? hoverInfo(hoverId, data, model.nodes, ws) : null), [hoverId, data, model, ws]);

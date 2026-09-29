@@ -15,7 +15,7 @@ import {
   type SkillPlanItem,
 } from "../../../shared/skills.ts";
 import { useApp } from "../../lib/hooks.ts";
-import { useTheme } from "../../lib/theme.ts";
+import { usePalette, useTheme } from "../../lib/theme.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { EmojiPicker, Icon, Modal, type Anchor } from "../../components/ui.tsx";
 import { FEATURED_TEMPLATE, SKILL_TEMPLATES, type SkillTemplate } from "./templates.ts";
@@ -38,6 +38,7 @@ export function AddSkillModal({
   onCreated: (id: string) => void;
 }) {
   const dark = useTheme() === "dark";
+  usePalette(); // ability colors follow the palette
   const parent = parentId ? data.byId.get(parentId) : undefined;
   const [name, setName] = useState("");
   const [icon, setIcon] = useState(parent ? "✨" : "⭐");

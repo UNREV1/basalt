@@ -143,14 +143,6 @@ const path2d = (d: string) => {
   return p;
 };
 
-/** Each learning path gets its own color, stable across sessions. */
-const PATH_COLORS = ["#0a84ff", "#bf5af2", "#ff9f0a", "#30d158", "#ff375f", "#64d2ff", "#ffd60a"];
-function pathColor(name: string): string {
-  let h = 7;
-  for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return PATH_COLORS[h % PATH_COLORS.length];
-}
-
 /** A color with an opacity, as CSS (cached: the map asks for the same few thousands of times a frame). */
 const alphas = new Map<string, string>();
 function alpha(hex: string, a: number): string {
@@ -1195,10 +1187,11 @@ export class SkillGraph {
     // (The built-in tree's paths are its general topics, already labelled.)
     for (const n of this.nodes) if (n.kind === "skill" && n.branch && !n.tier && n.x !== undefined) branches.set(n.branch, [...(branches.get(n.branch) ?? []), n]);
     for (const [name, members] of branches) {
-      const color = pathColor(name);
       const ids = new Set(members.map((m) => m.id));
       const faded = path ? !members.some((m) => path.has(m.id)) : this.opts.matches ? !members.some((m) => this.opts.matches!.has(m.id)) : false;
       const start = members.reduce((a, b) => (b.depth < a.depth ? b : a), members[0]);
+      // A path takes its ability's color (the palette's), like everything in it.
+      const color = start.color;
       roads.push({ name, color, start, faded });
       // The radial map's branches are the paths already.
       if (this.opts.layout === "radial") continue;

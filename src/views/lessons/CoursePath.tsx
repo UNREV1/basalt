@@ -12,7 +12,7 @@ import { areaOf, levelForXp, listSkills, needsMasteryCheck, themedColor, totalXp
 import { Icon } from "../../components/ui.tsx";
 import { useApp, useY } from "../../lib/hooks.ts";
 import { navigate } from "../../lib/router.ts";
-import { useTheme } from "../../lib/theme.ts";
+import { usePalette, useTheme } from "../../lib/theme.ts";
 import { dismissClaudeJob, useClaudeJobs } from "../../lib/claude.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { focusSkill } from "../skills/focus.ts";
@@ -29,6 +29,7 @@ export function CoursePath({ ws, pageId, page }: { ws: Workspace; pageId: string
   useY(course, true);
   useY(page);
   const dark = useTheme() === "dark";
+  usePalette(); // ability colors follow the palette
   const jobs = useClaudeJobs();
   const curriculum = getCurriculum(page);
   const title = displayTitle(pageMeta(page)) || curriculum?.topic || "Course";

@@ -22,7 +22,7 @@ import {
 import { Icon } from "../../components/ui.tsx";
 import { useApp } from "../../lib/hooks.ts";
 import { navigate } from "../../lib/router.ts";
-import { useTheme } from "../../lib/theme.ts";
+import { usePalette, useTheme } from "../../lib/theme.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { useLessonStarter } from "../lessons/start.ts";
 import { ClaudeJobLine } from "../lessons/ClaudeStatus.tsx";
@@ -36,6 +36,7 @@ export default function SkillHeader({ ws, pageId }: { ws: Workspace; pageId: str
   const { openPage, toast } = useApp();
   const data = useSkillTree(ws);
   const dark = useTheme() === "dark";
+  usePalette(); // ability colors follow the palette
   const doc = ws.doc;
   const [skillId, setSkillId] = useState<string | undefined>();
   const [minutes, setMinutes] = useState("");

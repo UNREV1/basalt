@@ -9,7 +9,7 @@ import { aiAvailable } from "../../lib/ai.ts";
 import { useClaudeJobs } from "../../lib/claude.ts";
 import { useApp, useMediaQuery, usePeers } from "../../lib/hooks.ts";
 import { useSettings } from "../../lib/settings.ts";
-import { useTheme } from "../../lib/theme.ts";
+import { usePalette, useTheme } from "../../lib/theme.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { Icon, Menu, Modal, type Anchor, type MenuItem } from "../../components/ui.tsx";
 import { usePlayer } from "../lessons/player.ts";
@@ -50,6 +50,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
   const settings = useSettings();
   const hasAi = useMemo(() => aiAvailable(), [settings.anthropicKey]);
   const dark = useTheme() === "dark";
+  usePalette(); // ability colors follow the palette
   const phone = useMediaQuery("(max-width: 720px)");
 
   const [selectedId, setSelectedId] = useState<string | null>(null);

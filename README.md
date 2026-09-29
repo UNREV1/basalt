@@ -255,6 +255,8 @@ Basalt's default look is inspired by Apple's Liquid Glass — on **every** platf
 
 **Designs:** Settings → Appearance opens with a gallery of complete looks — Calm (default), Windows 11, Clean, Graphite, Liquid Glass, Journal, Nord, Midnight and High contrast — each shown as a live miniature; one click switches, and everything below it fine-tunes the one you picked (also *Change design…* in `Ctrl/⌘ K`).
 
+**Colors:** one simple palette colors the whole app: the six abilities, the skill map (every path takes its ability's color), courses and buttons. Settings → Appearance → *Colors* has **Simple** (calm, muted colors; the default), **Soft** (light pastels), **Earth**, **Ocean**, **Mono** (graphite only, with ink-dark buttons) and **Vivid** (the bright colors from before). Each works in light and dark mode. The palette is per device and changes nothing in your workspace, so everyone sharing it can use their own. *Accent color* below still overrides the buttons if you want.
+
 Settings → Appearance → Liquid Glass: pick a backdrop (Calm by default; Aurora, Sunrise, Ocean, Meadow, Graphite or your own photo), set **Refraction** and **Frost**, choose **Subtle** or **Round** corners, or turn on **Reduce transparency** for solid surfaces (also honored from your OS setting where supported). The classic flat themes (Basalt, Paper, Nord, Solarized, Midnight, High contrast) are still there.
 
 ### Make it yours

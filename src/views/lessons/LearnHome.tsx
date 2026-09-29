@@ -33,7 +33,7 @@ import { useApp } from "../../lib/hooks.ts";
 import { appendMarkdown } from "../../lib/markdown.ts";
 import { navigate } from "../../lib/router.ts";
 import { getSettings, useSettings } from "../../lib/settings.ts";
-import { useTheme } from "../../lib/theme.ts";
+import { usePalette, useTheme } from "../../lib/theme.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { useDueCount } from "../registry.tsx";
 import { QuestCheck } from "../skills/Overview.tsx";
@@ -409,6 +409,7 @@ function lessonCount(ws: Workspace, s: Skill): { done: number; total: number } {
 function Branches({ ws }: { ws: Workspace }) {
   const { openPage, toast } = useApp();
   const dark = useTheme() === "dark";
+  usePalette(); // ability colors follow the palette
   const jobs = useClaudeJobs();
   const starter = useLessonStarter(ws, {
     toast,
@@ -551,6 +552,7 @@ function CourseList({ list }: { list: CourseInfo[] }) {
 function CharacterCard({ ws }: { ws: Workspace }) {
   const sheet = characterSheet(ws.doc);
   const dark = useTheme() === "dark";
+  usePalette(); // ability colors follow the palette
   return (
     <button className="lh-card lh-character" onClick={() => navigate({ name: "view", wsId: ws.id, view: "skills" })}>
       <span className="lh-kicker">Character</span>
@@ -572,6 +574,7 @@ function CharacterCard({ ws }: { ws: Workspace }) {
 function Library({ ws }: { ws: Workspace }) {
   const { openPage } = useApp();
   const dark = useTheme() === "dark";
+  usePalette(); // ability colors follow the palette
   const areas = listAreas(ws.doc);
   const [ability, setAbility] = useState<string>("all");
   if (!LIBRARY.length) return null;

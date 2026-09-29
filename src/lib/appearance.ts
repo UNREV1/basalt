@@ -8,6 +8,7 @@
 import { syncTitleBar } from "./desktop.ts";
 import type { Appearance, Settings, UiFont } from "./settings.ts";
 import { setLiquidGlass } from "./liquidGlass.ts";
+import { getPalette, setActivePalette } from "../../shared/palette.ts";
 
 export const APPEARANCE_CACHE_KEY = "basalt:appearance";
 const STYLE_ID = "basalt-appearance";
@@ -527,8 +528,14 @@ export function appearanceCss(a: Appearance): { css: string; only: "light" | "da
       out.push(block(LIGHT, { "--wallpaper": wp.light }), block(DARK, { "--wallpaper": wp.dark }));
     }
   }
+  const palette = getPalette(a.palette);
   if (HEX_COLOR.test(a.accent)) {
     out.push(block(LIGHT, accentTokens(a.accent, only === "dark")), block(DARK, accentTokens(a.accent, only !== "light")));
+  } else if (palette.accent && preset.id !== "contrast") {
+    // The palette's accent (High contrast keeps its own, for legibility).
+    const light = only === "dark" ? palette.accent.dark : palette.accent.light;
+    const dark = only === "light" ? palette.accent.light : palette.accent.dark;
+    out.push(block(LIGHT, accentTokens(light, only === "dark")), block(DARK, accentTokens(dark, only !== "light")));
   }
   const vars: Tokens = {};
   if (a.uiFont !== "sans" && FONT_STACKS[a.uiFont]) vars["--font"] = FONT_STACKS[a.uiFont];
@@ -578,6 +585,9 @@ export function applyAppearance(settings: Settings) {
   const el = ensureStyle(STYLE_ID);
   if (el.textContent !== css) el.textContent = css;
   const root = document.documentElement;
+  // Ability colors are drawn from the palette in JS; components re-render on data-palette (usePalette).
+  setActivePalette(a.palette);
+  root.dataset.palette = getPalette(a.palette).id;
   root.dataset.theme = resolveDark(settings.theme, a.preset) ? "dark" : "light";
   root.dataset.density = a.density;
   if (glass) root.dataset.glass = "";

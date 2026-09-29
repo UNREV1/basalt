@@ -15,6 +15,7 @@ import {
   SIDEBAR_NAV,
   THEME_PRESETS,
   WALLPAPERS,
+  getPreset,
   orderFavorites,
   presetOnly,
   type ThemePreset,
@@ -22,6 +23,8 @@ import {
 import { useApp, usePages } from "../../lib/hooks.ts";
 import { defaultAppearance, updateAppearance, updateSettings, useSettings, type UiFont } from "../../lib/settings.ts";
 import { useTheme } from "../../lib/theme.ts";
+import { PALETTES, getPalette } from "../../../shared/palette.ts";
+import { DEFAULT_AREAS, themedColor } from "../../../shared/skills.ts";
 import { lensSupported } from "../../lib/liquidGlass.ts";
 import { Icon, Segmented, Toggle } from "../ui.tsx";
 import { DesignGallery } from "./DesignGallery.tsx";
@@ -195,6 +198,41 @@ function GlassOptions({ dark }: { dark: boolean }) {
   );
 }
 
+/** Palettes: the six ability colors and the accent, as this mode shows them. */
+function PalettePicker({ dark }: { dark: boolean }) {
+  const a = useSettings().appearance;
+  const current = getPalette(a.palette).id;
+  const preset = getPreset(a.preset);
+  const themeAccent = (dark ? (preset.dark ?? preset.light) : (preset.light ?? preset.dark))?.["--accent"] ?? "var(--accent)";
+  return (
+    <div className="ap-palettes" role="radiogroup" aria-label="Color palette">
+      {PALETTES.map((p) => {
+        const active = p.id === current;
+        const accent = p.accent ? (dark ? p.accent.dark : p.accent.light) : themeAccent;
+        return (
+          <button
+            key={p.id}
+            role="radio"
+            aria-checked={active}
+            className={`ap-palette${active ? " active" : ""}`}
+            title={p.description}
+            // A palette brings its own accent, so a hand-picked one gives way.
+            onClick={() => updateAppearance({ palette: p.id, accent: "" })}
+          >
+            <span className="ap-palette-art" aria-hidden>
+              {DEFAULT_AREAS.map((area) => (
+                <i key={area.id} style={{ background: themedColor(area.color, dark, p) }} />
+              ))}
+              <b style={{ background: accent }} />
+            </span>
+            <span className="ap-palette-name">{p.name}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AppearanceSettings() {
   const { ws } = useApp();
   const settings = useSettings();
@@ -243,16 +281,20 @@ export function AppearanceSettings() {
         </div>
       </Group>
 
+      <Group title="Colors" hint={`${getPalette(a.palette).description} The six abilities, the skill map and buttons all use it.`}>
+        <PalettePicker dark={dark} />
+      </Group>
+
       {a.preset === "glass" && <GlassOptions dark={dark} />}
 
-      <Group title="Accent color">
+      <Group title="Accent color" hint="Buttons, links and selection. The palette decides, unless you pick one here.">
         <div className="cz-swatches ap-accents" role="radiogroup" aria-label="Accent color">
           <button
             role="radio"
             aria-checked={!a.accent}
             className={`cz-swatch default${!a.accent ? " selected" : ""}`}
-            title="Theme accent"
-            aria-label="Theme accent"
+            title="The palette's accent"
+            aria-label="The palette's accent"
             onClick={() => updateAppearance({ accent: "" })}
           />
           {ACCENT_PRESETS.map((c) => (

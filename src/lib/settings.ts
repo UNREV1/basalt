@@ -3,6 +3,7 @@
 import { syncTitleBar } from "./desktop.ts";
 import { useSyncExternalStore } from "react";
 import { resolveDark } from "./appearance.ts";
+import { DEFAULT_PALETTE } from "../../shared/palette.ts";
 
 export interface Identity {
   name: string;
@@ -15,8 +16,10 @@ export type UiFont = "sans" | "serif" | "mono" | "rounded" | "system";
 export interface Appearance {
   /** Theme preset id (see THEME_PRESETS in appearance.ts). */
   preset: string;
-  /** "" = the preset's own accent, else #rrggbb. */
+  /** "" = the palette's accent (or the preset's own), else #rrggbb. */
   accent: string;
+  /** Color palette id (see PALETTES in shared/palette.ts). */
+  palette: string;
   uiFont: UiFont;
   /** Base interface font size in px (13–18). */
   fontSize: number;
@@ -115,6 +118,7 @@ export function defaultAppearance(): Appearance {
   return {
     preset: "glass",
     accent: "",
+    palette: DEFAULT_PALETTE,
     uiFont: "sans",
     fontSize: 14,
     density: "comfortable",

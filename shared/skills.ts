@@ -28,6 +28,7 @@ import { isGlyph } from "./glyphs.ts";
 import { allLessons, getCurriculum, getProgress } from "./course.ts";
 import { hasMasteryCheck } from "./mastery.ts";
 import { createPage, ensureBuiltinType, findSystemPage, getPage, todayKey, trashPage } from "./model.ts";
+import { CLASSIC, SLOT_NAMES, paletteColor, type Palette } from "./palette.ts";
 
 /** Transaction origin for every write made through this module. */
 export const SKILLS_ORIGIN = "basalt-skills";
@@ -104,7 +105,7 @@ export interface SkillArea {
   id: string;
   name: string;
   icon: string;
-  /** Hex color (light-theme step; see AREA_PALETTE for the dark step). */
+  /** Hex color: one of AREA_PALETTE (shown in the device's palette, see themedColor), or any other. */
   color: string;
   /** Three-letter attribute shown on the character sheet, e.g. "VIT". */
   attribute?: string;
@@ -129,27 +130,15 @@ export const DEFAULT_QUEST_XP = 25;
 const CURVE = 2.2;
 
 /**
- * Categorical area colors, validated for color-vision separation in this
- * order (light on #fcfcfb, dark on #1a1a19). Areas are always labelled, so
- * color is a secondary cue.
+ * The colors an area can have, as stored in the workspace: the classic
+ * (Vivid) colors. Each device shows them in its own palette (see palette.ts).
+ * Areas are always labelled, so color is a secondary cue.
  */
-export const AREA_PALETTE: { light: string; dark: string; name: string }[] = [
-  { light: "#e34948", dark: "#e66767", name: "Red" },
-  { light: "#2a78d6", dark: "#3987e5", name: "Blue" },
-  { light: "#a0652a", dark: "#b0743a", name: "Bronze" },
-  { light: "#e87ba4", dark: "#d55181", name: "Pink" },
-  { light: "#eda100", dark: "#c98500", name: "Gold" },
-  { light: "#4a3aa7", dark: "#9085e9", name: "Violet" },
-  { light: "#eb6834", dark: "#d95926", name: "Orange" },
-  { light: "#1baf7a", dark: "#1a9aa8", name: "Aqua" },
-  { light: "#008300", dark: "#008300", name: "Green" },
-];
+export const AREA_PALETTE: { light: string; dark: string; name: string }[] = CLASSIC.colors.map((c, i) => ({ ...c, name: SLOT_NAMES[i] }));
 
-/** The theme-appropriate step for a palette color (unknown colors pass through). */
-export function themedColor(hex: string, dark: boolean): string {
-  if (!dark) return hex;
-  const hit = AREA_PALETTE.find((p) => p.light.toLowerCase() === hex.toLowerCase());
-  return hit ? hit.dark : hex;
+/** A stored area color as this device shows it: its palette's color, for the mode (unknown colors pass through). */
+export function themedColor(hex: string, dark: boolean, palette?: Palette): string {
+  return paletteColor(hex, dark, palette);
 }
 
 /** The six abilities, in character-sheet order. The archetype is the D&D class it leads to. */

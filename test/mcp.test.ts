@@ -401,6 +401,66 @@ test("interactive lessons: Claude writes steps, extends the path and maps a bran
   await claude.close();
 });
 
+test("the general plan: a whole subject planned up front, titles only", async () => {
+  const { getCurriculum, allLessons } = await import("../shared/course.ts");
+  const { getLessonContent } = await import("../shared/lesson.ts");
+  const { listSkills, computeSkillStats } = await import("../shared/skills.ts");
+  const key = generateKey();
+  const claude = await claudeSession(key);
+  const outline = (t: string) => ({ curriculum: { overview: t, levels: [{ name: "Foundations", modules: [{ title: t, lessons: [{ title: `${t} 1`, objectives: ["one"] }, { title: `${t} 2` }] }] }] } });
+  const added = await claude.call("add_skills", {
+    branch: "Mathematics",
+    skills: [
+      { key: "math", name: "Mathematics", icon: "🧮", area: "int" },
+      { key: "arith", name: "Arithmetic", icon: "🔢", area: "int", topic: "math" },
+      { key: "count", name: "Counting and place value", area: "int", topic: "arith", course: outline("Counting") },
+      { key: "add", name: "Addition and subtraction", area: "int", topic: "arith", prerequisites: ["count"], required_level: 2 },
+      { key: "alg", name: "Algebra", icon: "🔣", area: "int", topic: "math", prerequisites: ["arith"] },
+      { key: "vars", name: "Variables and expressions", area: "int", topic: "alg" },
+    ],
+  });
+  assert.match(added, /Added 6 skills/);
+  assert.match(added, /Counting and place value \[\w+\] \(part of Arithmetic\)\n {2}course "Counting and place value" \[\w+\]: 2 lessons, first "Counting 1"/);
+  const planned = await claude.call("plan_courses", {
+    courses: [
+      { skill: "Addition and subtraction", ...outline("Adding") },
+      { skill: "Variables and expressions", title: "Variables", goal: "Use letters for numbers", ...outline("Variables") },
+      { skill: "Counting and place value", ...outline("Again") },
+    ],
+  });
+  assert.match(planned, /Planned 3 courses/);
+  assert.match(planned, /course \(already had one\) "Counting and place value"/);
+
+  const skills = listSkills(claude.doc);
+  const by = (n: string) => skills.find((s) => s.name === n)!;
+  assert.equal(by("Counting and place value").topic, by("Arithmetic").id);
+  assert.equal(by("Algebra").topic, by("Mathematics").id);
+  // Every part has an outline and no lesson is written yet.
+  for (const n of ["Counting and place value", "Addition and subtraction", "Variables and expressions"]) {
+    const s = by(n);
+    assert.equal(s.courseIds.length, 1, n);
+    const page = getPage(claude.doc, s.courseIds[0])!;
+    const lessons = allLessons(getCurriculum(page)!);
+    assert.equal(lessons.length, 2);
+    assert.equal(getLessonContent(page, lessons[0].lesson.id), undefined);
+    assert.equal((page.get("course") as Y.Map<unknown>).get("format"), "interactive");
+  }
+  // Algebra waits for all of Arithmetic; its parts wait with it.
+  const stats = computeSkillStats(claude.doc);
+  assert.equal(stats.get(by("Algebra").id)!.missing[0].parts?.total, 2);
+  assert.equal(stats.get(by("Variables and expressions").id)!.unlocked, false);
+  const tree = await claude.call("get_skill_tree", {});
+  assert.match(tree, /Mathematics \[\w+\]: .*TOPIC of 2 parts \(0\/3 learnt\)/);
+  assert.match(tree, /LOCKED: needs all of Arithmetic \(0\/2 learnt\)/);
+
+  // Parts can move between topics, never into their own parts.
+  await claude.call("update_skill", { skill: "Variables and expressions", topic: "Arithmetic" });
+  assert.equal(listSkills(claude.doc).find((s) => s.name === "Variables and expressions")!.topic, by("Arithmetic").id);
+  const loop = await claude.callRaw("update_skill", { skill: "Mathematics", topic: "Arithmetic" });
+  assert.equal(loop.isError, true);
+  await claude.close();
+});
+
 test("skill tree: Claude plans skills, logs practice, awards XP and completes quests", async () => {
   const { listSkills, totalXp, skillsMap } = await import("../shared/skills.ts");
   const key = generateKey();

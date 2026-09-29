@@ -62,7 +62,7 @@ import {
   searchPages,
   typeName,
 } from "./ops.ts";
-import { LEVELS_HINT } from "./prompts.ts";
+import { CURRICULUM, MODULE } from "./schemas.ts";
 import { registerSkillTools, type ToolFn } from "./skill-tools.ts";
 
 export type { ToolFn };
@@ -86,23 +86,6 @@ const PROPS = z
   .record(z.string(), PROP_VALUE)
   .describe('Typed properties by name (or id), e.g. {"Status": "In progress", "Due": "2026-10-01", "Tags": ["ml", "papers"]}. null clears a property.');
 
-const LESSON = z.object({
-  id: z.string().optional().describe("Stable id; omit for new lessons (keep existing ids when updating)"),
-  title: z.string(),
-  objectives: z.array(z.string()).default([]).describe("Concrete, testable learning objectives"),
-});
-const MODULE = z.object({
-  id: z.string().optional(),
-  title: z.string(),
-  summary: z.string().default(""),
-  lessons: z.array(LESSON).min(1),
-});
-const LEVEL = z.object({
-  id: z.string().optional(),
-  name: z.string().describe(LEVELS_HINT),
-  summary: z.string().default(""),
-  modules: z.array(MODULE).min(1),
-});
 /** One interactive lesson step (flat: each type uses its own fields; see shared/lesson.ts). */
 const STEP = z.object({
   type: z.enum(STEP_TYPES),
@@ -142,10 +125,6 @@ const STEP = z.object({
   goal: z.string().optional().describe('practice: how to know it went well, e.g. "10 catches in a row"'),
 });
 
-const CURRICULUM = z.object({
-  overview: z.string().default("").describe("2-4 sentences: what the learner will be able to do at the end"),
-  levels: z.array(LEVEL).min(1),
-});
 
 /** create_note's `kind` → page kind. */
 const NOTE_KINDS: Record<string, PageKind> = { page: "doc", canvas: "board", database: "database", notebook: "notebook" };
@@ -616,7 +595,7 @@ export function registerWorkspaceTools(tool: ToolFn, ctx: WorkspaceToolContext) 
   // ---- learning -------------------------------------------------------------------------
 
   const requireCourse = (r: string) => {
-    const meta = resolvePage(doc, r);
+    const meta = resolvePage(doc, r, { kind: "course" });
     if (meta.kind !== "course") throw new ToolError(`${ref(meta)} is a ${meta.kind} page, not a course.`);
     return { meta, page: getPage(doc, meta.id)! };
   };
@@ -862,5 +841,5 @@ ${LESSON_STYLE}`,
 
   // ---- skill tree -------------------------------------------------------------------------
 
-  registerSkillTools(tool, { doc, tx });
+  registerSkillTools(tool, { doc, tx, agent });
 }

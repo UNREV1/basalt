@@ -116,7 +116,7 @@ The relay is a tiny append-only log of encrypted blobs. If it loses its data (e.
 ## Features in depth
 
 ### Learn
-The home screen. *Continue* picks up your next lesson; *Review* brings back what's due; once a week it asks how your learning went. Type any skill or topic into *What do you want to learn?* and (in the desktop app with Claude Code) Claude researches it, maps the branch to follow in your skill tree, builds the first course and writes its lessons. *Explore courses* has ready-made courses that work with no AI at all: Memory Palace, Learning How to Learn, Thinking in Probabilities, Cognitive Biases, The Art of Persuasion, The Science of Sleep, Strength Training 101 and Three-Ball Juggling.
+The home screen. *Continue* picks up your next lesson; *Review* brings back what's due; once a week it asks how your learning went. Type any skill or topic into *What do you want to learn?* and (in the desktop app with Claude Code) Claude researches it, plans the whole path in your skill tree (topics, the parts you learn to advance and every lesson title) and writes your first lessons. *Your paths* shows each path's topics, with the parts of the one you're on. *Explore courses* has ready-made courses that work with no AI at all: Memory Palace, Learning How to Learn, Thinking in Probabilities, Cognitive Biases, The Art of Persuasion, The Science of Sleep, Strength Training 101 and Three-Ball Juggling.
 
 **How a lesson works.** Lessons open full screen, one step at a time: a short explanation, then something to do (pick an answer, type one, drag a slider on a live graph, put steps in order, match pairs). Every answer gets instant feedback and the reason why; a miss gives a hint, then the answer, and asks *why* you missed it (didn't know it, misread, slipped, mixed it up), which goes into the course's error log.
 - **Subjects** walk *preview → understand → explain → recall → apply*: you predict before you're taught, explain the idea in your own words and compare it with a model answer (Feynman), recall it with no hints, then apply it to something new.
@@ -181,17 +181,26 @@ Real life, with the progression mechanics of D&D (but none of the video-game loo
   - **Charisma**: persuasion, performance, presence and leadership.
 
   Every skill trains one ability. An ability's **score** (10 = an average person, 20 = years of practice) and **modifier** grow with the XP of its skills. Your strongest abilities decide your **class**, for example Wizard, Fighter or Paladin.
-- **Every skill is a page** (type *Skill*, under *Skills* in the sidebar): the top shows its level, XP, quests, practice log and prerequisites; below is ordinary notes. Rename the page and the skill follows. Give any page the *Skill* type to add it to the tree; move it to the trash to take it out. Opening *Skills* shows the graph.
+- **Every skill is a page** (type *Skill*, under *Skills* in the sidebar): the top shows its level, XP, quests, practice log and prerequisites; below is ordinary notes. Rename the page and the skill follows. Give any page the *Skill* type to add it to the tree; move it to the trash to take it out. A skill's page has a *Start lesson* button too, and a topic's parts are pages under its page.
 - **Levels, XP and ranks** (Novice → Apprentice → Journeyman → Adept → Expert → Master → Grandmaster). XP comes from real activity: practice you log, daily/weekly **quests** you check off, and lessons you master in linked courses.
 - **Prerequisites** unlock advanced skills once their foundations reach a level; **streaks** reward consistency.
-- **Graph** (the default view of Character) maps every skill at once. Each skill is a circle: bigger means a higher level, the color is its ability and a ring fills toward the next level. Arrows run from a prerequisite to what it unlocks, and locked skills are dashed. Courses hang off the skills they train. Each path Claude mapped for you is a colored road, named where it starts. Hover or click a skill to light up everything it needs and everything it leads to; double-click to open it. There are three layouts:
-  - **Clusters**: skills gather around their ability.
-  - **Flow**: a column per ability, with tiers from foundations down to advanced.
-  - **Rings**: your abilities in the middle, each skill further out the deeper it is.
+- **The skill map** (*Character* in the sidebar) shows every skill at once, with your character beside it.
+  - **Click a skill to start its next lesson.** If the lesson isn't written yet, Claude writes it and it opens by itself. A skill with nothing planned yet gets planned by Claude, or starts a matching built-in course (Athletics starts *Strength Training 101*).
+  - **Right-click a skill** (or press and hold on a touch screen) for its details: what to learn first, its parts, the practice log, quests and more.
+  - **Reading it:** each skill is a circle. Bigger means a higher level, the color is its ability and a ring fills toward the next level. Arrows run from what to learn first to what it unlocks, locked skills are dashed, and each path Claude planned is a colored road. Hover a skill to light up everything it needs and leads to.
+  - **Topics** like Arithmetic have a double rim, and their badge shows how many parts you've learnt.
+  - **Layouts:**
+    - **Tree** (default): a column per ability. A planned subject gets its own block, with a lane per topic and its parts below.
+    - **Clusters:** skills gather around their ability.
+    - **Rings:** abilities in the middle, deeper skills further out.
+  - **Getting around:** filter by status or path, search, pinch or scroll to zoom. From the keyboard, Tab moves through the skills (the map follows) and Enter starts a lesson.
+- **Your character** sits beside the map (a sheet you pull up on a phone). It shows your level and class, what's up next with one-click lessons, your six ability scores and their hexagon, today's quests and recent XP.
+- **The general plan: every skill is planned the same way, up front.** Ask for a topic, or click any skill that has no plan yet, and Claude maps the whole tree right away, as titles only:
+  - The subject (say Mathematics) is made of topics in learning order: Arithmetic, Pre-algebra, Algebra, Geometry, …
+  - Each topic has parts, the things you learn to advance: Counting and place value, Addition and subtraction, Fractions, …
+  - Each part has a course outline with every lesson title.
 
-  You can filter to unlocked, locked, goal or path skills, pick one path, search, pinch or scroll to zoom, and use the keyboard (arrows, + and −, F to fit, Esc).
-- **Tree** is the classic top-down tree, where you can drag skills wherever you like.
-- **Overview** is your character sheet: level, rank and class, the six ability scores and a hexagon of them.
+  The next topic unlocks once you've learnt every part of the one before, and a topic's parts unlock with it. Lessons are written just before you reach them. *Plan every skill* on the character panel plans your whole tree this way, one skill after another.
 - Start from templates or describe any goal and let Claude generate a tree. The *D&D character* template has every D&D skill as a real-life skill; the others are Memory & study, fitness, programming, languages, music, art, math, money, social skills, mindfulness and cooking. Skills from before abilities moved to the closest one, for example Mind → Intelligence.
 
 ### Liquid Glass design

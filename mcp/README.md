@@ -158,8 +158,9 @@ bullets, no trailing spaces); `memory_str_replace` matches against exactly what
 | --- | --- |
 | `get_skill_tree()` | Every skill with level, rank, XP, streak, lock state, prerequisites and quests, plus today's quests. |
 | `list_life_areas()` | The six abilities (Strength, Dexterity, Constitution, Intelligence, Wisdom, Charisma, plus custom ones) and the D&D skills under each. |
-| `add_skills(skills[], branch?)` | Add a whole plan at once; prerequisites reference keys in the call or existing skills. `branch` groups them as one learning path the app shows in order. |
-| `update_skill(skill, …)` | Rename, change area/icon/goal, set prerequisites, archive. |
+| `add_skills(skills[], branch?)` | Add a whole plan at once; prerequisites reference keys in the call or existing skills. `branch` groups them as one learning path the app shows in order. Each skill can have a `topic` (the bigger skill it's part of) and a `course` outline (lesson titles only). |
+| `plan_courses(courses[])` | Course outlines for many skills in one call: lesson titles and objectives, no content, each linked to its skill. |
+| `update_skill(skill, …)` | Rename, change area/icon/goal, set prerequisites or `topic`, archive. |
 | `log_practice(skill, minutes, note?)` | Practice time → XP (10 XP/min); reports level-ups. |
 | `award_xp(skill, amount, reason)` | XP for milestones that aren't timed practice (max 1000). |
 | `add_quest(skill, title, cadence?, target?, xp?)` / `complete_quest(skill, quest)` | Daily/weekly habit quests with streaks. |
@@ -169,10 +170,20 @@ bullets, no trailing spaces); `memory_str_replace` matches against exactly what
 
 - `memory_protocol` — load memory at the start of the conversation, record
   durable facts and preferences, keep memory organized, never store secrets.
-- `teach_me(topic, level?)` — act as a tutor: research the topic, map the
-  branch in the skill tree, build the first course and write interactive
-  lessons ahead of the learner, adapting to their pace, accuracy and mistakes,
-  and extending the path (up to PhD / research frontier) as they go.
+- `teach_me(topic, level?)` — act as a tutor: research the topic, plan the
+  whole path in the skill tree up front with the general plan, write
+  interactive lessons ahead of the learner, and adapt to their pace, accuracy
+  and mistakes.
+
+**The general plan** (`shared/skill-plan.ts`) is how every skill is planned,
+whatever it is. The subject (say Mathematics) is made of topics in learning
+order (Arithmetic, Pre-algebra, Algebra, …). Each topic is made of parts,
+which are the things you learn to advance (Arithmetic: Counting and place
+value, Addition and subtraction, …). Each part has a course outline of lesson
+titles. Everything is planned up front as titles only, and lessons are
+written a few ahead of the learner. A topic that's a prerequisite unlocks
+what needs it once every one of its parts is learnt, and a topic's parts
+unlock with the topic, so the path runs topic → its parts → next topic.
 - `level_up_my_life(goal?)` — act as a life coach: design or extend the skill
   tree for any goal, set realistic habit quests, link courses, and log what
   you report doing as XP.

@@ -5,6 +5,7 @@
 
 import type * as Y from "yjs";
 import { z } from "zod";
+import { allLessons, getCurriculum } from "../shared/course.ts";
 import { displayTitle, getPage, listPages, pageMeta } from "../shared/model.ts";
 import {
   ABILITY_SKILLS,
@@ -20,13 +21,17 @@ import {
   rankForLevel,
   resolveAreaId,
   setParents,
+  setTopic,
   skillTreeSummary,
   todaysQuests,
   totalXp,
   updateSkill,
   type Skill,
 } from "../shared/skills.ts";
+import { createCourseOutline } from "../shared/library/install.ts";
+import { GENERAL_PLAN } from "../shared/skill-plan.ts";
 import { ToolError } from "./ops.ts";
+import { CURRICULUM } from "./schemas.ts";
 
 export type ToolFn = (
   name: string,
@@ -54,8 +59,35 @@ function levelLine(doc: Y.Doc, skill: Skill, before: number): string {
   return up;
 }
 
-export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: () => T) => T }) {
-  const { doc, tx } = ctx;
+export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: () => T) => T; agent: string }) {
+  const { doc, tx, agent } = ctx;
+
+  const COURSE_OUTLINE = z
+    .object({
+      title: z.string().optional().describe("Course title (default: the skill's name)"),
+      goal: z.string().optional().describe("What the learner can do at the end"),
+      curriculum: CURRICULUM,
+    })
+    .describe("The skill's course outline: lesson titles and one-line objectives only. Lessons are written later with write_interactive_lesson, just before the learner reaches them.");
+
+  /** Outline courses for skills; returns one line per skill. */
+  const outline = (items: { skillId: string; course: { title?: string; goal?: string; curriculum: unknown } }[]): string[] =>
+    items.map(({ skillId, course }) => {
+      const { id, created } = createCourseOutline(doc, {
+        skillId,
+        title: course.title,
+        goal: course.goal,
+        curriculum: course.curriculum as never,
+        createdBy: agent,
+      });
+      const page = getPage(doc, id);
+      const c = page ? getCurriculum(page) : null;
+      const lessons = c ? allLessons(c) : [];
+      const first = lessons[0]?.lesson;
+      return `  course ${created ? "" : "(already had one) "}"${page ? displayTitle(pageMeta(page)) : id}" [${id}]: ${lessons.length} lesson${lessons.length === 1 ? "" : "s"}${
+        first ? `, first "${first.title}" (${first.id})` : ""
+      }`;
+    });
 
   tool(
     "get_skill_tree",
@@ -108,7 +140,7 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
     {
       title: "Add skills",
       description:
-        "Add one or more skills to the user's skill tree in a single call (e.g. a whole plan for a life goal). Order foundations first. Prerequisites reference other `key`s in this call or existing skill names/ids; a skill unlocks when each prerequisite reaches `required_level`. Keep skills concrete and measurable, give each a fitting emoji and the ability it trains, and add 1–2 realistic habit quests where practice matters.",
+        "Add one or more skills to the user's skill tree in a single call (e.g. a whole plan for a life goal). Order foundations first. Prerequisites reference other `key`s in this call or existing skill names/ids; a skill unlocks when each prerequisite reaches `required_level`. `topic` makes a skill part of a bigger one (Mathematics → Arithmetic → Fractions): the app draws the parts under their topic, and a topic's parts stay locked until the topic unlocks. `course` gives a skill its course outline (lesson titles only) in the same call. Keep skills concrete and measurable, give each a fitting emoji and the ability it trains, and add 1–2 realistic habit quests where practice matters. For planning a whole subject, follow the general plan:\n" + GENERAL_PLAN,
       input: {
         skills: z
           .array(
@@ -122,10 +154,12 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
               required_level: z.number().int().min(1).max(50).optional().describe("Level each prerequisite needs (default 1)"),
               goal_level: z.number().int().min(1).max(50).optional(),
               quests: z.array(QUEST).optional(),
+              topic: z.string().optional().describe("The bigger skill this is part of: a key in this call, or an existing skill's id or name"),
+              course: COURSE_OUTLINE.optional(),
             }),
           )
           .min(1)
-          .max(60),
+          .max(80),
         branch: z
           .string()
           .optional()
@@ -147,10 +181,20 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
             goalLevel: s.goal_level,
             quests: s.quests,
             branch,
+            topicKey: s.topic,
           })),
         ),
       );
-      const created = [...ids.entries()].map(([key, id]) => `- ${getSkill(doc, id)?.name ?? key} [${id}]`);
+      const courses = new Map<string, string>();
+      tx(() => {
+        const withCourse = skills.filter((s: any) => s.course && ids.has(s.key)).map((s: any) => ({ skillId: ids.get(s.key)!, course: s.course }));
+        outline(withCourse).forEach((line, i) => courses.set(withCourse[i].skillId, line));
+      });
+      const created = [...ids.entries()].map(([key, id]) => {
+        const sk = getSkill(doc, id);
+        const topic = sk?.topic ? getSkill(doc, sk.topic)?.name : undefined;
+        return `- ${sk?.name ?? key} [${id}]${topic ? ` (part of ${topic})` : ""}${courses.has(id) ? `\n${courses.get(id)}` : ""}`;
+      });
       return `Added ${created.length} skill${created.length === 1 ? "" : "s"} to the skill tree:\n${created.join("\n")}`;
     },
   );
@@ -169,6 +213,7 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
         goal_level: z.number().int().min(1).max(50).optional(),
         prerequisites: z.array(z.string()).optional().describe("Replaces prerequisites (skill ids or names); [] removes all"),
         required_level: z.number().int().min(1).max(50).optional(),
+        topic: z.string().optional().describe('Make it part of this skill (id or name); "" makes it a skill of its own'),
         archived: z.boolean().optional(),
       },
     },
@@ -192,6 +237,10 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
           setParents(doc, skill.id, parents, a.required_level);
         } else if (a.required_level) {
           updateSkill(doc, skill.id, { requiredLevel: a.required_level });
+        }
+        if (a.topic !== undefined) {
+          const topic = a.topic ? resolveSkill(doc, a.topic).id : undefined;
+          if (!setTopic(doc, skill.id, topic)) throw new ToolError(`${skill.name} can't be part of itself or of its own parts.`);
         }
       });
       return `Updated ${getSkill(doc, skill.id)?.name ?? skill.name}.`;
@@ -274,6 +323,33 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
   );
 
   tool(
+    "plan_courses",
+    {
+      title: "Plan courses",
+      description:
+        "Give several skills their course outlines in one call: lesson titles and one-line objectives only, no content (write lessons later with write_interactive_lesson, just before the learner reaches them). Each course is linked to its skill, so its lessons earn XP. A skill that already has a course keeps it. Use it after add_skills to plan every part of a topic.",
+      input: {
+        courses: z
+          .array(
+            z.object({
+              skill: z.string().describe("Skill id or exact name"),
+              title: z.string().optional(),
+              goal: z.string().optional(),
+              curriculum: CURRICULUM,
+            }),
+          )
+          .min(1)
+          .max(30),
+      },
+    },
+    ({ courses }) => {
+      const items = courses.map((c: any) => ({ skillId: resolveSkill(doc, c.skill).id, course: c }));
+      const lines = tx(() => outline(items));
+      return `Planned ${lines.length} course${lines.length === 1 ? "" : "s"}:\n${items.map((it: { skillId: string }, i: number) => `- ${getSkill(doc, it.skillId)?.name}\n${lines[i]}`).join("\n")}`;
+    },
+  );
+
+  tool(
     "link_to_skill",
     {
       title: "Link page to skill",
@@ -286,9 +362,8 @@ export function registerSkillTools(tool: ToolFn, ctx: { doc: Y.Doc; tx: <T>(fn: 
     ({ skill: ref, page: pref }) => {
       const skill = resolveSkill(doc, ref);
       const lower = String(pref).trim().toLowerCase();
-      const meta =
-        (getPage(doc, pref) && pageMeta(getPage(doc, pref)!)) ||
-        listPages(doc).find((p) => displayTitle(p).toLowerCase() === lower);
+      const titled = listPages(doc).filter((p) => displayTitle(p).toLowerCase() === lower);
+      const meta = (getPage(doc, pref) && pageMeta(getPage(doc, pref)!)) || titled.find((p) => p.kind === "course") || titled[0];
       if (!meta) throw new ToolError(`No page "${pref}". Use search_notes to find it.`);
       tx(() => {
         if (meta.kind === "course") updateSkill(doc, skill.id, { courseIds: [...new Set([...skill.courseIds, meta.id])] });

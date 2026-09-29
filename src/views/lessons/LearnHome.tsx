@@ -2,7 +2,7 @@
 // reflect once a week, ask for any skill or topic and get the branch to
 // follow, see your courses and character, and explore the course library.
 
-import { useEffect, useMemo, useReducer, useState } from "react";
+import { Fragment, useEffect, useReducer, useState } from "react";
 import { allLessons, getCurriculum, getProgress } from "../../../shared/course.ts";
 import { installCourse, findLibraryCourse } from "../../../shared/library/install.ts";
 import type { LibraryCourse } from "../../../shared/library/types.ts";
@@ -12,14 +12,19 @@ import { displayTitle, ensureSystemPage, getPage, listPages } from "../../../sha
 import {
   areaOf,
   characterSheet,
+  computeSkillStats,
+  courseXp,
+  learningOrder,
+  partsOf,
+  requirementText,
+  skillDone,
+  topicProgress,
   ensureSkillPages,
   formatModifier,
-  levelForXp,
   listAreas,
   listSkills,
   themedColor,
   todaysQuests,
-  totalXp,
   type Skill,
 } from "../../../shared/skills.ts";
 import { Icon } from "../../components/ui.tsx";
@@ -35,7 +40,8 @@ import { QuestCheck } from "../skills/Overview.tsx";
 import { focusSkill } from "../skills/focus.ts";
 import { AskClaudeFallback } from "./ClaudeStatus.tsx";
 import { ABILITY_ORDER, LIBRARY } from "./library.ts";
-import { branchRequest, canRunClaude, runRequest, skillCourseRequest } from "./plan.ts";
+import { branchRequest, canRunClaude, runRequest } from "./plan.ts";
+import { useLessonStarter } from "./start.ts";
 import { openLesson, openReview } from "./player.ts";
 import "../skills/skills.css";
 import "./home.css";
@@ -156,7 +162,7 @@ export default function LearnHome({ ws }: { ws: Workspace }) {
           )}
           {reflectionDue(ws.doc) && <ReflectCard ws={ws} />}
           <AskCard ws={ws} />
-          <Branches ws={ws} list={list} />
+          <Branches ws={ws} />
           <CourseList list={list.filter((c) => c.id !== current?.id)} />
           <Library ws={ws} />
         </div>
@@ -349,103 +355,145 @@ function AskCard({ ws }: { ws: Workspace }) {
   );
 }
 
-/** Skills in a branch, foundations first (prerequisites before what needs them). */
-function orderBranch(skills: Skill[]): Skill[] {
-  const ids = new Set(skills.map((s) => s.id));
-  const out: Skill[] = [];
-  const seen = new Set<string>();
-  const visit = (s: Skill) => {
-    if (seen.has(s.id)) return;
-    seen.add(s.id);
-    for (const p of s.parents) {
-      const parent = skills.find((x) => x.id === p);
-      if (parent && ids.has(p)) visit(parent);
-    }
-    out.push(s);
-  };
-  [...skills].sort((a, b) => a.createdAt - b.createdAt).forEach(visit);
-  return out;
+/** Lessons done out of total across a skill's courses. */
+function lessonCount(ws: Workspace, s: Skill): { done: number; total: number } {
+  let done = 0;
+  let total = 0;
+  for (const c of s.courseIds) {
+    const x = courseXp(ws.doc, c);
+    done += x.mastered + x.skipped;
+    total += x.total;
+  }
+  return { done, total };
 }
 
-function Branches({ ws, list }: { ws: Workspace; list: CourseInfo[] }) {
+/**
+ * Your paths: each branch Claude planned, as the steps to follow. A planned
+ * subject shows its topics (Arithmetic, Algebra, …); the topic you're on
+ * opens up to show its parts, the things to learn before the next one.
+ */
+function Branches({ ws }: { ws: Workspace }) {
   const { openPage, toast } = useApp();
   const dark = useTheme() === "dark";
   const jobs = useClaudeJobs();
-  const skills = listSkills(ws.doc).filter((s) => s.branch);
-  const branches = useMemo(() => {
-    const map = new Map<string, Skill[]>();
-    for (const s of skills) map.set(s.branch!, [...(map.get(s.branch!) ?? []), s]);
-    return [...map.entries()].map(([name, ss]) => ({ name, skills: orderBranch(ss) }));
-  }, [skills]);
-  if (!branches.length) return null;
+  const starter = useLessonStarter(ws, {
+    toast,
+    openPage,
+    showSkill: (id) => {
+      focusSkill(id);
+      navigate({ name: "view", wsId: ws.id, view: "skills" });
+    },
+  });
+  const all = listSkills(ws.doc);
+  const stats = computeSkillStats(ws.doc);
   const areas = listAreas(ws.doc);
+  const branches = new Map<string, Skill[]>();
+  for (const s of all) if (s.branch) branches.set(s.branch, [...(branches.get(s.branch) ?? []), s]);
+  if (!branches.size) return null;
+
+  const busy = (s: Skill) =>
+    (starter.starting?.skillId === s.id && starter.job?.status === "running" ? starter.job : undefined) ??
+    jobs.find((j) => j.status === "running" && (j.key === `skill-plan:${s.id}` || s.courseIds.some((c) => j.key === `ahead:${c}`)));
+
+  const row = (s: Skill, n: number, isNext: boolean, small = false) => {
+    const area = areaOf(ws.doc, s, areas);
+    const st = stats.get(s.id);
+    const done = skillDone(ws.doc, all, s, stats);
+    const hasParts = all.some((x) => x.topic === s.id);
+    const tp = hasParts ? topicProgress(ws.doc, all, s.id, stats) : null;
+    const lc = hasParts ? null : lessonCount(ws, s);
+    const job = busy(s);
+    const locked = st ? !st.unlocked : false;
+    return (
+      <li key={s.id} className={`lh-step${done ? " done" : ""}${isNext ? " next" : ""}${small ? " small" : ""}${locked ? " locked" : ""}`} style={{ ["--c" as string]: themedColor(area.color, dark) }}>
+        <span className="lh-step-dot">{done ? <Icon name="check" size={small ? 11 : 13} stroke={3} /> : locked ? <Icon name="lock" size={11} /> : n + 1}</span>
+        <span className="lh-step-icon">{s.icon}</span>
+        <span className="grow lh-step-text">
+          <span className="lh-step-name">{s.name}</span>
+          <span className="lh-muted">
+            <span className="lh-attr">{area.attribute ?? area.name}</span> level {st?.level ?? 1}
+            {tp ? ` · ${tp.done}/${tp.total} learnt` : lc && lc.total ? ` · ${lc.done}/${lc.total} lessons` : " · not planned yet"}
+          </span>
+        </span>
+        {job ? (
+          <span className="lh-muted lh-step-status">
+            <span className="cp-spinner" aria-hidden /> {job.activity}…
+          </span>
+        ) : done ? null : locked ? (
+          <span className="lh-muted lh-step-status" title={st?.missing.map((m) => requirementText(m)).join(", ")}>
+            Locked
+          </span>
+        ) : (
+          <button className={`btn btn-sm${isNext ? " btn-primary" : ""}`} onClick={() => starter.startSkill(s.id)}>
+            <Icon name="play" size={13} /> {st && st.xp > 0 ? "Continue" : "Start"}
+          </button>
+        )}
+      </li>
+    );
+  };
+
   return (
     <section className="lh-section">
       <h2 className="lh-h2">Your paths</h2>
-      {branches.map((b) => {
-        const nextIndex = b.skills.findIndex((s) => {
-          const c = list.find((x) => s.courseIds.includes(x.id));
-          return !c || c.done < c.total;
-        });
+      {starter.starting && (
+        <div className={`lh-job${starter.job?.status === "error" ? " error" : ""}`} role="status">
+          {starter.job?.status === "error" ? <Icon name="x" size={14} /> : <span className="cp-spinner" aria-hidden />}
+          <span className="grow">
+            {starter.starting.label}
+            {starter.job?.status === "running" ? ` · ${starter.job.activity}…` : starter.job?.status === "error" ? ` · ${starter.job.error}` : "…"}
+            <span className="lh-muted"> The lesson opens as soon as it's written.</span>
+          </span>
+          <button className="icon-btn" aria-label="Stop waiting" onClick={starter.cancel}>
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+      )}
+      {[...branches.entries()].map(([name, members]) => {
+        // The steps: a planned subject's topics, or the branch's own skills.
+        const ids = new Set(members.map((m) => m.id));
+        const top = learningOrder(members.filter((m) => !m.topic || !ids.has(m.topic)));
+        const subject = top.length === 1 && members.some((m) => m.topic === top[0].id) ? top[0] : null;
+        const steps = subject ? partsOf(all, subject.id) : top;
+        const nextIndex = steps.findIndex((s) => !skillDone(ws.doc, all, s, stats));
+        const current = nextIndex >= 0 ? steps[nextIndex] : null;
+        const parts = current ? partsOf(all, current.id) : [];
+        const nextPart = parts.findIndex((p) => !skillDone(ws.doc, all, p, stats));
         return (
-          <div key={b.name} className="lh-card lh-branch">
+          <div key={name} className="lh-card lh-branch">
             <div className="lh-branch-head">
-              <strong>{b.name}</strong>
-              <button
-                className="btn btn-ghost btn-sm"
-                onClick={() => {
-                  focusSkill(b.skills[0].id);
-                  navigate({ name: "view", wsId: ws.id, view: "skills" });
-                }}
-              >
-                Show in skill tree
-              </button>
+              <strong>
+                {subject ? `${subject.icon} ` : ""}
+                {name}
+              </strong>
+              <span className="row" style={{ gap: 6 }}>
+                {subject && (
+                  <button className="btn btn-sm btn-primary" onClick={() => starter.startSkill(subject.id)}>
+                    <Icon name="play" size={13} /> Continue path
+                  </button>
+                )}
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    focusSkill((subject ?? steps[0]).id);
+                    navigate({ name: "view", wsId: ws.id, view: "skills" });
+                  }}
+                >
+                  Show on the map
+                </button>
+              </span>
             </div>
             <ol className="lh-branch-steps">
-              {b.skills.map((s, n) => {
-                const area = areaOf(ws.doc, s, areas);
-                const c = list.find((x) => s.courseIds.includes(x.id));
-                const done = !!c && c.done >= c.total && c.total > 0;
-                const isNext = n === nextIndex;
-                const job = jobs.find((j) => j.key === `skill-course:${s.id}` && j.status === "running");
-                const level = levelForXp(totalXp(ws.doc, s.id));
-                return (
-                  <li key={s.id} className={`lh-step${done ? " done" : ""}${isNext ? " next" : ""}`} style={{ ["--c" as string]: themedColor(area.color, dark) }}>
-                    <span className="lh-step-dot">{done ? <Icon name="check" size={13} stroke={3} /> : n + 1}</span>
-                    <span className="lh-step-icon">{s.icon}</span>
-                    <span className="grow lh-step-text">
-                      <span className="lh-step-name">{s.name}</span>
-                      <span className="lh-muted">
-                        <span className="lh-attr">{area.attribute ?? area.name}</span> level {level}
-                        {c ? ` · ${c.done}/${c.total} lessons` : ""}
-                      </span>
-                    </span>
-                    {c ? (
-                      <button className={`btn btn-sm${isNext ? " btn-primary" : ""}`} onClick={() => (c.next?.ready ? openLesson(c.id, c.next.id) : openPage(c.id))}>
-                        {done ? "Review" : c.done ? "Continue" : "Start"}
-                      </button>
-                    ) : job ? (
-                      <span className="lh-muted lh-step-status">
-                        <span className="cp-spinner" aria-hidden /> {job.activity}…
-                      </span>
-                    ) : canRunClaude() ? (
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        onClick={() => {
-                          const req = skillCourseRequest(ws, s.id);
-                          if (!req) return;
-                          if (!ws.info.sync) return toast("Turn on sync so Claude can reach this workspace");
-                          void runRequest(ws, req);
-                        }}
-                      >
-                        <Icon name="sparkle" size={13} /> Build course
-                      </button>
-                    ) : (
-                      <span className="lh-muted lh-step-status">Locked until earlier steps</span>
-                    )}
-                  </li>
-                );
-              })}
+              {steps.map((s, n) => (
+                <Fragment key={s.id}>
+                  {row(s, n, n === nextIndex)}
+                  {s === current && parts.length > 0 && (
+                    <li className="lh-parts">
+                      <span className="lh-muted lh-parts-title">Learn these to unlock the next step</span>
+                      <ol className="lh-branch-steps">{parts.map((p, i) => row(p, i, i === nextPart, true))}</ol>
+                    </li>
+                  )}
+                </Fragment>
+              ))}
             </ol>
           </div>
         );

@@ -1,5 +1,6 @@
-// Side panel (bottom sheet on phones) for the selected skill: details, XP,
-// practice logging, quests, prerequisites, linked courses and notes, history.
+// Side panel (bottom sheet on phones) for the selected skill: what to learn
+// next (and a topic's parts), details, XP, practice logging, quests,
+// prerequisites, linked courses and notes, history.
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { displayTitle, defaultIcon, type PageMeta } from "../../../shared/model.ts";
@@ -24,6 +25,12 @@ import {
   xpEntries,
   courseXp,
   questStatus,
+  allParts,
+  partsOf,
+  requirementText,
+  skillDone,
+  topicProgress,
+  type Skill,
   MAX_PRACTICE_MINUTES,
   type QuestCadence,
   type XpEntry,
@@ -34,6 +41,9 @@ import type { Workspace } from "../../lib/workspace.ts";
 import { EmojiPicker, Icon, Popover, timeAgo, type Anchor } from "../../components/ui.tsx";
 import { fmt, plural, type SkillTreeData } from "./useSkillData.ts";
 import { levelUpMessage } from "./Overview.tsx";
+import { AskClaudeFallback } from "../lessons/ClaudeStatus.tsx";
+import { planSkillRequest } from "../lessons/plan.ts";
+import { planSkillStart } from "../lessons/start.ts";
 
 const SOURCE_LABEL: Record<XpSource, string> = {
   practice: "Practice",
@@ -191,6 +201,134 @@ function PagePicker({
   );
 }
 
+/**
+ * Learn: the one button that starts the next lesson, whatever that takes
+ * (Claude planning the skill or writing the lesson, a built-in course), what
+ * to learn first while it's locked, and for a topic, its parts in order.
+ */
+function LearnSection({
+  ws,
+  data,
+  skill,
+  onStart,
+  onSelect,
+}: {
+  ws: Workspace;
+  data: SkillTreeData;
+  skill: Skill;
+  onStart: (id: string) => void;
+  onSelect: (id: string) => void;
+}) {
+  const plan = planSkillStart(ws, skill.id);
+  const parts = partsOf(data.skills, skill.id);
+  const tp = parts.length ? topicProgress(ws.doc, data.skills, skill.id, data.stats) : null;
+  const hasParts = (s: Skill) => data.skills.some((x) => x.topic === s.id);
+  const nextPart = parts.length
+    ? allParts(data.skills, skill.id).find((p) => !hasParts(p) && data.stats.get(p.id)?.unlocked !== false && !skillDone(ws.doc, data.skills, p, data.stats))
+    : undefined;
+  const go = (label: ReactNode, note?: ReactNode, icon = "play") => (
+    <>
+      <button className="btn btn-primary sk-learn-go" onClick={() => onStart(skill.id)}>
+        <Icon name={icon} size={14} /> {label}
+      </button>
+      {note && <p className="small muted sk-learn-note">{note}</p>}
+    </>
+  );
+  let primary: ReactNode;
+  switch (plan.kind) {
+    case "open":
+      primary = go(nextPart ? `Continue: ${nextPart.name}` : "Start the next lesson", <>Next lesson: {plan.title}</>);
+      break;
+    case "write":
+      primary = go(nextPart ? `Continue: ${nextPart.name}` : "Start the next lesson", <>Claude writes “{plan.title}” first, usually in a minute or two. It opens by itself.</>);
+      break;
+    case "build":
+      primary = go(nextPart ? `Start: ${nextPart.name}` : "Plan it and start", <>Claude maps it (topics, the parts you learn to advance, every lesson title) and writes your first lesson.</>, "sparkle");
+      break;
+    case "library":
+      primary = go(`Start “${plan.course.title}”`, <>A built-in course, ready now.</>);
+      break;
+    case "course-page":
+      primary = go("Open the course", undefined, "open");
+      break;
+    case "done":
+      primary = <p className="sk-learn-done">✓ You've learnt all of {skill.name}.</p>;
+      break;
+    case "locked":
+      primary = (
+        <div className="sk-learn-first">
+          <span className="small muted">Learn first:</span>
+          {plan.missing.map((m) => (
+            <button key={m.parentId} className="btn btn-sm" onClick={() => onStart(m.parentId)}>
+              <Icon name="play" size={12} /> {requirementText(m)}
+            </button>
+          ))}
+        </div>
+      );
+      break;
+    case "ask":
+      primary = (
+        <>
+          <p className="small muted sk-learn-note">No lessons yet. Claude can plan this skill and write them.</p>
+          <AskClaudeFallback request={planSkillRequest(ws, skill.id)} />
+        </>
+      );
+      break;
+  }
+  const leaf = !parts.length;
+  const learnt = skillDone(ws.doc, data.skills, skill, data.stats);
+  const level = data.stats.get(skill.id)?.level ?? 1;
+  return (
+    <Section
+      title={tp ? `Learn · ${tp.done}/${tp.total} learnt` : "Learn"}
+      aside={
+        leaf &&
+        !learnt && (
+          <button
+            className="btn btn-ghost btn-sm"
+            title="Count it as learnt: what comes after it unlocks"
+            onClick={() => updateSkill(ws.doc, skill.id, { goalLevel: Math.max(1, level) })}
+          >
+            I know this already
+          </button>
+        )
+      }
+    >
+      {primary}
+      {parts.length > 0 && (
+        <ol className="sk-parts" aria-label={`Parts of ${skill.name}`}>
+          {parts.map((p) => {
+            const st = data.stats.get(p.id);
+            const done = skillDone(ws.doc, data.skills, p, data.stats);
+            const locked = st ? !st.unlocked : false;
+            const inner = hasParts(p) ? topicProgress(ws.doc, data.skills, p.id, data.stats) : null;
+            const lessons = p.courseIds.map((c) => data.courses.get(c)).filter((c): c is NonNullable<typeof c> => !!c && c.total > 0);
+            const count = lessons.reduce((a, c) => a + c.mastered + c.skipped, 0);
+            const total = lessons.reduce((a, c) => a + c.total, 0);
+            return (
+              <li key={p.id} className={`sk-part${done ? " done" : ""}${locked ? " locked" : ""}${nextPart && (p.id === nextPart.id || p.id === nextPart.topic) ? " next" : ""}`}>
+                <button className="sk-part-main" onClick={() => onSelect(p.id)} title="Details">
+                  <span className="sk-part-state" aria-hidden>
+                    {done ? <Icon name="check" size={11} stroke={3} /> : locked ? <Icon name="lock" size={10} /> : null}
+                  </span>
+                  <span className="sk-part-icon">{p.icon}</span>
+                  <span className="grow ellipsis">{p.name}</span>
+                  <span className="small muted">{inner ? `${inner.done}/${inner.total}` : total ? `${count}/${total}` : ""}</span>
+                </button>
+                {!done && !locked && (
+                  <button className="icon-btn sk-part-go" aria-label={`Start ${p.name}`} title="Start its next lesson" onClick={() => onStart(p.id)}>
+                    <Icon name="play" size={13} />
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </Section>
+  );
+}
+
 export function SkillPanel({
   ws,
   data,
@@ -199,6 +337,7 @@ export function SkillPanel({
   onClose,
   onSelect,
   onAddChild,
+  onStart,
 }: {
   ws: Workspace;
   data: SkillTreeData;
@@ -207,6 +346,8 @@ export function SkillPanel({
   onClose: () => void;
   onSelect: (id: string) => void;
   onAddChild: (parentId: string) => void;
+  /** Start a skill's next lesson (see lessons/start.ts). */
+  onStart: (id: string) => void;
 }) {
   const { openPage, createAndOpen, toast } = useApp();
   const pages = usePages(ws);
@@ -372,7 +513,7 @@ export function SkillPanel({
             >
               <option value="">No goal</option>
               {Array.from({ length: MAX_LEVEL }, (_, i) => i + 1)
-                .filter((l) => l > 1)
+                .filter((l) => l > 1 || skill.goalLevel === 1)
                 .map((l) => (
                   <option key={l} value={l}>
                     Level {l} · {rankForLevel(l).name}
@@ -387,21 +528,24 @@ export function SkillPanel({
           </label>
         </div>
 
+        <LearnSection ws={ws} data={data} skill={skill} onStart={onStart} onSelect={onSelect} />
+
         {!stats.unlocked && (
           <div className="sk-locked-note" role="note">
             <Icon name="lock" size={15} />
             <div>
-              <strong>Locked.</strong> Reach{" "}
+              <strong>Locked.</strong> Needs{" "}
               {stats.missing.map((m, i) => (
                 <span key={m.parentId}>
                   {i > 0 && (i === stats.missing.length - 1 ? " and " : ", ")}
+                  {m.parts && "all of "}
                   <button className="sk-link" onClick={() => onSelect(m.parentId)}>
                     {m.name}
                   </button>{" "}
-                  level {m.need} (now {m.have})
+                  {m.parts ? `(${m.parts.done}/${m.parts.total} learnt)` : `level ${m.need} (now ${m.have})`}
                 </span>
-              ))}{" "}
-              to unlock it. Practice still earns XP.
+              ))}
+              . Practice still earns XP.
             </div>
           </div>
         )}
@@ -508,7 +652,11 @@ export function SkillPanel({
             )
           }
         >
-          {parents.length === 0 && <p className="sk-empty-line">A root skill: always unlocked.</p>}
+          {parents.length === 0 && (
+            <p className="sk-empty-line">
+              {skill.topic && data.byId.has(skill.topic) ? `Part of ${data.byId.get(skill.topic)!.name}: it unlocks with it.` : "A root skill: always unlocked."}
+            </p>
+          )}
           <div className="sk-link-list">
             {parents.map((p) => {
               const ps = data.stats.get(p.id)!;

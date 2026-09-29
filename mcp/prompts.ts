@@ -8,7 +8,7 @@ export const SERVER_INSTRUCTIONS = `Basalt is the user's local-first, end-to-end
 
 Memory protocol: at the start of a conversation call memory_view to load your long-term memory (the /memories directory, stored as notes under the "Claude Memory" page). Save durable facts, preferences and decisions with remember or memory_create / memory_str_replace, keep one topic per file, update outdated facts instead of piling up contradictions, and never store secrets.
 
-The user's real-life skill tree (a D&D-style character: six abilities with scores, skills with levels, XP and habit quests) is available via get_skill_tree; log what the user reports doing with log_practice / complete_quest / award_xp.
+The user's real-life skill tree (a D&D-style character: six abilities with scores, skills with levels, XP and habit quests) is available via get_skill_tree; log what the user reports doing with log_practice / complete_quest / award_xp. Skills can be made of parts (Mathematics → Arithmetic → Fractions); when planning anything to learn, plan the whole tree up front with the general plan described in add_skills, titles only, and write lessons just before the user reaches them.
 
 Content is markdown: [[Title]] links to another page, \`![[Title]]\` alone on a line embeds it (a canvas, database or notebook shown live inside the page), \`Front :: Back\` lines are flashcards, $…$ and $$…$$ are LaTeX math. Find pages with search_notes / list_notes and address them by id when titles are ambiguous.`;
 
@@ -26,9 +26,8 @@ export function teachMePrompt(topic: string, level?: string): string {
 
 1. Look first: get_course "${topic}" (or search_notes), recall "${topic}", and memory_view /memories/learning.md (if it exists) for what you know about me as a learner. If the course exists, continue it: get_course shows my pace, first-try accuracy, recent mistakes, which lessons to write next and when the path is about to run out.
 2. Otherwise research the topic (web search if you have it), ask at most two short questions about my goal and background, then:
-   - Map the branch: get_skill_tree, then add_skills with branch "${topic}": sub-skills from foundations to mastery with prerequisites, each under the D&D ability it trains.
-   - create_course for the first skill with a short curriculum to start (the full path runs ${LEVELS.join(" → ")} and grows with extend_course as I progress), a clear, specific goal, and link_to_skill.
-   - Write the first lessons with write_interactive_lesson, as many as get_course says to keep ready. Follow its style guide: active learning, visuals, one idea at a time.
+   - Plan the whole path up front with the general plan (see add_skills), from the very basics to mastery (${LEVELS.join(" → ")}): get_skill_tree, then add_skills with branch "${topic}": the subject, its topics in learning order, and under each topic the parts I learn to advance, each part with its course outline (lesson titles only), every skill under the D&D ability it trains. plan_courses outlines many parts at once.
+   - Write the first lessons of the first part with write_interactive_lesson, as many as get_course says to keep ready. Follow its style guide: active learning, visuals, one idea at a time.
 3. As I take lessons in the app, keep the next ones written ahead of me, adapt to my accuracy (faster and deeper when I'm acing it, smaller steps and more practice when I'm not) and re-teach my mistakes. Extend the course and the branch before I reach the end.
 4. In this chat: answer questions, explain differently when I'm stuck, and quiz me Socratically (never answer your own questions for me). If I finish a lesson here rather than in the app, grade it honestly and call record_quiz with my score (0–1).
 5. Add flashcards for key facts with add_flashcards, and record durable observations about me as a learner (strengths, misconceptions, pace) with remember, topic "learning".

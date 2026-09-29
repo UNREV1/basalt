@@ -1,28 +1,12 @@
-// Overview: a D&D-style character sheet. Overall level and class, the six
-// ability scores, today's quests and recent activity.
+// Character-sheet pieces shared by the character panel, the skill pages and
+// the Learn home: the ability hexagon, quest check-offs and level-up toasts.
 
-import { useMemo, useRef, useState } from "react";
-import {
-  ABILITY_SKILLS,
-  completeQuest,
-  formatModifier,
-  levelForXp,
-  rankForLevel,
-  scoreProgress,
-  themedColor,
-  totalXp,
-  undoQuest,
-  xpEntries,
-  type AreaStats,
-  type TodayQuest,
-  type XpSource,
-} from "../../../shared/skills.ts";
+import { useRef, useState } from "react";
+import { completeQuest, formatModifier, levelForXp, rankForLevel, themedColor, totalXp, undoQuest, type AreaStats, type TodayQuest } from "../../../shared/skills.ts";
 import { useApp } from "../../lib/hooks.ts";
-import { useSettings } from "../../lib/settings.ts";
 import type { Workspace } from "../../lib/workspace.ts";
-import { Avatar, Icon, timeAgo } from "../../components/ui.tsx";
-import { XpBar } from "./SkillPanel.tsx";
-import { fmt, plural, type SkillTreeData } from "./useSkillData.ts";
+import { Icon } from "../../components/ui.tsx";
+import { fmt, plural } from "./useSkillData.ts";
 
 /** Quiet toast after a check-off or log that crossed a level. */
 export function levelUpMessage(name: string, before: number, after: number): string | null {
@@ -33,7 +17,7 @@ export function levelUpMessage(name: string, before: number, after: number): str
 }
 
 /** Ability scores on a hexagon: the center is 8, the outer ring 20 (or the best score, if higher). */
-function Radar({ areas, dark, onPick }: { areas: AreaStats[]; dark: boolean; onPick: (areaId: string) => void }) {
+export function Radar({ areas, dark, onPick }: { areas: AreaStats[]; dark: boolean; onPick: (areaId: string) => void }) {
   const hostRef = useRef<HTMLDivElement>(null);
   const [hover, setHover] = useState<{ i: number; x: number; y: number } | null>(null);
   const n = areas.length;
@@ -163,189 +147,6 @@ export function QuestCheck({ ws, q, compact }: { ws: Workspace; q: TodayQuest; c
         </div>
       </div>
       <span className="sk-quest-xp">{st.quest.xp} XP</span>
-    </div>
-  );
-}
-
-const SOURCE_LABEL: Record<XpSource, string> = {
-  practice: "Practice",
-  lesson: "Lesson",
-  quiz: "Quiz",
-  flashcards: "Flashcards",
-  task: "Task",
-  manual: "XP",
-  claude: "Claude",
-  quest: "Quest",
-};
-
-export function OverviewView({
-  ws,
-  data,
-  dark,
-  onShowArea,
-  onSelectSkill,
-  onEditAreas,
-}: {
-  ws: Workspace;
-  data: SkillTreeData;
-  dark: boolean;
-  onShowArea: (areaId: string) => void;
-  onSelectSkill: (id: string) => void;
-  onEditAreas: () => void;
-}) {
-  const settings = useSettings();
-  const { sheet } = data;
-  const identity = settings.identity;
-
-  const recent = useMemo(() => {
-    const out: { skillId: string; icon: string; name: string; at: number; amount: number; text: string }[] = [];
-    for (const s of data.skills) {
-      const titles = new Map((s.quests ?? []).map((q) => [q.id, q.title]));
-      for (const e of xpEntries(ws.doc, s.id)) {
-        const text =
-          e.source === "quest"
-            ? `Quest · ${titles.get(e.note) ?? "completed"}`
-            : e.note || `${SOURCE_LABEL[e.source]}${e.minutes ? ` · ${e.minutes} min` : ""}`;
-        out.push({ skillId: s.id, icon: s.icon, name: s.name, at: e.at, amount: e.amount, text });
-      }
-    }
-    return out.sort((a, b) => b.at - a.at).slice(0, 10);
-  }, [ws, data]);
-
-  const bestStreak = Math.max(0, ...[...data.stats.values()].map((s) => s.streak.current));
-  const questsDone = data.quests.filter((q) => q.status.done).length;
-
-  return (
-    <div className="sk-sheet-scroll">
-      <div className="sk-sheet">
-        <section className="sk-hero">
-          <Avatar name={identity.name} color={identity.color} size={52} />
-          <div className="sk-hero-text">
-            <div className="sk-hero-title">
-              Level {sheet.level}
-              <span className="sk-rank" title="Rank and class: the class comes from your strongest abilities">
-                {sheet.title}
-              </span>
-            </div>
-            <XpBar fraction={sheet.progress.fraction} color="var(--accent)" label="XP toward next level" />
-            <div className="small muted">
-              {sheet.progress.next !== null
-                ? `${fmt(sheet.xp - sheet.progress.floor)} / ${fmt(sheet.progress.next - sheet.progress.floor)} XP to level ${sheet.level + 1} · ${fmt(sheet.xp)} XP total`
-                : `${fmt(sheet.xp)} XP · max level`}
-            </div>
-          </div>
-          <dl className="sk-hero-stats">
-            <div>
-              <dt>Total level</dt>
-              <dd>{sheet.totalLevel}</dd>
-            </div>
-            <div>
-              <dt>Skills</dt>
-              <dd>{sheet.skills}</dd>
-            </div>
-            <div>
-              <dt>Top rank</dt>
-              <dd>{sheet.topRank?.name ?? "—"}</dd>
-            </div>
-            <div>
-              <dt>Best streak</dt>
-              <dd>{bestStreak > 0 ? plural(bestStreak, "day") : "—"}</dd>
-            </div>
-          </dl>
-        </section>
-
-        <div className="sk-sheet-grid">
-          <section className="sk-card sk-card-wide">
-            <header className="sk-card-head">
-              <h3>Abilities</h3>
-              <span className="small faint grow">Scores grow with the XP of their skills</span>
-              <button className="btn btn-ghost btn-sm" onClick={onEditAreas}>
-                <Icon name="edit" size={14} /> Edit
-              </button>
-            </header>
-            <div className="sk-abilities">
-              {sheet.areas.map((a) => {
-                const color = themedColor(a.area.color, dark);
-                const sp = scoreProgress(a.xp);
-                const dnd = ABILITY_SKILLS[a.area.id]?.map((s) => s.name).join(", ");
-                return (
-                  <button
-                    key={a.area.id}
-                    className="sk-ability"
-                    onClick={() => onShowArea(a.area.id)}
-                    style={{ ["--c" as string]: color }}
-                    title={a.area.description}
-                    aria-label={`${a.area.name} ${a.score}, modifier ${formatModifier(a.modifier)}. Show in tree`}
-                  >
-                    <span className="sk-ability-abbr">{a.area.attribute || a.area.name.slice(0, 3).toUpperCase()}</span>
-                    <span className="sk-ability-mod">{formatModifier(a.modifier)}</span>
-                    <span className="sk-ability-score">{a.score}</span>
-                    <span className="sk-ability-name ellipsis">
-                      {a.area.icon} {a.area.name}
-                    </span>
-                    <XpBar fraction={a.skills ? sp.fraction : 0} color={color} label={`${a.area.name}: progress to ${a.score + 1}`} />
-                    <span className="sk-ability-sub small muted">
-                      {a.top && a.xp > 0 ? `${a.top.icon} ${a.top.name} · level ${a.top.level}` : dnd || a.area.description || "No skills yet"}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-
-          <section className="sk-card">
-            <header className="sk-card-head">
-              <h3>Ability scores</h3>
-            </header>
-            <Radar areas={sheet.areas} dark={dark} onPick={onShowArea} />
-          </section>
-
-          <section className="sk-card">
-            <header className="sk-card-head">
-              <h3>Today’s quests</h3>
-              {data.quests.length > 0 && (
-                <span className="small muted">
-                  {questsDone}/{data.quests.length} done
-                </span>
-              )}
-            </header>
-            {data.quests.length === 0 ? (
-              <p className="sk-empty-line">Add recurring quests to a skill, like “Meditate 10 minutes” daily or “Run 3× a week”, and check them off here.</p>
-            ) : (
-              <div className="sk-quest-list">
-                {data.quests.map((q) => (
-                  <QuestCheck key={`${q.skill.id}:${q.status.quest.id}`} ws={ws} q={q} />
-                ))}
-              </div>
-            )}
-          </section>
-
-          <section className="sk-card">
-            <header className="sk-card-head">
-              <h3>Recent activity</h3>
-            </header>
-            {recent.length === 0 ? (
-              <p className="sk-empty-line">Log practice or complete quests to earn XP.</p>
-            ) : (
-              <div className="sk-history">
-                {recent.map((r, i) => (
-                  <button key={`${r.at}-${i}`} className="sk-history-row as-button" onClick={() => onSelectSkill(r.skillId)}>
-                    <span className="sk-history-icon">{r.icon}</span>
-                    <span className="grow ellipsis">
-                      {r.name} <span className="muted">· {r.text}</span>
-                    </span>
-                    <span className={`sk-history-xp${r.amount < 0 ? " neg" : ""}`}>
-                      {r.amount >= 0 ? "+" : ""}
-                      {fmt(r.amount)} XP
-                    </span>
-                    <span className="small faint sk-history-time">{timeAgo(r.at)}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </section>
-        </div>
-      </div>
     </div>
   );
 }

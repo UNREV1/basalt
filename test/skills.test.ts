@@ -492,3 +492,56 @@ test("skills from before pages get one; Skill-typed pages become skills", () => 
   assert.notEqual(dupSkill, sid);
   assert.equal(getSkill(doc, sid)!.pageId, pid);
 });
+
+test("topics: parts nest under a topic, wait for it, and a topic you need means all its parts", async () => {
+  const { allParts, partsOf, setTopic, skillDone, topicProgress, requirementText } = await import("../shared/skills.ts");
+  const doc = new Y.Doc();
+  const ids = createSkillsFromPlan(doc, [
+    { key: "math", name: "Mathematics", category: "int", branch: "Math" },
+    { key: "arith", name: "Arithmetic", category: "int", topicKey: "math", branch: "Math" },
+    { key: "count", name: "Counting", category: "int", topicKey: "arith", branch: "Math" },
+    { key: "add", name: "Addition", category: "int", topicKey: "arith", parentKeys: ["count"], requiredLevel: 2, branch: "Math" },
+    { key: "alg", name: "Algebra", category: "int", topicKey: "math", parentKeys: ["arith"], branch: "Math" },
+    { key: "vars", name: "Variables", category: "int", topicKey: "alg", branch: "Math" },
+  ]);
+  const id = (k: string) => ids.get(k)!;
+  assert.equal(getSkill(doc, id("count"))!.topic, id("arith"));
+  assert.deepEqual(partsOf(listSkills(doc), id("math")).map((s) => s.name), ["Arithmetic", "Algebra"]);
+  assert.deepEqual(allParts(listSkills(doc), id("math")).map((s) => s.name), ["Arithmetic", "Counting", "Addition", "Algebra", "Variables"]);
+  // Pages nest: Skills → Mathematics → Arithmetic → Counting.
+  const page = (k: string) => getPage(doc, getSkill(doc, id(k))!.pageId!)!;
+  assert.equal(page("count").get("parentId"), getSkill(doc, id("arith"))!.pageId);
+  assert.equal(page("arith").get("parentId"), getSkill(doc, id("math"))!.pageId);
+
+  let stats = computeSkillStats(doc);
+  assert.equal(stats.get(id("count"))!.unlocked, true);
+  assert.equal(stats.get(id("add"))!.unlocked, false, "Addition needs Counting level 2");
+  // Algebra needs every part of Arithmetic learnt, not a level.
+  const need = stats.get(id("alg"))!.missing[0];
+  assert.deepEqual(need.parts, { done: 0, total: 2 });
+  assert.equal(requirementText(need), "all of Arithmetic (0/2 learnt)");
+  assert.equal(stats.get(id("vars"))!.unlocked, false, "a locked topic's parts wait for it");
+  assert.equal(isUnlocked(doc, id("vars")), false);
+
+  // Learning the parts: goals reached (or every course lesson done).
+  updateSkill(doc, id("count"), { goalLevel: 2 });
+  updateSkill(doc, id("add"), { goalLevel: 2 });
+  logPractice(doc, id("count"), 15);
+  logPractice(doc, id("add"), 15);
+  stats = computeSkillStats(doc);
+  const skills = listSkills(doc);
+  assert.equal(skillDone(doc, skills, getSkill(doc, id("arith"))!, stats), true);
+  assert.deepEqual(topicProgress(doc, skills, id("math"), stats), { done: 2, total: 3 });
+  assert.equal(stats.get(id("alg"))!.unlocked, true);
+  assert.equal(stats.get(id("vars"))!.unlocked, true);
+
+  // No loops: a topic can't become part of its own part.
+  assert.equal(setTopic(doc, id("math"), id("count")), false);
+  assert.equal(setTopic(doc, id("vars"), undefined), true);
+  assert.equal(getSkill(doc, id("vars"))!.topic, undefined);
+
+  const text = skillTreeSummary(doc);
+  assert.match(text, /Mathematics \[\w+\]: .*TOPIC of 2 parts \(2\/3 learnt\)/);
+  assert.match(text, /\n {4}- ⭐ Counting/);
+  assert.match(text, /Counting \[\w+\]: .*part of Arithmetic/);
+});

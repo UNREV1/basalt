@@ -1,10 +1,13 @@
-// The skill graph: a canvas + d3-force map of every skill, clustered around
-// the six abilities (or laid out as a top-down flow, or in rings by depth).
+// The skill map: a canvas + d3-force map of every skill, laid out as a
+// top-down tree (a column per ability, tiers by depth), clustered around the
+// six abilities, or in rings by depth.
 // Kept outside React: the simulation moves nodes every tick and pointer
 // interaction redraws at frame rate.
 //
 // Encoding: node size = level, color = ability, ring = progress to the next
-// level, gold ring = goal reached, dashed = locked. Arrows run from a
+// level, gold ring = goal reached, dashed = locked. A topic (a skill made of
+// parts, like Arithmetic) has a double rim and its ring shows how many of its
+// parts are learnt; its parts hang below it and lead on to the next topic. Arrows run from a
 // prerequisite to what it unlocks (solid once met). Soft colored roads trace
 // the learning paths Claude mapped. Hovering or selecting a skill lights up
 // its whole path: everything it needs and everything it leads to.
@@ -21,7 +24,7 @@ import {
   type SimulationNodeDatum,
 } from "d3-force";
 
-export type GraphLayout = "clusters" | "flow" | "rings";
+export type GraphLayout = "tree" | "clusters" | "rings";
 
 export interface SGNode {
   id: string;
@@ -40,14 +43,25 @@ export interface SGNode {
   branch?: string;
   /** Ability nodes: "STR 12 (+1)". Courses: "3/6 lessons". */
   sub?: string;
+  /** A topic: how many of its innermost parts are learnt. */
+  learnt?: { done: number; total: number };
+  /** Learnt (a finished course, or every part of a topic). */
+  done?: boolean;
+  /** Claude is writing or planning something for it right now. */
+  busy?: boolean;
+  /** Colors of collaborators looking at it. */
+  peers?: string[];
 }
 
 export interface SGLink {
   source: string;
   target: string;
-  kind: "prereq" | "course";
-  /** Prerequisite reached its required level. */
+  /** prereq: needed first; part: a topic → one of its parts; course: skill → its course. */
+  kind: "prereq" | "part" | "course";
+  /** Prerequisite reached its required level (a part: its topic is unlocked). */
   met: boolean;
+  /** Shapes the layout and the highlighted path, but isn't drawn. */
+  hidden?: boolean;
 }
 
 interface Node extends SimulationNodeDatum, SGNode {
@@ -57,6 +71,7 @@ interface Node extends SimulationNodeDatum, SGNode {
 interface Link extends SimulationLinkDatum<Node> {
   kind: SGLink["kind"];
   met: boolean;
+  hidden?: boolean;
 }
 
 export interface GraphOptions {
@@ -92,30 +107,24 @@ interface Camera {
 
 const MIN_K = 0.12;
 const MAX_K = 5;
-const clamp = (v: number, lo: number, hi: number) =>
-  Math.max(lo, Math.min(hi, v));
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 /** Opacity of nodes outside the highlighted path or search. */
 const FADED = 0.26;
-const EMOJI_FONT =
-  '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
+const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
 const radius = (n: SGNode) =>
   n.kind === "ability"
     ? 30
     : n.kind === "course"
       ? 9
-      : 12 + Math.min(16, Math.sqrt(Math.max(1, n.level)) * 3.2);
+      : n.learnt
+        ? 18 + Math.min(14, Math.sqrt(n.learnt.total) * 3)
+        : 12 + Math.min(16, Math.sqrt(Math.max(1, n.level)) * 3.2);
+/** Optional node fields, cleared before each update so a removed one doesn't linger. */
+const OPTIONAL: (keyof SGNode)[] = ["branch", "sub", "learnt", "done", "busy", "peers"];
 
 /** Each learning path gets its own color, stable across sessions. */
-const PATH_COLORS = [
-  "#0a84ff",
-  "#bf5af2",
-  "#ff9f0a",
-  "#30d158",
-  "#ff375f",
-  "#64d2ff",
-  "#ffd60a",
-];
+const PATH_COLORS = ["#0a84ff", "#bf5af2", "#ff9f0a", "#30d158", "#ff375f", "#64d2ff", "#ffd60a"];
 function pathColor(name: string): string {
   let h = 7;
   for (const c of name) h = (h * 31 + c.charCodeAt(0)) >>> 0;
@@ -138,10 +147,12 @@ export class SkillGraph {
   private byId = new Map<string, Node>();
   private parents = new Map<string, string[]>();
   private children = new Map<string, string[]>();
+  /** Part → the topic it belongs to. */
+  private partOf = new Map<string, string>();
   private abilityOrder: string[] = [];
   private structure = "";
   private opts: GraphOptions = {
-    layout: "clusters",
+    layout: "tree",
     labels: true,
     courses: true,
     dark: false,
@@ -172,9 +183,14 @@ export class SkillGraph {
   private anim: { from: Camera; to: Camera; start: number } | null = null;
   private inset = { top: 0, right: 0, bottom: 0, left: 0 };
   private reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  private press: { id: string; timer: number } | null = null;
+  /** The skill focused from the keyboard (the list for screen readers and keys). */
+  private focusId: string | null = null;
   private cb: {
+    /** A click or tap (null: on empty space). */
     onSelect: (id: string | null) => void;
-    onOpen: (id: string) => void;
+    /** Right-click, or press and hold on a touch screen. */
+    onDetails: (id: string) => void;
     onHover: (id: string | null, at: Pt | null) => void;
   };
 
@@ -192,7 +208,7 @@ export class SkillGraph {
     canvas.addEventListener("pointercancel", this.onUp);
     canvas.addEventListener("pointerleave", this.onLeave);
     canvas.addEventListener("wheel", this.onWheel, { passive: false });
-    canvas.addEventListener("dblclick", this.onDbl);
+    canvas.addEventListener("contextmenu", this.onContext);
   }
 
   destroy() {
@@ -205,7 +221,8 @@ export class SkillGraph {
     c.removeEventListener("pointercancel", this.onUp);
     c.removeEventListener("pointerleave", this.onLeave);
     c.removeEventListener("wheel", this.onWheel);
-    c.removeEventListener("dblclick", this.onDbl);
+    c.removeEventListener("contextmenu", this.onContext);
+    if (this.press) clearTimeout(this.press.timer);
   }
 
   // ---- data & options ----------------------------------------------------------------------
@@ -217,6 +234,7 @@ export class SkillGraph {
     this.nodes = nodes.map((n) => {
       const prev = old.get(n.id);
       const node = (prev ?? ({} as Node)) as Node;
+      for (const k of OPTIONAL) delete node[k];
       Object.assign(node, n, { r: radius(n) });
       if (!prev) {
         // New nodes start near their ability, or near a parent.
@@ -236,35 +254,32 @@ export class SkillGraph {
             target: l.target,
             kind: l.kind,
             met: l.met,
+            hidden: l.hidden,
           }) as unknown as Link,
       );
     this.parents = new Map();
     this.children = new Map();
+    this.partOf = new Map(links.filter((l) => l.kind === "part").map((l) => [l.target, l.source]));
     for (const l of links) {
-      if (l.kind !== "prereq") continue;
-      this.children.set(l.source, [
-        ...(this.children.get(l.source) ?? []),
-        l.target,
-      ]);
-      this.parents.set(l.target, [
-        ...(this.parents.get(l.target) ?? []),
-        l.source,
-      ]);
+      if (l.kind === "course") continue;
+      this.children.set(l.source, [...(this.children.get(l.source) ?? []), l.target]);
+      this.parents.set(l.target, [...(this.parents.get(l.target) ?? []), l.source]);
     }
     const changed = key !== this.structure;
     this.structure = key;
     this.applyForces(changed ? 0.9 : 0.05);
   }
 
+  private isPart(n: SGNode): boolean {
+    return this.partOf.has(n.id);
+  }
+
   setOptions(opts: Partial<GraphOptions>) {
-    const layoutChanged =
-      opts.layout !== undefined && opts.layout !== this.opts.layout;
-    const coursesChanged =
-      opts.courses !== undefined && opts.courses !== this.opts.courses;
+    const layoutChanged = opts.layout !== undefined && opts.layout !== this.opts.layout;
+    const coursesChanged = opts.courses !== undefined && opts.courses !== this.opts.courses;
     this.opts = { ...this.opts, ...opts };
     if (layoutChanged || coursesChanged) {
-      for (const n of this.nodes)
-        if (n.kind !== "ability") ((n.fx = null), (n.fy = null));
+      for (const n of this.nodes) if (n.kind !== "ability") ((n.fx = null), (n.fy = null));
       this.autoFit = true;
       this.applyForces(1);
     }
@@ -301,9 +316,9 @@ export class SkillGraph {
 
   // ---- layout -------------------------------------------------------------------------------------
 
-  /** Where the structured layouts (flow, rings) want each hub and skill; clusters leave it empty. */
+  /** Where the structured layouts (tree, rings) want each hub and skill; clusters leave it empty. */
   private slots = new Map<string, Pt>();
-  /** Tier guides: horizontal lines (flow) or circles (rings). */
+  /** Tier guides: horizontal lines (tree) or circles (rings). */
   private guides: { at: number; label: string }[] = [];
 
   private hubPoint(ability: string): Pt {
@@ -326,105 +341,129 @@ export class SkillGraph {
    * around it, each owning a wedge; tiers are rings further out. Within a tier,
    * skills sit near what they need, so arrows stay short and rarely cross.
    */
+  /** A topic's parts in learning order (the order Claude planned them, prerequisites first). */
+  private partsOf(topicId: string, visible: Map<string, Node>): Node[] {
+    const out: Node[] = [];
+    for (const [part, topic] of this.partOf) if (topic === topicId && visible.has(part)) out.push(visible.get(part)!);
+    return out.sort((a, b) => a.depth - b.depth);
+  }
+
   private computeSlots(visible: Node[]) {
     this.slots = new Map();
     this.guides = [];
     const layout = this.opts.layout;
     if (layout === "clusters") return;
-    const hubs = this.abilityOrder.filter((a) =>
-      visible.some((n) => n.kind === "ability" && n.id === a),
-    );
+    const hubs = this.abilityOrder.filter((a) => visible.some((n) => n.kind === "ability" && n.id === a));
     if (!hubs.length) return;
+    const byId = new Map(visible.map((n) => [n.id, n]));
+
+    // Subjects: skills made of parts that aren't parts themselves (Mathematics).
+    // Each gets a block: a lane per topic, the topic on top, its parts below.
+    const subjects = visible.filter((n) => n.kind === "skill" && !this.partOf.has(n.id) && this.partsOf(n.id, byId).length > 0);
+    const inBlock = new Map<string, number>(); // node → level under its subject (subject 0, topic 1, part 2…)
+    const walk = (id: string, level: number) => {
+      inBlock.set(id, level);
+      for (const p of this.partsOf(id, byId)) if (!inBlock.has(p.id)) walk(p.id, level + 1);
+    };
+    for (const s of subjects) walk(s.id, 0);
+    // Rings count depth by level inside a subject (subject, topics, parts), the tree by tiers outside them.
+    const depthOf = (n: Node) =>
+      layout === "rings" && inBlock.has(n.id) ? (subjects.find((s) => this.isUnder(n.id, s.id))?.depth ?? 0) + inBlock.get(n.id)! : n.depth;
+
     const tiers = new Map<string, Node[][]>(hubs.map((a) => [a, []]));
     for (const n of visible) {
-      const rows = n.kind === "skill" ? tiers.get(n.ability) : undefined;
-      if (rows) (rows[n.depth] ??= []).push(n);
+      if (n.kind !== "skill" || (layout === "tree" && inBlock.has(n.id))) continue;
+      const rows = tiers.get(n.ability);
+      if (rows) (rows[depthOf(n)] ??= []).push(n);
     }
     // Order each tier by where its prerequisites sit (0..1 across their ability),
     // tier by tier so every parent is ranked before its children.
-    const maxDepth = Math.max(
-      0,
-      ...[...tiers.values()].map((rows) => rows.length - 1),
-    );
+    const maxDepth = Math.max(0, ...[...tiers.values()].map((rows) => rows.length - 1));
     const rank = new Map<string, number>();
     const key = (n: Node) => {
-      const ps = (this.parents.get(n.id) ?? [])
-        .map((id) => rank.get(id))
-        .filter((v): v is number => v !== undefined);
+      const ps = (this.parents.get(n.id) ?? []).map((id) => rank.get(id)).filter((v): v is number => v !== undefined);
       return ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : 0.5;
     };
     for (let d = 0; d <= maxDepth; d++) {
       for (const rows of tiers.values()) {
         const row = rows[d];
         if (!row) continue;
-        row.sort(
-          (a, b) =>
-            key(a) - key(b) ||
-            b.level - a.level ||
-            a.label.localeCompare(b.label),
-        );
-        row.forEach((n, i) =>
-          rank.set(n.id, row.length > 1 ? i / (row.length - 1) : 0.5),
-        );
+        row.sort((a, b) => key(a) - key(b) || b.level - a.level || a.label.localeCompare(b.label));
+        row.forEach((n, i) => rank.set(n.id, row.length > 1 ? i / (row.length - 1) : 0.5));
       }
     }
     const CELL = 74;
 
-    if (layout === "flow") {
+    if (layout === "tree") {
       const PER_ROW = 4;
-      const widths = hubs.map(
-        (a) =>
-          Math.max(
-            1,
-            Math.min(
-              PER_ROW,
-              ...(tiers.get(a) ?? []).map((r) => r?.length ?? 0),
-            ),
-          ) * CELL,
-      );
-      const GAP = 56;
-      const total = widths.reduce((a, b) => a + b, 0) + GAP * (hubs.length - 1);
-      const centers: number[] = [];
-      let x = -total / 2;
-      for (const w of widths) {
-        centers.push(x + w / 2);
-        x += w + GAP;
-      }
       const ROW_H = 78;
+      const LANE = 196;
+      const PART_H = 70;
+      // The lanes of each subject: its topics, each with everything inside it, in order.
+      const lanesOf = (subject: Node): Node[][] => {
+        const direct = this.partsOf(subject.id, byId);
+        const flat = (t: Node): Node[] => this.partsOf(t.id, byId).flatMap((p) => [p, ...flat(p)]);
+        if (direct.every((t) => !this.partsOf(t.id, byId).length)) {
+          // Parts without topics: stacked, five to a lane.
+          const out: Node[][] = [];
+          for (let i = 0; i < direct.length; i += 5) out.push(direct.slice(i, i + 5));
+          return out;
+        }
+        return direct.map((t) => [t, ...flat(t)]);
+      };
+      type Column = { kind: "ability"; id: string; width: number } | { kind: "subject"; node: Node; lanes: Node[][]; width: number };
+      const columns: Column[] = [];
+      for (const a of hubs) {
+        columns.push({ kind: "ability", id: a, width: Math.max(1, Math.min(PER_ROW, ...(tiers.get(a) ?? []).map((r) => r?.length ?? 0))) * CELL });
+        for (const s of subjects.filter((x) => x.ability === a)) {
+          const lanes = lanesOf(s);
+          columns.push({ kind: "subject", node: s, lanes, width: Math.max(1, lanes.length) * LANE });
+        }
+      }
+      const GAP = 56;
+      const total = columns.reduce((a, c) => a + c.width, 0) + GAP * (columns.length - 1);
+      let x = -total / 2;
+      const center = new Map<Column, number>();
+      for (const c of columns) {
+        center.set(c, x + c.width / 2);
+        x += c.width + GAP;
+      }
       let y = 0;
       for (let d = 0; d <= maxDepth; d++) {
-        const sub = Math.max(
-          1,
-          ...hubs.map((a) =>
-            Math.ceil((tiers.get(a)?.[d]?.length ?? 0) / PER_ROW),
-          ),
-        );
-        this.guides.push({ at: y - ROW_H / 2, label: `Tier ${d + 1}` });
-        hubs.forEach((a, ai) => {
-          const row = tiers.get(a)?.[d] ?? [];
+        const sub = Math.max(1, ...hubs.map((a) => Math.ceil((tiers.get(a)?.[d]?.length ?? 0) / PER_ROW)));
+        // Tier lines only where tiers are the whole story (subject blocks have lanes).
+        if (!subjects.length) this.guides.push({ at: y - ROW_H / 2, label: `Tier ${d + 1}` });
+        for (const c of columns) {
+          if (c.kind !== "ability") continue;
+          const row = tiers.get(c.id)?.[d] ?? [];
           const lines = Math.max(1, Math.ceil(row.length / PER_ROW));
           const per = Math.ceil(row.length / lines);
           row.forEach((n, i) => {
             const line = Math.floor(i / per);
             const inLine = Math.min(per, row.length - line * per);
             const j = i - line * per;
-            this.slots.set(n.id, {
-              x: centers[ai] + (j - (inLine - 1) / 2) * CELL,
-              y: y + line * ROW_H,
-            });
+            this.slots.set(n.id, { x: center.get(c)! + (j - (inLine - 1) / 2) * CELL, y: y + line * ROW_H });
           });
-        });
+        }
         y += sub * ROW_H + 40;
       }
-      hubs.forEach((a, ai) => this.slots.set(a, { x: centers[ai], y: -120 }));
+      for (const c of columns) {
+        if (c.kind === "ability") this.slots.set(c.id, { x: center.get(c)!, y: -120 });
+        else {
+          // The subject at the top, then its lanes: topic, then its parts one under another.
+          const cx = center.get(c)!;
+          this.slots.set(c.node.id, { x: cx, y: 0 });
+          c.lanes.forEach((lane, li) => {
+            const lx = cx - c.width / 2 + LANE * (li + 0.5);
+            lane.forEach((n, j) => this.slots.set(n.id, { x: lx, y: ROW_H * 1.4 + j * PART_H + (j > 0 ? 18 : 0) }));
+          });
+        }
+      }
       return;
     }
 
     // Rings.
-    const weight = hubs.map(
-      (a) =>
-        0.8 + Math.max(1, ...(tiers.get(a) ?? []).map((r) => r?.length ?? 0)),
-    );
+    const weight = hubs.map((a) => 0.8 + Math.max(1, ...(tiers.get(a) ?? []).map((r) => r?.length ?? 0)));
     const sum = weight.reduce((a, b) => a + b, 0);
     const span = weight.map((w) => (w / sum) * Math.PI * 2);
     const starts: number[] = [];
@@ -445,8 +484,7 @@ export class SkillGraph {
       const need = (ai: number, rows: number) => {
         const m = tiers.get(hubs[ai])?.[d]?.length ?? 0;
         let cap = 0;
-        for (let j = 0; j < rows; j++)
-          cap += Math.max(1, Math.floor((span[ai] * (r + j * SUB)) / CELL));
+        for (let j = 0; j < rows; j++) cap += Math.max(1, Math.floor((span[ai] * (r + j * SUB)) / CELL));
         return cap >= m;
       };
       let sub = 1;
@@ -457,19 +495,10 @@ export class SkillGraph {
         let i = 0;
         for (let j = 0; j < sub && i < row.length; j++) {
           const rr = r + j * SUB;
-          const cap =
-            j === sub - 1
-              ? row.length - i
-              : Math.min(
-                  row.length - i,
-                  Math.max(1, Math.floor((span[ai] * rr) / CELL)),
-                );
+          const cap = j === sub - 1 ? row.length - i : Math.min(row.length - i, Math.max(1, Math.floor((span[ai] * rr) / CELL)));
           for (let k = 0; k < cap; k++, i++) {
             const ang = starts[ai] + (span[ai] * (k + 0.5)) / cap;
-            this.slots.set(row[i].id, {
-              x: Math.cos(ang) * rr,
-              y: Math.sin(ang) * rr,
-            });
+            this.slots.set(row[i].id, { x: Math.cos(ang) * rr, y: Math.sin(ang) * rr });
           }
         }
       });
@@ -477,16 +506,18 @@ export class SkillGraph {
     }
   }
 
+  /** Whether a skill is inside a topic, at any depth. */
+  private isUnder(id: string, topicId: string): boolean {
+    for (let t = this.partOf.get(id), n = 0; t && n < 64; t = this.partOf.get(t), n++) if (t === topicId) return true;
+    return false;
+  }
+
   private applyForces(heat: number) {
     const layout = this.opts.layout;
-    const visible = this.nodes.filter(
-      (n) => this.opts.courses || n.kind !== "course",
-    );
+    const visible = this.nodes.filter((n) => this.opts.courses || n.kind !== "course");
     const visibleIds = new Set(visible.map((n) => n.id));
     const links = this.links.filter(
-      (l) =>
-        visibleIds.has(String((l.source as Node).id ?? l.source)) &&
-        visibleIds.has(String((l.target as Node).id ?? l.target)),
+      (l) => visibleIds.has(String((l.source as Node).id ?? l.source)) && visibleIds.has(String((l.target as Node).id ?? l.target)),
     );
     this.computeSlots(visible);
     const structured = layout !== "clusters";
@@ -515,44 +546,23 @@ export class SkillGraph {
         forceLink<Node, Link>(links)
           .id((d) => d.id)
           .distance((l) => (l.kind === "course" ? 34 : 78))
-          .strength((l) =>
-            l.kind === "course" ? 0.9 : structured ? 0.02 : 0.35,
-          ),
+          .strength((l) => (l.kind === "course" ? 0.9 : structured ? 0.02 : 0.35)),
       )
       .force(
         "charge",
         forceManyBody<Node>()
-          .strength((d) =>
-            d.kind === "course"
-              ? -30
-              : d.kind === "ability"
-                ? structured
-                  ? -120
-                  : -500
-                : structured
-                  ? -40
-                  : -210,
-          )
+          .strength((d) => (d.kind === "course" ? -30 : d.kind === "ability" ? (structured ? -120 : -500) : structured ? -40 : -210))
           .distanceMax(structured ? 160 : 600),
       )
       .force(
         "x",
-        forceX<Node>((d) => target(d).x).strength((d) =>
-          d.kind === "skill" ? pull : 0,
-        ),
+        forceX<Node>((d) => target(d).x).strength((d) => (d.kind === "skill" ? pull : 0)),
       )
       .force(
         "y",
-        forceY<Node>((d) => target(d).y).strength((d) =>
-          d.kind === "skill" ? pull : 0,
-        ),
+        forceY<Node>((d) => target(d).y).strength((d) => (d.kind === "skill" ? pull : 0)),
       )
-      .force(
-        "collide",
-        forceCollide<Node>(
-          (d) => d.r + (d.kind === "course" ? 4 : structured ? 6 : 14),
-        ).iterations(2),
-      );
+      .force("collide", forceCollide<Node>((d) => d.r + (d.kind === "course" ? 4 : structured ? 6 : 14)).iterations(2));
     this.sim.alpha(Math.max(this.sim.alpha(), heat));
     if (this.reduced) {
       this.sim.stop();
@@ -586,11 +596,7 @@ export class SkillGraph {
   }
 
   fit(ids?: string[], animate = true) {
-    const nodes = (
-      ids?.length
-        ? ids.map((id) => this.byId.get(id)).filter((n): n is Node => !!n)
-        : this.nodes
-    ).filter(
+    const nodes = (ids?.length ? ids.map((id) => this.byId.get(id)).filter((n): n is Node => !!n) : this.nodes).filter(
       (n) => n.x !== undefined && (this.opts.courses || n.kind !== "course"),
     );
     if (!nodes.length || !this.w) return;
@@ -604,17 +610,13 @@ export class SkillGraph {
       x1 = Math.max(x1, n.x! + n.r + 30);
       y1 = Math.max(y1, n.y! + n.r + 46);
     }
-    if (!ids?.length && this.opts.layout === "flow" && this.guides.length) {
+    if (!ids?.length && this.opts.layout === "tree" && this.guides.length) {
       for (const p of this.slots.values()) x0 = Math.min(x0, p.x - 80);
     }
     if (!ids?.length) this.autoFit = true;
     const aw = this.w - this.inset.left - this.inset.right;
     const ah = this.h - this.inset.top - this.inset.bottom;
-    const k = clamp(
-      Math.min(aw / (x1 - x0), ah / (y1 - y0)),
-      MIN_K,
-      ids?.length === 1 ? 1.4 : 1.6,
-    );
+    const k = clamp(Math.min(aw / (x1 - x0), ah / (y1 - y0)), MIN_K, ids?.length === 1 ? 1.4 : 1.6);
     const to = {
       k,
       x: this.inset.left + aw / 2 - ((x0 + x1) / 2) * k,
@@ -642,14 +644,16 @@ export class SkillGraph {
     if (!n || n.x === undefined) return;
     const s = this.toScreen({ x: n.x, y: n.y! });
     const pad = 60;
-    if (
-      s.x < this.inset.left + pad ||
-      s.x > this.w - this.inset.right - pad ||
-      s.y < this.inset.top + pad ||
-      s.y > this.h - this.inset.bottom - pad
-    ) {
+    if (s.x < this.inset.left + pad || s.x > this.w - this.inset.right - pad || s.y < this.inset.top + pad || s.y > this.h - this.inset.bottom - pad) {
       this.centerOn(id);
     }
+  }
+
+  /** Keyboard focus on a skill: ring it and bring it into view. */
+  focus(id: string | null) {
+    this.focusId = id;
+    if (id) this.reveal(id);
+    this.request();
   }
 
   panBy(dx: number, dy: number) {
@@ -691,8 +695,7 @@ export class SkillGraph {
       if (l.kind === "course" && out.has(s)) out.add(t);
     }
     const n = this.byId.get(id);
-    if (n?.kind === "ability")
-      for (const m of this.nodes) if (m.ability === id) out.add(m.id);
+    if (n?.kind === "ability") for (const m of this.nodes) if (m.ability === id) out.add(m.id);
     return out;
   }
 
@@ -715,8 +718,7 @@ export class SkillGraph {
         y: from.y + (to.y - from.y) * e,
       };
       if (p >= 1) this.anim = null;
-    } else if (this.autoFit && this.sim.alpha() > 0.02)
-      this.fit(undefined, false);
+    } else if (this.autoFit && this.sim.alpha() > 0.02) this.fit(undefined, false);
 
     const { ctx, theme, t } = this;
     ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
@@ -725,22 +727,16 @@ export class SkillGraph {
     ctx.translate(t.x, t.y);
     ctx.scale(t.k, t.k);
 
-    const focus = this.hover?.id ?? this.opts.selectedId;
+    const focus = this.hover?.id ?? this.focusId ?? this.opts.selectedId;
     const path = focus && this.byId.has(focus) ? this.pathOf(focus) : null;
-    const dim = (id: string) =>
-      path
-        ? !path.has(id)
-        : this.opts.matches
-          ? !this.opts.matches.has(id)
-          : false;
+    const dim = (id: string) => (path ? !path.has(id) : this.opts.matches ? !this.opts.matches.has(id) : false);
     const showCourse = (n: Node) => this.opts.courses || n.kind !== "course";
 
-    // Tier guides: bands (flow) or circles (rings), one per prerequisite depth.
+    // Tier guides: bands (tree) or circles (rings), one per prerequisite depth.
     if (this.guides.length) {
       let gx0 = Infinity;
       let gx1 = -Infinity;
-      for (const p of this.slots.values())
-        ((gx0 = Math.min(gx0, p.x)), (gx1 = Math.max(gx1, p.x)));
+      for (const p of this.slots.values()) ((gx0 = Math.min(gx0, p.x)), (gx1 = Math.max(gx1, p.x)));
       ctx.save();
       ctx.strokeStyle = theme.muted;
       ctx.fillStyle = theme.muted;
@@ -750,19 +746,15 @@ export class SkillGraph {
       for (const g of this.guides) {
         ctx.globalAlpha = 0.28;
         ctx.beginPath();
-        if (this.opts.layout === "flow") {
+        if (this.opts.layout === "tree") {
           ctx.moveTo(gx0 - 70, g.at);
           ctx.lineTo(gx1 + 70, g.at);
         } else ctx.arc(0, 0, g.at, 0, Math.PI * 2);
         ctx.stroke();
-        if (this.opts.layout === "flow") {
+        if (this.opts.layout === "tree") {
           ctx.globalAlpha = 0.6;
           ctx.textAlign = "left";
-          ctx.fillText(
-            g.label.toUpperCase(),
-            gx0 - 70,
-            g.at + 14 / Math.max(t.k, 0.6),
-          );
+          ctx.fillText(g.label.toUpperCase(), gx0 - 70, g.at + 14 / Math.max(t.k, 0.6));
         }
       }
       ctx.restore();
@@ -777,21 +769,12 @@ export class SkillGraph {
       faded: boolean;
     }[] = [];
     const branches = new Map<string, Node[]>();
-    for (const n of this.nodes)
-      if (n.kind === "skill" && n.branch && n.x !== undefined)
-        branches.set(n.branch, [...(branches.get(n.branch) ?? []), n]);
+    for (const n of this.nodes) if (n.kind === "skill" && n.branch && n.x !== undefined) branches.set(n.branch, [...(branches.get(n.branch) ?? []), n]);
     for (const [name, members] of branches) {
       const color = pathColor(name);
       const ids = new Set(members.map((m) => m.id));
-      const faded = path
-        ? !members.some((m) => path.has(m.id))
-        : this.opts.matches
-          ? !members.some((m) => this.opts.matches!.has(m.id))
-          : false;
-      const start = members.reduce(
-        (a, b) => (b.depth < a.depth ? b : a),
-        members[0],
-      );
+      const faded = path ? !members.some((m) => path.has(m.id)) : this.opts.matches ? !members.some((m) => this.opts.matches!.has(m.id)) : false;
+      const start = members.reduce((a, b) => (b.depth < a.depth ? b : a), members[0]);
       roads.push({ name, color, start, faded });
       // One path, stroked once, so overlapping stretches don't darken.
       ctx.beginPath();
@@ -806,35 +789,22 @@ export class SkillGraph {
         const dx = b.x! - a.x!;
         const dy = b.y! - a.y!;
         ctx.moveTo(a.x!, a.y!);
-        ctx.quadraticCurveTo(
-          (a.x! + b.x!) / 2 - dy * 0.08,
-          (a.y! + b.y!) / 2 + dx * 0.08,
-          b.x!,
-          b.y!,
-        );
+        ctx.quadraticCurveTo((a.x! + b.x!) / 2 - dy * 0.08, (a.y! + b.y!) / 2 + dx * 0.08, b.x!, b.y!);
       }
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       ctx.lineWidth = 44;
-      ctx.strokeStyle = alpha(
-        color,
-        faded ? 0.04 : this.opts.dark ? 0.16 : 0.12,
-      );
+      ctx.strokeStyle = alpha(color, faded ? 0.04 : this.opts.dark ? 0.16 : 0.12);
       ctx.stroke();
       ctx.lineCap = "butt";
       ctx.lineJoin = "miter";
     }
 
     // Hub spokes: faint lines from each skill to its ability (just the first
-    // tier in flow and rings, where deeper skills hang off their prerequisites).
+    // tier in the tree and rings, where deeper skills hang off their prerequisites).
     {
       for (const n of this.nodes) {
-        if (
-          n.kind !== "skill" ||
-          n.x === undefined ||
-          (this.opts.layout !== "clusters" && n.depth > 0)
-        )
-          continue;
+        if (n.kind !== "skill" || n.x === undefined || (this.opts.layout !== "clusters" && n.depth > 0) || this.isPart(n)) continue;
         const hub = this.byId.get(n.ability);
         if (!hub || hub.x === undefined) continue;
         ctx.beginPath();
@@ -850,14 +820,9 @@ export class SkillGraph {
     for (const l of this.links) {
       const s = l.source as Node;
       const d = l.target as Node;
-      if (
-        s.x === undefined ||
-        d.x === undefined ||
-        !showCourse(s) ||
-        !showCourse(d)
-      )
-        continue;
+      if (l.hidden || s.x === undefined || d.x === undefined || !showCourse(s) || !showCourse(d)) continue;
       const faded = dim(s.id) || dim(d.id);
+      const arrow = l.kind !== "course";
       const lit = path && path.has(s.id) && path.has(d.id);
       const dx = d.x - s.x;
       const dy = d.y! - s.y!;
@@ -866,45 +831,33 @@ export class SkillGraph {
       const uy = dy / len;
       const x1 = s.x + ux * s.r;
       const y1 = s.y! + uy * s.r;
-      const x2 = d.x - ux * (d.r + (l.kind === "prereq" ? 4 : 0));
-      const y2 = d.y! - uy * (d.r + (l.kind === "prereq" ? 4 : 0));
+      const x2 = d.x - ux * (d.r + (arrow ? 4 : 0));
+      const y2 = d.y! - uy * (d.r + (arrow ? 4 : 0));
       // A gentle curve so crossing edges read apart.
       const mx = (x1 + x2) / 2 - uy * len * 0.08;
       const my = (y1 + y2) / 2 + ux * len * 0.08;
       ctx.beginPath();
       ctx.moveTo(x1, y1);
       ctx.quadraticCurveTo(mx, my, x2, y2);
-      const base =
-        l.kind === "course" ? theme.edge : l.met ? d.color : theme.edge;
-      ctx.strokeStyle = faded
-        ? alpha(theme.edge.startsWith("#") ? theme.edge : "#888888", 0.12)
-        : lit
-          ? d.color
-          : base;
-      ctx.globalAlpha = faded ? 0.35 : l.kind === "course" ? 0.55 : 0.85;
-      ctx.lineWidth =
-        (lit ? 2.6 : l.kind === "course" ? 1 : 1.6) / Math.sqrt(t.k);
-      if (!l.met && l.kind === "prereq") ctx.setLineDash([5 / t.k, 4 / t.k]);
+      const base = l.kind === "course" ? theme.edge : l.met ? d.color : theme.edge;
+      ctx.strokeStyle = faded ? alpha(theme.edge.startsWith("#") ? theme.edge : "#888888", 0.12) : lit ? d.color : base;
+      ctx.globalAlpha = faded ? 0.35 : l.kind === "course" ? 0.55 : l.kind === "part" ? 0.6 : 0.85;
+      ctx.lineWidth = (lit ? 2.6 : l.kind === "prereq" ? 1.6 : 1.1) / Math.sqrt(t.k);
+      if (!l.met && arrow) ctx.setLineDash([5 / t.k, 4 / t.k]);
       ctx.stroke();
       ctx.setLineDash([]);
-      if (l.kind === "prereq") {
+      if (arrow) {
         // Arrowhead along the curve's end tangent.
         const tx = x2 - mx;
         const ty = y2 - my;
         const tl = Math.hypot(tx, ty) || 1;
         const ax = tx / tl;
         const ay = ty / tl;
-        const size = 7 / Math.sqrt(t.k);
+        const size = (l.kind === "part" ? 5.5 : 7) / Math.sqrt(t.k);
         ctx.beginPath();
         ctx.moveTo(x2, y2);
-        ctx.lineTo(
-          x2 - ax * size - ay * size * 0.55,
-          y2 - ay * size + ax * size * 0.55,
-        );
-        ctx.lineTo(
-          x2 - ax * size + ay * size * 0.55,
-          y2 - ay * size - ax * size * 0.55,
-        );
+        ctx.lineTo(x2 - ax * size - ay * size * 0.55, y2 - ay * size + ax * size * 0.55);
+        ctx.lineTo(x2 - ax * size + ay * size * 0.55, y2 - ay * size - ax * size * 0.55);
         ctx.closePath();
         ctx.fillStyle = ctx.strokeStyle as string;
         ctx.fill();
@@ -946,12 +899,7 @@ export class SkillGraph {
         ctx.lineWidth = 1.5;
         ctx.stroke();
         ctx.beginPath();
-        ctx.rect(
-          x - s + 2,
-          y + s - 2 - (s * 2 - 4) * n.progress,
-          s * 2 - 4,
-          (s * 2 - 4) * n.progress,
-        );
+        ctx.rect(x - s + 2, y + s - 2 - (s * 2 - 4) * n.progress, s * 2 - 4, (s * 2 - 4) * n.progress);
         ctx.fillStyle = alpha(n.color, 0.5);
         ctx.fill();
       } else {
@@ -967,14 +915,22 @@ export class SkillGraph {
           ctx.stroke();
           ctx.setLineDash([]);
         }
+        if (n.learnt) {
+          // A topic: a second rim inside, like a medal.
+          ctx.beginPath();
+          ctx.arc(x, y, n.r - 4, 0, Math.PI * 2);
+          ctx.strokeStyle = n.locked ? alpha(n.color, 0.5) : alpha(theme.bg.startsWith("#") ? theme.bg : "#ffffff", 0.7);
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+          // Its track, so an empty ring still reads as "0 of N".
+          ctx.beginPath();
+          ctx.arc(x, y, n.r + 4, 0, Math.PI * 2);
+          ctx.strokeStyle = alpha(n.color, 0.18);
+          ctx.lineWidth = 3;
+          ctx.stroke();
+        }
         ctx.beginPath();
-        ctx.arc(
-          x,
-          y,
-          n.r + 4,
-          -Math.PI / 2,
-          -Math.PI / 2 + Math.PI * 2 * n.progress,
-        );
+        ctx.arc(x, y, n.r + 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * n.progress);
         ctx.strokeStyle = n.color;
         ctx.lineWidth = 3;
         ctx.lineCap = "round";
@@ -987,13 +943,14 @@ export class SkillGraph {
           ctx.lineWidth = 2;
           ctx.stroke();
         }
-        if (this.opts.selectedId === n.id || this.hover === n) {
+        if (this.opts.selectedId === n.id || this.hover === n || this.focusId === n.id) {
           ctx.beginPath();
           ctx.arc(x, y, n.r + (n.goal ? 13 : 9), 0, Math.PI * 2);
-          ctx.strokeStyle =
-            this.opts.selectedId === n.id ? theme.accent : alpha(n.color, 0.6);
+          ctx.strokeStyle = this.opts.selectedId === n.id || this.focusId === n.id ? theme.accent : alpha(n.color, 0.6);
           ctx.lineWidth = 2.5;
+          if (this.focusId === n.id && this.opts.selectedId !== n.id) ctx.setLineDash([5, 4]);
           ctx.stroke();
+          ctx.setLineDash([]);
         }
         // Emoji and level badge, when big enough to read.
         if (n.r * t.k >= 9) {
@@ -1006,18 +963,43 @@ export class SkillGraph {
           ctx.globalAlpha = faded ? FADED : 1;
           const bx = x + n.r * 0.78;
           const by = y + n.r * 0.78;
+          // Badge: the level, "3/5" learnt for a topic, a check once learnt, a lock.
+          const text = n.locked ? "🔒" : n.done ? "✓" : n.learnt ? `${n.learnt.done}/${n.learnt.total}` : String(n.level);
+          ctx.font = `700 9px ${theme.font}`;
+          const bw = Math.max(15, ctx.measureText(text).width + 8);
           ctx.beginPath();
-          ctx.arc(bx, by, 7.5, 0, Math.PI * 2);
-          ctx.fillStyle = theme.bg;
+          ctx.roundRect(bx - bw / 2, by - 7.5, bw, 15, 7.5);
+          ctx.fillStyle = n.done ? n.color : theme.bg;
           ctx.fill();
           ctx.strokeStyle = n.color;
           ctx.lineWidth = 1.4;
           ctx.stroke();
-          ctx.font = `700 9px ${theme.font}`;
-          ctx.fillStyle = theme.text;
-          ctx.fillText(n.locked ? "🔒" : String(n.level), bx, by + 0.5);
+          ctx.fillStyle = n.done ? "#fff" : theme.text;
+          ctx.fillText(text, bx, by + 0.5);
           ctx.textBaseline = "alphabetic";
         }
+        // Claude is working on it: a turning arc.
+        if (n.busy) {
+          const a0 = (now / 600) % (Math.PI * 2);
+          ctx.beginPath();
+          ctx.arc(x, y, n.r + 10, a0, a0 + Math.PI * 1.2);
+          ctx.strokeStyle = theme.accent;
+          ctx.lineWidth = 2.5;
+          ctx.lineCap = "round";
+          ctx.stroke();
+          ctx.lineCap = "butt";
+        }
+        // Collaborators looking at it: their colors along the rim.
+        n.peers?.forEach((c, i) => {
+          const a = -Math.PI / 4 - i * 0.5;
+          ctx.beginPath();
+          ctx.arc(x + Math.cos(a) * (n.r + 5), y + Math.sin(a) * (n.r + 5), 4.5, 0, Math.PI * 2);
+          ctx.fillStyle = c;
+          ctx.fill();
+          ctx.strokeStyle = theme.bg;
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        });
       }
       // Level-up pulse.
       const fx = this.effects.get(n.id);
@@ -1040,8 +1022,7 @@ export class SkillGraph {
     // that would overlap one already placed (or another node) tries above its
     // node, then gives way, so zooming in reveals more of them.
     type Box = { x0: number; y0: number; x1: number; y1: number };
-    const overlaps = (b: Box, o: Box) =>
-      b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0;
+    const overlaps = (b: Box, o: Box) => b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0;
     const placed: Box[] = [];
     const discs = new Map<string, Box>();
     for (const n of this.nodes) {
@@ -1055,38 +1036,25 @@ export class SkillGraph {
     const candidates = this.nodes
       .filter((n) => n.x !== undefined && n.kind !== "ability" && showCourse(n))
       .map((n) => {
-        const important =
-          this.hover === n ||
-          this.opts.selectedId === n.id ||
-          (path?.has(n.id) ?? false) ||
-          (this.opts.matches?.has(n.id) ?? false);
+        const important = this.hover === n || this.opts.selectedId === n.id || (path?.has(n.id) ?? false) || (this.opts.matches?.has(n.id) ?? false);
+        // Only the skill you're on always gets its label; the rest of its path gives way when crowded.
+        const forced = this.hover === n || this.opts.selectedId === n.id || this.focusId === n.id;
         const rank =
           this.hover === n
             ? 1e6
             : this.opts.selectedId === n.id
               ? 1e5
-              : (important ? 1e4 : 0) +
-                (n.kind === "course"
-                  ? 0
-                  : 100 + n.level * 4 + (n.goal ? 20 : 0));
-        return { n, important, rank };
+              : (important ? 1e4 : 0) + (n.kind === "course" ? 0 : 100 + n.level * 4 + (n.goal ? 20 : 0) + (n.learnt ? 400 : 0));
+        return { n, important, forced, rank };
       })
-      .filter(
-        ({ n, important }) =>
-          important ||
-          (this.opts.labels &&
-            !dim(n.id) &&
-            t.k >= (n.kind === "course" ? 1.1 : 0.45)),
-      )
+      .filter(({ n, important }) => important || (this.opts.labels && !dim(n.id) && t.k >= (n.kind === "course" ? 1.1 : 0.45)))
       .sort((a, b) => b.rank - a.rank);
     ctx.textAlign = "center";
     for (const road of roads) {
       const n = road.start;
       const s = this.toScreen({ x: n.x!, y: n.y! });
       ctx.font = `800 11px ${theme.font}`;
-      const label = (
-        road.name.length > 32 ? `${road.name.slice(0, 31)}…` : road.name
-      ).toUpperCase();
+      const label = (road.name.length > 32 ? `${road.name.slice(0, 31)}…` : road.name).toUpperCase();
       const w = ctx.measureText(label).width;
       const gap = (n.r + (n.goal ? 10 : 7)) * t.k;
       const box = (base: number): Box => ({
@@ -1097,12 +1065,7 @@ export class SkillGraph {
       });
       // Above its first step, else below it, wherever it covers no other skill.
       const spots = [s.y - gap - 7, s.y + gap + 13];
-      const y =
-        spots.find(
-          (b) =>
-            !placed.some((o) => overlaps(box(b), o)) &&
-            ![...discs].some(([id, o]) => id !== n.id && overlaps(box(b), o)),
-        ) ?? spots[0];
+      const y = spots.find((b) => !placed.some((o) => overlaps(box(b), o)) && ![...discs].some(([id, o]) => id !== n.id && overlaps(box(b), o))) ?? spots[0];
       placed.push(box(y));
       ctx.globalAlpha = road.faded ? 0.35 : 1;
       ctx.lineWidth = 4;
@@ -1112,9 +1075,9 @@ export class SkillGraph {
       ctx.fillText(label, s.x, y);
       ctx.globalAlpha = 1;
     }
-    for (const { n, important } of candidates) {
+    for (const { n, forced } of candidates) {
       const s = this.toScreen({ x: n.x!, y: n.y! });
-      ctx.font = `${n.kind === "course" ? 500 : 600} ${n.kind === "course" ? 11 : 12.5}px ${theme.font}`;
+      ctx.font = `${n.kind === "course" ? 500 : n.learnt ? 750 : 600} ${n.kind === "course" ? 11 : n.learnt ? 14 : 12.5}px ${theme.font}`;
       const label = n.label.length > 28 ? `${n.label.slice(0, 27)}…` : n.label;
       const w = ctx.measureText(label).width;
       const gap = (n.r + (n.goal ? 10 : 7)) * t.k;
@@ -1126,11 +1089,9 @@ export class SkillGraph {
         y1: base + 4,
       });
       const clearOfLabels = (b: Box) => !placed.some((o) => overlaps(b, o));
-      const clearOfNodes = (b: Box) =>
-        ![...discs].some(([id, o]) => id !== n.id && overlaps(b, o));
+      const clearOfNodes = (b: Box) => ![...discs].some(([id, o]) => id !== n.id && overlaps(b, o));
       let at = spots.find((y) => clearOfLabels(box(y)) && clearOfNodes(box(y)));
-      if (at === undefined && important)
-        at = spots.find((y) => clearOfLabels(box(y))) ?? spots[0];
+      if (at === undefined && forced) at = spots.find((y) => clearOfLabels(box(y))) ?? spots[0];
       if (at === undefined) continue;
       placed.push(box(at));
       ctx.lineWidth = 4;
@@ -1140,7 +1101,7 @@ export class SkillGraph {
       ctx.fillText(label, s.x, at);
     }
 
-    if (this.anim || this.effects.size) this.request();
+    if (this.anim || this.effects.size || (!this.reduced && this.nodes.some((n) => n.busy))) this.request();
   }
 
   // ---- pointer ------------------------------------------------------------------------------------
@@ -1155,8 +1116,7 @@ export class SkillGraph {
     let best: Node | null = null;
     let bestD = Infinity;
     for (const n of this.nodes) {
-      if (n.x === undefined || (!this.opts.courses && n.kind === "course"))
-        continue;
+      if (n.x === undefined || (!this.opts.courses && n.kind === "course")) continue;
       const d = Math.hypot(n.x - w.x, n.y! - w.y);
       if (d <= n.r + 6 / this.t.k && d < bestD) {
         best = n;
@@ -1167,6 +1127,8 @@ export class SkillGraph {
   }
 
   private onDown = (e: PointerEvent) => {
+    // Right-click opens details (contextmenu), it doesn't start a lesson.
+    if (e.button !== 0) return;
     this.canvas.setPointerCapture(e.pointerId);
     const p = this.pointAt(e);
     this.pointers.set(e.pointerId, p);
@@ -1182,10 +1144,33 @@ export class SkillGraph {
       return;
     }
     const n = this.nodeAt(p);
-    if (n && n.kind !== "ability")
+    if (n && n.kind !== "ability") {
       this.drag = { node: n, start: p, moved: false };
-    else this.pan = { start: p, t: { ...this.t }, moved: false };
+      // Press and hold (touch, pen) shows details instead of starting a lesson.
+      if (e.pointerType !== "mouse") {
+        const id = n.id;
+        this.press = {
+          id,
+          timer: window.setTimeout(() => {
+            if (this.drag?.node.id !== id || this.drag.moved) return;
+            this.drag = null;
+            this.held = performance.now();
+            this.cb.onDetails(id);
+          }, 550),
+        };
+      }
+    } else this.pan = { start: p, t: { ...this.t }, moved: false };
     this.anim = null;
+  };
+
+  /** When a press-and-hold last opened details (a contextmenu right after it is the same gesture). */
+  private held = 0;
+
+  private onContext = (e: MouseEvent) => {
+    e.preventDefault();
+    if (performance.now() - this.held < 1000) return;
+    const n = this.nodeAt(this.pointAt(e));
+    if (n && n.kind !== "ability") this.cb.onDetails(n.id);
   };
 
   private onMove = (e: PointerEvent) => {
@@ -1194,11 +1179,7 @@ export class SkillGraph {
     if (this.pinch && this.pointers.size === 2) {
       const [a, b] = [...this.pointers.values()];
       const dist = Math.hypot(a.x - b.x, a.y - b.y);
-      const k = clamp(
-        this.pinch.k * (dist / (this.pinch.dist || 1)),
-        MIN_K,
-        MAX_K,
-      );
+      const k = clamp(this.pinch.k * (dist / (this.pinch.dist || 1)), MIN_K, MAX_K);
       const w = this.toWorld(this.pinch.mid);
       this.t = {
         k,
@@ -1210,11 +1191,9 @@ export class SkillGraph {
       return;
     }
     if (this.drag) {
-      if (
-        !this.drag.moved &&
-        Math.hypot(p.x - this.drag.start.x, p.y - this.drag.start.y) > 4
-      ) {
+      if (!this.drag.moved && Math.hypot(p.x - this.drag.start.x, p.y - this.drag.start.y) > 4) {
         this.drag.moved = true;
+        if (this.press) clearTimeout(this.press.timer);
         this.autoFit = false;
         this.sim.alphaTarget(0.25).restart();
       }
@@ -1247,6 +1226,10 @@ export class SkillGraph {
 
   private onUp = (e: PointerEvent) => {
     this.pointers.delete(e.pointerId);
+    if (this.press) {
+      clearTimeout(this.press.timer);
+      this.press = null;
+    }
     if (this.pinch) {
       if (this.pointers.size < 2) this.pinch = null;
       return;
@@ -1283,10 +1266,5 @@ export class SkillGraph {
     e.preventDefault();
     const f = Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0022));
     this.zoomBy(f, this.pointAt(e));
-  };
-
-  private onDbl = (e: MouseEvent) => {
-    const n = this.nodeAt(this.pointAt(e));
-    if (n && n.kind !== "ability") this.cb.onOpen(n.id);
   };
 }

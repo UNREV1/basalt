@@ -36,7 +36,7 @@ const TARGETS: Target[] = [
   { selector: ".cp-bubble", frost: 0.6 },
   { selector: ".pv-selbar, .pv-showui, .pv-topbar, .pv-embedded .pv-toolbar", frost: 0.45 },
   { selector: ".pv-pop, .pv-sheet, .pv-embedded .pv-docker", frost: 1 },
-  { selector: ".gv-zoom, .sk-controls, .sk-legend, .co-gen-bar", frost: 0.45 },
+  { selector: ".gv-zoom, .sg-tools, .sg-legend, .co-gen-bar", frost: 0.45 },
   { selector: ".gv-panel, .sk-panel", frost: 1 },
   { selector: ".bn-toolbar", frost: 0.6 },
   { selector: ".bn-suggestion-menu, .bn-grid-suggestion-menu, .bn-menu-dropdown, .bn-panel-popover, .bn-form-popover", frost: 1 },

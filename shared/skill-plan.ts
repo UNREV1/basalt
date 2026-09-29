@@ -1,0 +1,32 @@
+// The general plan every skill follows, whatever it is: how a subject is
+// broken down into the whole tree up front, from absolute zero to mastery,
+// as titles only. Lesson content is written later, a few lessons ahead of
+// the learner (see shared/learning.ts). Claude plans with it (the MCP tools
+// and the app's requests quote it), so every path in the tree has the same
+// shape: subject → topics → parts → lessons.
+
+/** The stages of any skill, for fields without natural milestones of their own. */
+export const PLAN_STAGES = [
+  { name: "Foundations", about: "what it is, the words for things, the very first basics" },
+  { name: "Core", about: "the essential techniques or ideas everything else builds on" },
+  { name: "Application", about: "using the core on real problems, pieces or situations" },
+  { name: "Intermediate", about: "widening and combining: more cases, more speed, fewer mistakes" },
+  { name: "Advanced", about: "the hard parts: nuance, style, harder problems" },
+  { name: "Mastery", about: "expert practice, creating your own, teaching others, the frontier" },
+] as const;
+
+export const GENERAL_PLAN = `THE GENERAL PLAN (the same shape for every skill or subject):
+1. Plan the whole tree now, from absolute zero to mastery, as titles only. Lessons are written later, a few ahead of the learner.
+2. The subject is one skill (e.g. "Mathematics"), or the existing skill being planned.
+3. Topics are its parts (\`topic\`: the subject): the real milestones of the field, in learning order. Mathematics: Arithmetic, Pre-algebra, Algebra, Geometry, Trigonometry, Precalculus, Calculus, Linear algebra, Probability and statistics. Guitar: First chords, Rhythm and strumming, Barre chords, Scales and lead, Music theory, Improvisation. When a field has no natural milestones, use the stages ${PLAN_STAGES.map((s) => s.name).join(", ")}.
+4. Each topic has 3–8 parts (\`topic\`: that topic): concrete sub-skills, each small enough for 3–10 short lessons. Arithmetic: Counting and place value, Addition and subtraction, Multiplication and division, Fractions, Decimals and percentages. A very big topic can be split once more (at most three levels under the subject).
+5. Order: the parts are what you learn to advance. Every topic after the first lists the topic before it as its prerequisite, and unlocks once every part of that topic is learnt (all its lessons done). Inside a topic, the first parts have no prerequisites; later parts list the part(s) they build on (required_level 2). A topic's parts unlock with their topic, so the path runs: Arithmetic → its parts → Algebra → its parts → …
+6. Every part (the skills without parts of their own) gets a course outline: 1–3 modules of 3–6 lessons, each a title and a one-line objective. No lesson content yet.
+7. Give every skill a fitting emoji and the ability it trains, and the same branch (the subject's name). Add a habit quest only to parts that need regular practice.`;
+
+/** The tools to plan with, in the order that lets the learner start soonest. */
+export const PLAN_STEPS = `How to plan it with the tools:
+a. add_skills with the subject, its topics and the first topic's parts (their \`course\` outlines included), in one call.
+b. Write the first lessons of the first part's course with write_interactive_lesson, so the learner can start right away.
+c. Then add the remaining topics' parts with add_skills (a call per topic or two, max 80 skills per call), and outline their courses with plan_courses (or \`course\` in add_skills).
+d. Check the result with get_skill_tree: every part should have a course.`;

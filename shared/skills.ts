@@ -85,6 +85,11 @@ export interface Skill {
   pageId?: string;
   /** The learning path this skill belongs to, e.g. "Play guitar" (skills Claude mapped for one goal). */
   branch?: string;
+  /**
+   * The bigger skill this one is part of: Mathematics → Arithmetic → Fractions.
+   * A skill with parts is a topic; learning it means learning its parts.
+   */
+  topic?: string;
 }
 
 export interface SkillArea {
@@ -436,6 +441,7 @@ export function normalizeSkill(raw: Partial<Skill> & { id: string }): Skill {
   if (quests.length) out.quests = quests;
   if (typeof raw.pageId === "string" && raw.pageId) out.pageId = raw.pageId;
   if (typeof raw.branch === "string" && raw.branch.trim()) out.branch = raw.branch.trim().slice(0, 120);
+  if (typeof raw.topic === "string" && raw.topic && raw.topic !== raw.id) out.topic = raw.topic;
   return out;
 }
 
@@ -489,13 +495,20 @@ export function ensureSkillPage(doc: Y.Doc, skillId: string): string | undefined
   doc.transact(() => {
     ensureBuiltinType(doc, SKILL_TYPE_ID);
     if (!getPage(doc, pageId)) {
-      createPage(doc, { id: pageId, title: skill.name, icon: skill.icon, typeId: SKILL_TYPE_ID, parentId: ensureSkillsRoot(doc), order: skill.createdAt });
+      createPage(doc, { id: pageId, title: skill.name, icon: skill.icon, typeId: SKILL_TYPE_ID, parentId: topicPageId(doc, skill) ?? ensureSkillsRoot(doc), order: skill.createdAt });
     }
     getPage(doc, pageId)!.set("skillId", skill.id);
     const raw = skillsMap(doc).get(skill.id);
     if (raw) skillsMap(doc).set(skill.id, clone({ ...raw, pageId }));
   }, SKILLS_ORIGIN);
   return pageId;
+}
+
+/** A sub-skill's page lives under its topic's page (Skills → Mathematics → Arithmetic). */
+function topicPageId(doc: Y.Doc, skill: Skill): string | undefined {
+  const raw = skill.topic ? skillsMap(doc).get(skill.topic) : undefined;
+  const id = raw && typeof raw === "object" ? (raw.pageId as string | undefined) : undefined;
+  return id && getPage(doc, id) && !getPage(doc, id)!.get("deletedAt") ? id : undefined;
 }
 
 /** Give every active skill made before skill pages existed its page. */
@@ -598,6 +611,8 @@ export interface SkillInput {
   /** An existing page to be this skill's page (otherwise one is created). */
   pageId?: string;
   branch?: string;
+  /** The skill this one is part of (see Skill.topic). */
+  topic?: string;
 }
 
 export function createSkill(doc: Y.Doc, input: SkillInput): Skill {
@@ -627,6 +642,7 @@ export function createSkill(doc: Y.Doc, input: SkillInput): Skill {
       updatedAt: now,
       pageId: input.pageId,
       branch: input.branch,
+      topic: input.topic && existing.has(input.topic) ? input.topic : undefined,
     });
     skillsMap(doc).set(id, clone(skill));
     // Created together with the skill so no other client ever races to create it.
@@ -1019,6 +1035,14 @@ export interface Requirement {
   name: string;
   need: number;
   have: number;
+  /** A topic as prerequisite: every one of its parts must be learnt. */
+  parts?: { done: number; total: number };
+}
+
+/** "Mnemonics level 2 (now 1)", or "all of Arithmetic (3/5 learnt)". */
+export function requirementText(m: Requirement, opts: { now?: boolean } = {}): string {
+  if (m.parts) return `all of ${m.name}${opts.now === false ? "" : ` (${m.parts.done}/${m.parts.total} learnt)`}`;
+  return `${m.name} level ${m.need}${opts.now === false ? "" : ` (now ${m.have})`}`;
 }
 
 export interface SkillStats {
@@ -1061,6 +1085,12 @@ export function computeSkillStats(doc: Y.Doc, now = Date.now(), skills = listSki
     });
   }
   const out = new Map<string, SkillStats>();
+  // A topic you need is learnt part by part: every part, not a level.
+  const topicDone = new Map<string, { done: number; total: number }>();
+  const needTopic = (id: string) => {
+    if (!topicDone.has(id)) topicDone.set(id, topicProgress(doc, skills, id, base));
+    return topicDone.get(id)!;
+  };
   for (const s of skills) {
     const b = base.get(s.id)!;
     const missing: Requirement[] = [];
@@ -1068,23 +1098,30 @@ export function computeSkillStats(doc: Y.Doc, now = Date.now(), skills = listSki
       const parent = byId.get(p);
       const pb = base.get(p);
       if (!parent || !pb) continue; // archived or missing prerequisites don't block
-      if (pb.level < s.requiredLevel) missing.push({ parentId: p, name: parent.name, need: s.requiredLevel, have: pb.level });
+      if (skills.some((x) => x.topic === p)) {
+        const tp = needTopic(p);
+        if (tp.done < tp.total) missing.push({ parentId: p, name: parent.name, need: s.requiredLevel, have: pb.level, parts: tp });
+      } else if (pb.level < s.requiredLevel) missing.push({ parentId: p, name: parent.name, need: s.requiredLevel, have: pb.level });
     }
     out.set(s.id, { ...b, unlocked: missing.length === 0, missing });
+  }
+  // A skill inside a locked topic waits for it too (Algebra's parts wait for Algebra).
+  const topicLock = (s: Skill, seen = new Set<string>()): Requirement[] => {
+    const t = s.topic ? byId.get(s.topic) : undefined;
+    if (!t || seen.has(t.id)) return [];
+    seen.add(t.id);
+    return [...(out.get(t.id)?.missing ?? []), ...topicLock(t, seen)];
+  };
+  for (const s of skills) {
+    const inherited = topicLock(s).filter((m) => !out.get(s.id)!.missing.some((x) => x.parentId === m.parentId));
+    if (inherited.length) out.set(s.id, { ...out.get(s.id)!, unlocked: false, missing: [...out.get(s.id)!.missing, ...inherited] });
   }
   return out;
 }
 
 /** All prerequisites at or above the required level (roots are always unlocked). */
 export function isUnlocked(doc: Y.Doc, skillId: string): boolean {
-  const skill = getSkill(doc, skillId);
-  if (!skill) return false;
-  for (const p of skill.parents) {
-    const parent = getSkill(doc, p);
-    if (!parent || parent.archived) continue;
-    if (skillLevel(doc, p) < skill.requiredLevel) return false;
-  }
-  return true;
+  return computeSkillStats(doc).get(skillId)?.unlocked ?? false;
 }
 
 export interface AreaStats {
@@ -1188,6 +1225,8 @@ export interface SkillPlanItem {
   quests?: QuestInput[];
   /** The learning path the skill belongs to (see Skill.branch). */
   branch?: string;
+  /** The skill it's part of: a key in this plan, or an existing skill's id or name. */
+  topicKey?: string;
 }
 
 /**
@@ -1199,6 +1238,12 @@ export function createSkillsFromPlan(doc: Y.Doc, plan: SkillPlanItem[]): Map<str
   const ids = new Map<string, string>();
   doc.transact(() => {
     const before = listSkills(doc, { includeArchived: true });
+    const resolve = (ref: string): string | undefined => {
+      if (ids.has(ref)) return ids.get(ref);
+      if (before.some((s) => s.id === ref)) return ref;
+      const lower = ref.trim().toLowerCase();
+      return before.find((s) => s.name.trim().toLowerCase() === lower)?.id;
+    };
     // Distinct, increasing creation times keep the plan's order (layouts sort by it).
     let t = Math.max(Date.now(), ...before.map((s) => s.createdAt + 1));
     for (const item of plan) {
@@ -1213,23 +1258,100 @@ export function createSkillsFromPlan(doc: Y.Doc, plan: SkillPlanItem[]): Map<str
         goalLevel: item.goalLevel,
         quests: item.quests,
         branch: item.branch,
+        // Topics usually come before their parts; later ones are set below.
+        topic: item.topicKey ? resolve(item.topicKey) : undefined,
       });
       ids.set(item.key, s.id);
     }
-    const resolve = (ref: string): string | undefined => {
-      if (ids.has(ref)) return ids.get(ref);
-      if (before.some((s) => s.id === ref)) return ref;
-      const lower = ref.trim().toLowerCase();
-      return before.find((s) => s.name.trim().toLowerCase() === lower)?.id;
-    };
     for (const item of plan) {
       const id = ids.get(item.key);
-      if (!id || !item.parentKeys?.length) continue;
-      const parents = item.parentKeys.map(resolve).filter((p): p is string => !!p);
-      if (parents.length) setParents(doc, id, parents, item.requiredLevel);
+      if (!id) continue;
+      if (item.parentKeys?.length) {
+        const parents = item.parentKeys.map(resolve).filter((p): p is string => !!p);
+        if (parents.length) setParents(doc, id, parents, item.requiredLevel);
+      }
+      const topic = item.topicKey ? resolve(item.topicKey) : undefined;
+      if (topic && getSkill(doc, id)?.topic !== topic) setTopic(doc, id, topic);
     }
   }, SKILLS_ORIGIN);
   return ids;
+}
+
+/**
+ * Make a skill part of a bigger one (or, with undefined, a skill of its own).
+ * Refuses loops (a skill inside its own part); its page moves under the topic's.
+ */
+export function setTopic(doc: Y.Doc, id: string, topic: string | undefined): boolean {
+  const skill = getSkill(doc, id);
+  if (!skill) return false;
+  if (topic) {
+    for (let t: string | undefined = topic, n = 0; t && n < 64; t = getSkill(doc, t)?.topic, n++) if (t === id) return false;
+    if (!getSkill(doc, topic)) return false;
+  }
+  doc.transact(() => {
+    updateSkill(doc, id, { topic });
+    const page = skill.pageId ? getPage(doc, skill.pageId) : undefined;
+    const updated = getSkill(doc, id);
+    if (page && updated) page.set("parentId", topicPageId(doc, updated) ?? ensureSkillsRoot(doc));
+  }, SKILLS_ORIGIN);
+  return true;
+}
+
+// ---- topics: skills made of smaller skills -------------------------------------------
+
+/** The skills directly inside a topic, in learning order. */
+export function partsOf(skills: Skill[], topicId: string): Skill[] {
+  return learningOrder(skills.filter((s) => s.topic === topicId));
+}
+
+/** Prerequisites before what needs them, then creation order. */
+export function learningOrder(list: Skill[]): Skill[] {
+  const ids = new Set(list.map((s) => s.id));
+  const byId = new Map(list.map((s) => [s.id, s]));
+  const out: Skill[] = [];
+  const seen = new Set<string>();
+  const visit = (s: Skill) => {
+    if (seen.has(s.id)) return;
+    seen.add(s.id);
+    for (const p of s.parents) if (ids.has(p)) visit(byId.get(p)!);
+    out.push(s);
+  };
+  [...list].sort((a, b) => a.createdAt - b.createdAt).forEach(visit);
+  return out;
+}
+
+/** Every skill inside a topic, at any depth, in learning order (topics before their parts). */
+export function allParts(skills: Skill[], topicId: string): Skill[] {
+  const out: Skill[] = [];
+  const seen = new Set<string>([topicId]);
+  const walk = (id: string) => {
+    for (const s of partsOf(skills, id)) {
+      if (seen.has(s.id)) continue;
+      seen.add(s.id);
+      out.push(s);
+      walk(s.id);
+    }
+  };
+  walk(topicId);
+  return out;
+}
+
+/**
+ * A skill counts as learnt when its goal is reached, or when every lesson of
+ * its courses is done; a topic, when all its parts are.
+ */
+export function skillDone(doc: Y.Doc, skills: Skill[], skill: Skill, stats?: Map<string, Pick<SkillStats, "goalReached">>): boolean {
+  const parts = partsOf(skills, skill.id);
+  if (parts.length) return parts.every((p) => skillDone(doc, skills, p, stats));
+  if (stats?.get(skill.id)?.goalReached) return true;
+  const courses = skill.courseIds.map((c) => courseXp(doc, c)).filter((c) => c.total > 0);
+  return courses.length > 0 && courses.every((c) => c.mastered + c.skipped >= c.total);
+}
+
+/** How much of a topic is learnt: its innermost skills (the ones with lessons), done out of total. */
+export function topicProgress(doc: Y.Doc, skills: Skill[], topicId: string, stats?: Map<string, Pick<SkillStats, "goalReached">>): { done: number; total: number } {
+  const leaves = allParts(skills, topicId).filter((s) => !skills.some((x) => x.topic === s.id));
+  return { done: leaves.filter((s) => skillDone(doc, skills, s, stats)).length, total: leaves.length };
 }
 
 // ---- text summary (for Claude) -----------------------------------------------------
@@ -1261,8 +1383,19 @@ export function skillTreeSummary(doc: Y.Doc, now = Date.now()): string {
     if (st.courseXp) parts.push(`${fmt(st.courseXp)} from courses`);
     if (st.streak.current > 1) parts.push(`${st.streak.current}-day streak`);
     if (s.goalLevel) parts.push(`goal L${s.goalLevel}${st.goalReached ? " ✓" : ""}`);
-    if (!st.unlocked) parts.push(`LOCKED: needs ${st.missing.map((m) => `${m.name} L${m.need} (now L${m.have})`).join(", ")}`);
+    if (!st.unlocked) parts.push(`LOCKED: needs ${st.missing.map((m) => (m.parts ? requirementText(m) : `${m.name} L${m.need} (now L${m.have})`)).join(", ")}`);
     else if (s.parents.length && s.requiredLevel > 1) parts.push(`unlocked at L${s.requiredLevel} of prerequisites`);
+    const inside = skills.filter((x) => x.topic === s.id);
+    if (inside.length) {
+      const tp = topicProgress(doc, skills, s.id, stats);
+      parts.push(`TOPIC of ${inside.length} part${inside.length === 1 ? "" : "s"} (${tp.done}/${tp.total} learnt)`);
+    }
+    if (s.topic && byId.has(s.topic)) parts.push(`part of ${byId.get(s.topic)!.name}`);
+    if (s.branch) parts.push(`path "${s.branch}"`);
+    if (s.courseIds.length) {
+      const cs = s.courseIds.map((c) => courseXp(doc, c)).filter((c) => c.total > 0);
+      if (cs.length) parts.push(`course${cs.length > 1 ? "s" : ""} ${cs.map((c) => `${c.courseId} (${c.mastered}/${c.total} lessons)`).join(", ")}`);
+    }
     if (s.pageId) parts.push(`page ${s.pageId}`);
     let line = `${s.icon} ${s.name} [${s.id}]: ${parts.join(", ")}`;
     if (s.quests?.length) {
@@ -1284,11 +1417,16 @@ export function skillTreeSummary(doc: Y.Doc, now = Date.now()): string {
     }
     printed.add(s.id);
     const others = s.parents.filter((p) => p !== via?.id && byId.has(p)).map((p) => byId.get(p)!.name);
-    lines.push(`${indent}- ${describe(s)}${others.length ? ` · also requires ${others.join(", ")}` : ""}`);
-    for (const c of childrenOf(doc, s.id, skills)) walk(c, depth + 1, s);
+    lines.push(`${indent}- ${describe(s)}${others.length ? ` · ${via ? "also requires" : "requires"} ${others.join(", ")}` : ""}`);
+    // Its parts, in learning order, then what it unlocks outside any topic
+    // (skills inside a topic are listed under their topic).
+    for (const part of partsOf(skills, s.id)) walk(part, depth + 1);
+    for (const c of childrenOf(doc, s.id, skills)) if (!inTopic(c)) walk(c, depth + 1, s);
   };
+  const inTopic = (s: Skill) => !!s.topic && byId.has(s.topic);
   const areas = listAreas(doc);
-  const rootList = roots(doc, skills);
+  const rootList = roots(doc, skills).filter((s) => !inTopic(s));
+  for (const s of skills) if (!inTopic(s) && !rootList.includes(s) && s.parents.every((p) => !byId.has(p) || inTopic(byId.get(p)!))) rootList.push(s);
   const groups = new Map<string, Skill[]>();
   for (const r of rootList) {
     const a = areaOf(doc, r, areas).id;

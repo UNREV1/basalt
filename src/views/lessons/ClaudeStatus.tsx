@@ -5,6 +5,7 @@
 import { useState } from "react";
 import { Icon } from "../../components/ui.tsx";
 import type { ClaudeRequest } from "./plan.ts";
+import "./path.css";
 
 export function AskClaudeFallback({ request, label = "Copy the request for Claude" }: { request: ClaudeRequest | null; label?: string }) {
   const [copied, setCopied] = useState(false);

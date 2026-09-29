@@ -2,10 +2,10 @@
 // with every lesson already written, linked to the D&D skill it trains.
 
 import type * as Y from "yjs";
-import { courseMap, initCourse, setCurriculum } from "../course.ts";
+import { courseMap, initCourse, setCurriculum, type Curriculum } from "../course.ts";
 import { setLessonContent } from "../lesson.ts";
 import { createPage, ensureSystemPage, getPage, listPages } from "../model.ts";
-import { createSkill, listSkills, updateSkill } from "../skills.ts";
+import { createSkill, getSkill, listSkills, updateSkill } from "../skills.ts";
 import type { AbilityId, LibraryCourse } from "./types.ts";
 
 export const COURSES_SYSTEM = "courses";
@@ -58,4 +58,36 @@ export function installCourse(doc: Y.Doc, course: LibraryCourse, createdBy = "")
     linkCourseToSkill(doc, id, course.skill, course.ability);
   });
   return id;
+}
+
+/**
+ * A planned course for a skill: the outline only (levels → modules → lesson
+ * titles), written lesson by lesson later, just before the learner gets there.
+ * Goes under "Courses" and is linked to the skill. A skill that already has a
+ * course keeps it (returns that one).
+ */
+export function createCourseOutline(
+  doc: Y.Doc,
+  input: { skillId: string; title?: string; goal?: string; curriculum: Omit<Curriculum, "topic">; createdBy?: string },
+): { id: string; created: boolean } {
+  const skill = getSkill(doc, input.skillId);
+  if (!skill) throw new Error(`No skill ${input.skillId}`);
+  const existing = skill.courseIds.find((c) => {
+    const p = getPage(doc, c);
+    return p && !p.get("deletedAt");
+  });
+  if (existing) return { id: existing, created: false };
+  const title = input.title?.trim() || skill.name;
+  let id = "";
+  doc.transact(() => {
+    const parentId = ensureSystemPage(doc, COURSES_SYSTEM, { title: "Courses", icon: "🎓", createdBy: input.createdBy ?? "" });
+    id = createPage(doc, { title, kind: "course", icon: skill.icon || "🎓", parentId, createdBy: input.createdBy ?? "" });
+    const page = getPage(doc, id)!;
+    initCourse(page, { topic: title, goal: input.goal });
+    courseMap(page).set("format", "interactive");
+    courseMap(page).set("ability", skill.category);
+    setCurriculum(page, { topic: title, ...input.curriculum });
+    updateSkill(doc, skill.id, { courseIds: [...skill.courseIds, id] });
+  });
+  return { id, created: true };
 }

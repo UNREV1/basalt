@@ -1,47 +1,36 @@
-// Real-life skill tree ("life RPG"): skills as nodes with prerequisites,
-// levels, XP and ranks, each training one of six D&D abilities, progressing
-// from real practice, quests and AI-tutor courses.
+// Real-life skill tree ("life RPG"): one map of every skill, with topics and
+// the parts you learn to advance, prerequisites, levels, XP and ranks, each
+// skill training one of six D&D abilities. Clicking a skill starts its next
+// lesson; your character sits beside the map.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { RANKS, updateSkill, listSkills, deleteSkill, ensureSkillPages, type SkillStats } from "../../../shared/skills.ts";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { updateSkill, deleteSkill, ensureSkillPages, type SkillStats } from "../../../shared/skills.ts";
 import { aiAvailable } from "../../lib/ai.ts";
+import { useClaudeJobs } from "../../lib/claude.ts";
 import { useApp, useMediaQuery, usePeers } from "../../lib/hooks.ts";
 import { useSettings } from "../../lib/settings.ts";
 import { useTheme } from "../../lib/theme.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { Icon, Menu, Modal, type Anchor, type MenuItem } from "../../components/ui.tsx";
-import { OverviewView, QuestCheck } from "./Overview.tsx";
+import { useLessonStarter } from "../lessons/start.ts";
+import { CharacterPanel } from "./CharacterPanel.tsx";
+import { QuestCheck } from "./Overview.tsx";
 import { GenerateTreeModal } from "./GenerateTree.tsx";
-import { layoutTree, type Point } from "./layout.ts";
-import { SkillCanvas, type CanvasApi, type Effect, type PeerMark, type View } from "./SkillCanvas.tsx";
 import { AddSkillModal, AreasModal, applyTemplate, TemplateGrid, TemplatesModal } from "./SkillDialogs.tsx";
 import { SkillPanel } from "./SkillPanel.tsx";
 import { fmt, plural, useSkillTree } from "./useSkillData.ts";
 import type { SkillTemplate } from "./templates.ts";
 import { takeSkillFocus } from "./focus.ts";
-import { SkillGraphView } from "./graph/SkillGraph.tsx";
+import { SkillGraphView, type CanvasApi, type Effect } from "./graph/SkillGraph.tsx";
 import "./skills.css";
 
-type Tab = "graph" | "tree" | "overview";
+const CHAR_KEY = "basalt:skills:character";
 
-interface Remembered {
-  tab?: Tab;
-  view?: View;
-}
-
-function loadRemembered(wsId: string): Remembered {
+function characterOpen(): boolean {
   try {
-    return JSON.parse(localStorage.getItem(`basalt:skills:${wsId}`) ?? "{}") as Remembered;
+    return localStorage.getItem(CHAR_KEY) !== "hidden";
   } catch {
-    return {};
-  }
-}
-
-function saveRemembered(wsId: string, patch: Remembered) {
-  try {
-    localStorage.setItem(`basalt:skills:${wsId}`, JSON.stringify({ ...loadRemembered(wsId), ...patch }));
-  } catch {
-    // Storage may be unavailable (private mode); remembering the camera is optional.
+    return true;
   }
 }
 
@@ -50,39 +39,46 @@ function openAiSettings() {
 }
 
 export default function SkillTreeView({ ws }: { ws: Workspace }) {
-  const { toast } = useApp();
+  const { toast, openPage } = useApp();
   const data = useSkillTree(ws);
   const settings = useSettings();
   const hasAi = useMemo(() => aiAvailable(), [settings.anthropicKey]);
   const dark = useTheme() === "dark";
   const phone = useMediaQuery("(max-width: 720px)");
-  const reduceMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
-  const remembered = useMemo(() => loadRemembered(ws.id), [ws.id]);
 
-  const [tab, setTabState] = useState<Tab>(remembered.tab === "overview" || remembered.tab === "tree" ? remembered.tab : "graph");
-  const map = tab === "graph" || tab === "tree";
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [charOpenState, setCharOpenState] = useState(characterOpen);
   const [search, setSearch] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
   const [adding, setAdding] = useState<{ parentId?: string } | null>(null);
   const [modal, setModal] = useState<"areas" | "templates" | "generate" | "archived" | null>(null);
   const [menu, setMenu] = useState<Anchor | null>(null);
-  const [legend, setLegend] = useState(false);
   const [effects, setEffects] = useState<Effect[]>([]);
   const apiRef = useRef<CanvasApi | null>(null);
   const pending = useRef<{ fit?: string[] | "all"; reveal?: string; version: number } | null>(null);
 
-  const setTab = (t: Tab) => {
-    setTabState(t);
-    saveRemembered(ws.id, { tab: t });
+  // On a phone the character is always there, as a sheet peeking up from the map.
+  const charOpen = phone || charOpenState;
+  const setCharOpen = (open: boolean) => {
+    setCharOpenState(open);
+    try {
+      localStorage.setItem(CHAR_KEY, open ? "shown" : "hidden");
+    } catch {
+      // Not remembered; fine.
+    }
   };
 
-  const onViewChange = useCallback((v: View) => saveRemembered(ws.id, { view: v }), [ws.id]);
+  const select = (id: string | null) => {
+    setSelectedId(id);
+    if (id) queueCamera({ reveal: id });
+  };
+
+  const starter = useLessonStarter(ws, { toast, openPage, showSkill: (id) => select(id) });
 
   // Every skill is a page; older skills get theirs here.
   useEffect(() => ensureSkillPages(ws.doc), [ws]);
 
-  // Arriving from a skill page's "Tree" button.
+  // Arriving from a skill page or a path's "Show on the map".
   useEffect(() => {
     const id = takeSkillFocus();
     if (id && data.byId.has(id)) select(id);
@@ -101,16 +97,30 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
   }, [ws, selectedId]);
   useEffect(() => () => ws.setPresence({ skillsSelection: null }), [ws]);
   const peers = usePeers(ws);
-  const peerMarks = useMemo(() => {
-    const m = new Map<string, PeerMark[]>();
+  const peerColors = useMemo(() => {
+    const m = new Map<string, string[]>();
     for (const p of peers) {
       const id = p.state.skillsSelection;
-      if (typeof id !== "string") continue;
-      if (!m.has(id)) m.set(id, []);
-      m.get(id)!.push({ name: p.state.user.name, color: p.state.user.color });
+      if (typeof id === "string") m.set(id, [...(m.get(id) ?? []), p.state.user.color]);
     }
     return m;
   }, [peers]);
+
+  // Skills Claude is planning or writing lessons for right now.
+  const jobs = useClaudeJobs();
+  const busy = useMemo(() => {
+    const out = new Set<string>();
+    for (const j of jobs) {
+      if (j.status !== "running") continue;
+      if (j.key.startsWith("skill-plan:")) out.add(j.key.slice(11));
+      if (j.key.startsWith("ahead:")) {
+        const c = j.key.slice(6);
+        for (const s of data.skills) if (s.courseIds.includes(c)) out.add(s.id);
+      }
+    }
+    if (starter.starting?.skillId && starter.job?.status === "running") out.add(starter.starting.skillId);
+    return out;
+  }, [jobs, data.skills, starter.starting, starter.job]);
 
   // A brief highlight on skills that level up (local or remote changes).
   const prevStats = useRef<Map<string, SkillStats> | null>(null);
@@ -131,9 +141,6 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
     window.setTimeout(() => setEffects((fx) => fx.filter((f) => !keys.has(f.key))), 1500);
   }, [data.stats]);
 
-  const layout = useMemo(() => layoutTree(data.skills, data.areas.map((a) => a.id), phone ? 0.75 : 1.7), [data.skills, data.areas, phone]);
-  const areaLevels = useMemo(() => new Map(data.sheet.areas.map((a) => [a.area.id, a.level])), [data.sheet]);
-
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q && !areaFilter) return null;
@@ -146,59 +153,40 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
     return set;
   }, [search, areaFilter, data.skills]);
 
-  const panelOpen = !!selectedId && map;
-  const questStrip = map && data.quests.length > 0;
+  const side = !!selectedId || charOpen;
+  const questStrip = data.quests.length > 0;
   const insets = useMemo(
     () => ({
       top: questStrip ? 56 : 12,
-      right: panelOpen && !phone ? 408 : 12,
-      bottom: panelOpen && phone ? Math.round(window.innerHeight * 0.55) : 56,
+      right: side && !phone ? 408 : 12,
+      bottom: phone ? (selectedId ? Math.round(window.innerHeight * 0.55) : 104 + 100) : 56,
       left: 12,
     }),
-    [questStrip, panelOpen, phone],
+    [questStrip, side, phone, selectedId],
   );
 
-  // Deferred camera moves, run once the skills they target are laid out
+  // Deferred camera moves, run once the skills they target are on the map
   // (new skills arrive with the next data snapshot).
   useEffect(() => {
     const p = pending.current;
     const api = apiRef.current;
     if (!p || !api) return;
     const ids = [...(Array.isArray(p.fit) ? p.fit : []), ...(p.reveal ? [p.reveal] : [])];
-    const ready = p.fit === "all" ? data.version > p.version && layout.pos.size > 0 : ids.every((id) => layout.pos.has(id));
+    const ready = p.fit === "all" ? data.version > p.version : ids.every((id) => data.byId.has(id));
     if (!ready) return;
     pending.current = null;
-    requestAnimationFrame(() => {
+    // Give new skills a moment to find their place first.
+    window.setTimeout(() => {
       if (p.fit) api.fit(p.fit === "all" ? undefined : p.fit);
       else if (p.reveal) api.reveal(p.reveal);
-    });
+    }, 400);
   });
 
   const queueCamera = (move: { fit?: string[] | "all"; reveal?: string }) => {
     pending.current = { ...move, version: data.version };
   };
 
-  const select = (id: string | null) => {
-    setSelectedId(id);
-    if (id) {
-      if (!map) setTab("graph");
-      queueCamera({ reveal: id });
-    }
-  };
-
-  const onMove = useCallback((id: string, pos: Point) => updateSkill(ws.doc, id, { pos }), [ws]);
-
-  const tidy = () => {
-    const withPos = listSkills(ws.doc, { includeArchived: true }).filter((s) => s.pos);
-    ws.doc.transact(() => {
-      for (const s of withPos) updateSkill(ws.doc, s.id, { pos: undefined });
-    });
-    queueCamera({ fit: "all" });
-    toast("Layout reset");
-  };
-
   const afterCreate = (ids: string[]) => {
-    if (!map) setTab("graph");
     setSelectedId(null);
     setAreaFilter("");
     if (ids.length) queueCamera({ fit: data.skills.length ? ids : "all" });
@@ -212,16 +200,14 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
 
   const showArea = (areaId: string) => {
     setAreaFilter(areaId);
-    if (!map) setTab("graph");
     const ids = data.skills.filter((s) => s.category === areaId).map((s) => s.id);
     if (ids.length) queueCamera({ fit: ids });
   };
 
-  const hasManualPositions = data.skills.some((s) => s.pos);
   const menuItems: MenuItem[] = [
     { label: "Add from template…", icon: <Icon name="copy" size={15} />, onClick: () => setModal("templates") },
     { label: "Edit abilities…", icon: <Icon name="edit" size={15} />, onClick: () => setModal("areas") },
-    { label: "Reset layout", icon: <Icon name="graph" size={15} />, onClick: tidy, disabled: !hasManualPositions },
+    { label: charOpen ? "Hide character" : "Show character", icon: <Icon name="shapes" size={15} />, onClick: () => setCharOpen(!charOpen), disabled: phone },
     { label: `Archived skills${data.archived.length ? ` (${data.archived.length})` : ""}`, icon: <Icon name="trash" size={15} />, onClick: () => setModal("archived"), disabled: !data.archived.length },
   ];
 
@@ -233,31 +219,12 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
       <Icon name="sparkle" size={15} />
       <span className="sk-hide-narrow">Generate with AI</span>
     </button>
-  ) : (
-    <button className="btn btn-ghost sk-ai-hint" onClick={openAiSettings} title="Add your Anthropic API key in Settings → AI to generate trees with Claude">
-      <Icon name="sparkle" size={15} />
-      <span className="sk-hide-narrow">Set up AI</span>
-    </button>
-  );
+  ) : null;
 
   return (
     <div className="sk-root">
       <div className="sk-toolbar">
-        <div className="tabs sk-tabs" role="tablist" aria-label="Skill views">
-          <button role="tab" aria-selected={tab === "graph"} className={`tab${tab === "graph" ? " active" : ""}`} onClick={() => setTab("graph")}>
-            <Icon name="graph" size={15} />
-            Graph
-          </button>
-          <button role="tab" aria-selected={tab === "tree"} className={`tab${tab === "tree" ? " active" : ""}`} onClick={() => setTab("tree")}>
-            <Icon name="tree" size={15} />
-            Tree
-          </button>
-          <button role="tab" aria-selected={tab === "overview"} className={`tab${tab === "overview" ? " active" : ""}`} onClick={() => setTab("overview")}>
-            <Icon name="shapes" size={15} />
-            Character
-          </button>
-        </div>
-        {map && !empty && (
+        {!empty && (
           <div className="sk-filters">
             <label className="sk-search">
               <Icon name="search" size={14} />
@@ -283,12 +250,7 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
                 </button>
               )}
             </label>
-            <select
-              className="select sk-area-filter"
-              aria-label="Filter by ability"
-              value={areaFilter}
-              onChange={(e) => (e.target.value ? showArea(e.target.value) : setAreaFilter(""))}
-            >
+            <select className="select sk-area-filter" aria-label="Filter by ability" value={areaFilter} onChange={(e) => (e.target.value ? showArea(e.target.value) : setAreaFilter(""))}>
               <option value="">All abilities</option>
               {data.areas.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -300,7 +262,15 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
         )}
         <span className="spacer" />
         {!empty && (
-          <button className="sk-stat" onClick={() => setTab("overview")} title={`Total level ${data.sheet.totalLevel} · ${fmt(data.sheet.xp)} XP`}>
+          <button
+            className={`sk-stat${charOpen && !phone ? " on" : ""}`}
+            onClick={() => {
+              setSelectedId(null);
+              if (!phone) setCharOpen(!charOpen || !!selectedId);
+            }}
+            title={charOpen ? "Your character (click to hide)" : "Show your character"}
+            aria-pressed={charOpen}
+          >
             <span className="sk-stat-main">Level {data.sheet.level}</span>
             <span className="sk-stat-sub">
               {data.sheet.rank.name} · {plural(data.sheet.skills, "skill")}
@@ -319,17 +289,8 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
         </button>
       </div>
 
-      <div className={`sk-body${panelOpen ? " with-panel" : ""}`}>
-        {tab === "overview" ? (
-          <OverviewView
-            ws={ws}
-            data={data}
-            dark={dark}
-            onShowArea={showArea}
-            onSelectSkill={(id) => select(id)}
-            onEditAreas={() => setModal("areas")}
-          />
-        ) : empty ? (
+      <div className={`sk-body${side ? " with-panel" : ""}`}>
+        {empty ? (
           <EmptyState
             archived={data.archived.length}
             hasAi={hasAi}
@@ -340,40 +301,25 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
           />
         ) : (
           <>
-            {tab === "graph" ? (
-              <SkillGraphView
-                ws={ws}
-                data={data}
-                dark={dark}
-                selectedId={selectedId}
-                onSelect={select}
-                onAbility={showArea}
-                matches={matches}
-                effects={effects}
-                insets={insets}
-                apiRef={apiRef}
-              />
-            ) : (
-            <SkillCanvas
-              skills={data.skills}
-              stats={data.stats}
-              areas={data.areas}
-              areaLevels={areaLevels}
-              layout={layout}
+            <SkillGraphView
+              ws={ws}
+              data={data}
               dark={dark}
               selectedId={selectedId}
-              onSelect={select}
-              onMove={onMove}
+              onStart={(id) => starter.startSkill(id)}
+              onStartCourse={(id) => starter.startCourse(id)}
+              onDetails={(id) => select(id)}
+              onAbility={showArea}
+              onDeselect={() => setSelectedId(null)}
               matches={matches}
               effects={effects}
-              peers={peerMarks}
               insets={insets}
               apiRef={apiRef}
-              initialView={remembered.view ?? null}
-              onViewChange={onViewChange}
-              reduceMotion={reduceMotion}
+              busy={busy}
+              peers={peerColors}
+              toolsBottom={phone && !selectedId ? 112 : 12}
+              hideTools={phone && !!selectedId}
             />
-            )}
             {questStrip && (
               <div className="sk-quest-strip" role="group" aria-label="Today's quests">
                 <span className="sk-quest-strip-label">
@@ -387,30 +333,21 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
                 ))}
               </div>
             )}
-            {tab === "tree" && !(phone && panelOpen) && (
-              <div className="sk-controls" role="toolbar" aria-label="Canvas controls">
-                <button className="icon-btn" aria-label="Zoom out" onClick={() => apiRef.current?.zoomBy(0.8)}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
-                    <path d="M5 12h14" />
-                  </svg>
-                </button>
-                <button className="icon-btn" aria-label="Zoom in" onClick={() => apiRef.current?.zoomBy(1.25)}>
-                  <Icon name="plus" />
-                </button>
-                <button className="icon-btn sk-fit" aria-label="Fit tree to screen" title="Fit (F)" onClick={() => apiRef.current?.fit()}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    <path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" />
-                  </svg>
-                  <span>Fit</span>
-                </button>
-                <span className="sk-controls-sep" />
-                <button className={`icon-btn${legend ? " active" : ""}`} aria-label="Legend" aria-expanded={legend} onClick={() => setLegend((l) => !l)}>
-                  ?
+            {starter.starting && (
+              <div className={`sk-starting${starter.job?.status === "error" ? " error" : ""}`} role="status">
+                {starter.job?.status === "error" ? <Icon name="x" size={15} /> : <span className="sk-spinner" aria-hidden />}
+                <span className="grow">
+                  <strong>{starter.starting.label}</strong>
+                  <span className="muted">
+                    {starter.job?.status === "error" ? ` · ${starter.job.error}` : starter.job?.status === "running" ? ` · ${starter.job.activity}…` : "…"} It opens as soon as it's written.
+                  </span>
+                </span>
+                <button className="icon-btn" aria-label="Stop waiting" onClick={starter.cancel}>
+                  <Icon name="x" size={14} />
                 </button>
               </div>
             )}
-            {tab === "tree" && legend && !(phone && panelOpen) && <Legend onClose={() => setLegend(false)} />}
-            {selected && (
+            {selected ? (
               <SkillPanel
                 ws={ws}
                 data={data}
@@ -422,7 +359,21 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
                   apiRef.current?.centerOn(id);
                 }}
                 onAddChild={(parentId) => setAdding({ parentId })}
+                onStart={(id) => starter.startSkill(id)}
               />
+            ) : (
+              charOpen && (
+                <CharacterPanel
+                  ws={ws}
+                  data={data}
+                  dark={dark}
+                  phone={phone}
+                  onStart={(id) => starter.startSkill(id)}
+                  onShowArea={showArea}
+                  onEditAreas={() => setModal("areas")}
+                  onCollapse={() => setCharOpen(false)}
+                />
+              )
             )}
           </>
         )}
@@ -437,7 +388,6 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
           defaultArea={areaFilter || undefined}
           onClose={() => setAdding(null)}
           onCreated={(id) => {
-            if (!map) setTab("graph");
             setSelectedId(id);
             queueCamera(empty ? { fit: [id] } : { reveal: id });
           }}
@@ -467,35 +417,6 @@ export default function SkillTreeView({ ws }: { ws: Workspace }) {
           </div>
         </Modal>
       )}
-    </div>
-  );
-}
-
-function Legend({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="sk-legend" role="dialog" aria-label="How the tree works">
-      <div className="row">
-        <strong className="grow">How it works</strong>
-        <button className="icon-btn" aria-label="Close" onClick={onClose}>
-          <Icon name="x" size={14} />
-        </button>
-      </div>
-      <p className="small muted">
-        Practice, quests and course lessons earn XP. The ring around a skill fills toward its next level; the number below it is
-        the level. A skill unlocks once each prerequisite reaches the level shown on its lock.
-      </p>
-      <div className="sk-legend-ranks">
-        {RANKS.map((r, i) => (
-          <div key={r.id} className="sk-legend-row" title={r.description}>
-            <span className="grow">{r.name}</span>
-            <span className="faint small">
-              Level {r.minLevel}
-              {RANKS[i + 1] ? `–${RANKS[i + 1].minLevel - 1}` : "+"}
-            </span>
-          </div>
-        ))}
-      </div>
-      <p className="small faint">Drag skills to arrange them. Scroll or pinch to zoom.</p>
     </div>
   );
 }

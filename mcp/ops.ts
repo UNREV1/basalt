@@ -46,7 +46,7 @@ export function titleOf(doc: Y.Doc, id: string): string {
  * Find a live page by id, exact title (case-insensitive), or "Parent/Child"
  * path. Throws a ToolError with guidance when nothing (or too much) matches.
  */
-export function resolvePage(doc: Y.Doc, ref: string, opts: { includeDeleted?: boolean } = {}): PageMeta {
+export function resolvePage(doc: Y.Doc, ref: string, opts: { includeDeleted?: boolean; kind?: PageMeta["kind"] } = {}): PageMeta {
   const r = stripRef(ref);
   if (!r) throw new ToolError("A page id or title is required.");
   const byId = getPage(doc, r);
@@ -55,7 +55,8 @@ export function resolvePage(doc: Y.Doc, ref: string, opts: { includeDeleted?: bo
     if (!meta.deletedAt || opts.includeDeleted) return meta;
     throw new ToolError(`Page "${displayTitle(meta)}" (id: ${meta.id}) is in the trash.`);
   }
-  const pages = listPages(doc, { includeDeleted: opts.includeDeleted });
+  // A kind narrows titles: a course named like its skill's page is still found.
+  const pages = listPages(doc, { includeDeleted: opts.includeDeleted }).filter((p) => !opts.kind || p.kind === opts.kind);
   const lower = normalizeLinkTarget(r).toLowerCase();
   const exact = pages.filter((p) => displayTitle(p).toLowerCase() === lower);
   if (exact.length === 1) return exact[0];

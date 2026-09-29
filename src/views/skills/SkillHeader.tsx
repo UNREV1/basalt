@@ -24,6 +24,7 @@ import { useApp } from "../../lib/hooks.ts";
 import { navigate } from "../../lib/router.ts";
 import { useTheme } from "../../lib/theme.ts";
 import type { Workspace } from "../../lib/workspace.ts";
+import { useLessonStarter } from "../lessons/start.ts";
 import { focusSkill } from "./focus.ts";
 import { levelUpMessage } from "./Overview.tsx";
 import { QuestForm, XpBar } from "./SkillPanel.tsx";
@@ -46,6 +47,11 @@ export default function SkillHeader({ ws, pageId }: { ws: Workspace; pageId: str
   const archived = skillId ? data.archived.find((s) => s.id === skillId) : undefined;
   const stats = skillId ? data.stats.get(skillId) : undefined;
   const entries = useMemo(() => (skillId ? xpEntries(doc, skillId) : []), [doc, skillId, data.version]);
+  const showInTree = (id: string) => {
+    focusSkill(id);
+    navigate({ name: "view", wsId: ws.id, view: "skills" });
+  };
+  const starter = useLessonStarter(ws, { toast, openPage, showSkill: showInTree });
 
   if (archived) {
     return (
@@ -86,10 +92,6 @@ export default function SkillHeader({ ws, pageId }: { ws: Workspace; pageId: str
     }
   };
   const openSkill = (s: Skill) => (s.pageId ? openPage(s.pageId) : showInTree(s.id));
-  const showInTree = (id: string) => {
-    focusSkill(id);
-    navigate({ name: "view", wsId: ws.id, view: "skills" });
-  };
 
   return (
     <section className="sk-page" style={{ ["--c" as string]: color }} aria-label={`${skill.name} skill`}>
@@ -117,10 +119,25 @@ export default function SkillHeader({ ws, pageId }: { ws: Workspace; pageId: str
         {stats.streak.current > 0 && (
           <span className={`sk-streak${stats.streak.today ? " today" : ""}`}>{stats.streak.current}-day streak</span>
         )}
-        <button className="btn btn-sm btn-ghost" onClick={() => showInTree(skill.id)} title="Show in the skill tree">
-          <Icon name="tree" size={14} /> Tree
+        <button className="btn btn-sm btn-ghost" onClick={() => showInTree(skill.id)} title="Show on the skill map">
+          <Icon name="tree" size={14} /> Map
+        </button>
+        <button className="btn btn-sm btn-primary" onClick={() => starter.startSkill(skill.id)} disabled={!!starter.starting}>
+          <Icon name="play" size={13} /> Start lesson
         </button>
       </div>
+      {starter.starting && (
+        <div className="sk-job" role="status">
+          {starter.job?.status === "error" ? <Icon name="x" size={14} /> : <span className="sk-spinner" aria-hidden />}
+          <span className="grow">
+            {starter.starting.label}
+            {starter.job?.status === "error" ? ` · ${starter.job.error}` : starter.job?.status === "running" ? ` · ${starter.job.activity}…` : "…"}
+          </span>
+          <button className="icon-btn" aria-label="Stop waiting" onClick={starter.cancel}>
+            <Icon name="x" size={14} />
+          </button>
+        </div>
+      )}
 
       <XpBar fraction={stats.progress.fraction} color={color} label="XP toward next level" />
       <div className="sk-level-foot small">
@@ -138,20 +155,21 @@ export default function SkillHeader({ ws, pageId }: { ws: Workspace; pageId: str
         <div className="sk-locked-note" role="note">
           <Icon name="lock" size={15} />
           <div>
-            <strong>Locked.</strong> Reach{" "}
+            <strong>Locked.</strong> Needs{" "}
             {stats.missing.map((m, i) => {
               const p = data.byId.get(m.parentId);
               return (
                 <span key={m.parentId}>
                   {i > 0 && (i === stats.missing.length - 1 ? " and " : ", ")}
+                  {m.parts && "all of "}
                   <button className="sk-link" onClick={() => p && openSkill(p)}>
                     {m.name}
                   </button>{" "}
-                  level {m.need} (now {m.have})
+                  {m.parts ? `(${m.parts.done}/${m.parts.total} learnt)` : `level ${m.need} (now ${m.have})`}
                 </span>
               );
-            })}{" "}
-            to unlock it. Practice still earns XP.
+            })}
+            . Practice still earns XP.
           </div>
         </div>
       )}

@@ -484,3 +484,37 @@ button.lh-card:active {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* A topic's parts, under the step you're on */
+.lh-parts {
+  list-style: none;
+  margin: 2px 0 6px 38px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-hover);
+}
+.lh-parts-title {
+  display: block;
+  margin-bottom: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.lh-step.small {
+  padding: 5px 0;
+}
+.lh-step.small .lh-step-dot {
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+}
+.lh-step.small + .lh-step.small::before {
+  left: 10px;
+}
+.lh-step.small .lh-step-icon {
+  font-size: 17px;
+}
+.lh-step.locked .lh-step-name {
+  color: var(--text-muted);
+}

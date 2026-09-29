@@ -4,10 +4,12 @@
 // returns the same request as text, for pasting into Claude Code or Claude
 // Desktop where the app can't start Claude itself (browsers, phones).
 
+import { useSyncExternalStore } from "react";
 import { getCurriculum } from "../../../shared/course.ts";
 import { courseAhead, courseMistakes, learnerStats, learningMap, MISTAKE_WHY, type LearnerStats } from "../../../shared/learning.ts";
 import { displayTitle, getPage, pageMeta } from "../../../shared/model.ts";
-import { listSkills } from "../../../shared/skills.ts";
+import { GENERAL_PLAN, PLAN_STEPS } from "../../../shared/skill-plan.ts";
+import { listSkills, type Skill } from "../../../shared/skills.ts";
 import { claudeBridge, isJobRunning, startClaudeJob } from "../../lib/claude.ts";
 import { shareLink, type Workspace } from "../../lib/workspace.ts";
 
@@ -56,33 +58,120 @@ export interface ClaudeRequest {
   prompt: string;
 }
 
-/** Map the branch to follow for a skill or topic, and start its first course. */
+/**
+ * Plan the whole path for a skill or topic up front (the general plan: the
+ * subject, its topics and their parts, each part's lesson titles), then write
+ * the first lessons so the learner can start.
+ */
 export function branchRequest(ws: Workspace, goal: string): ClaudeRequest {
   const g = goal.trim();
   const stats = learnerStats(ws.doc);
   const prompt = `I want to learn: "${g}".
 
-Map the branch I should follow and get me started:
-1. Research it (web search) enough to know the real sub-skills or topics and a sensible order, most useful first (the 20% that gives 80% of the results).
-2. Call get_skill_tree. Then call add_skills once with branch "${g}": 4 to 10 skills from foundations to mastery, each concrete and measurable, with prerequisites (keys) that form the path, ${ABILITIES}, a fitting emoji, and one habit quest for skills that need regular practice. Reuse existing skills as prerequisites instead of duplicating them.
-3. For the first skill on the branch, create_course with a short curriculum (one level, two or three modules of three short lessons; more gets added as I progress), with a clear, specific goal. Link it with link_to_skill. Then write its first ${stats.aheadTarget} lessons with write_interactive_lesson, following its style guide and the learning loop.
+Plan my whole path to mastery now, as titles only, and get me started:
+1. Research it (web search) enough to know the field's real topics and the order people learn them in.
+2. Call get_skill_tree. Reuse skills I already have instead of duplicating them: an existing skill can be the subject, or a prerequisite.
+3. Plan it with the general plan below, with branch "${g}" on every skill and each skill under ${ABILITIES}. The first lessons to write: ${stats.aheadTarget}.
+
+${GENERAL_PLAN}
+
+${PLAN_STEPS}
 
 ${statsLine(stats, ws)} ${ADAPT}`;
-  return { key: `branch:${g.toLowerCase()}`, label: `Mapping your path to “${g}”`, prompt };
+  return { key: `branch:${g.toLowerCase()}`, label: `Planning your path to “${g}”`, prompt };
 }
 
-/** Build the course for a skill that has none yet. */
-export function skillCourseRequest(ws: Workspace, skillId: string): ClaudeRequest | null {
+/** Skills with nothing planned yet: no parts and no course. */
+export function unplannedSkills(ws: Workspace): Skill[] {
+  const skills = listSkills(ws.doc);
+  return skills.filter((s) => !s.courseIds.some((c) => getPage(ws.doc, c) && !getPage(ws.doc, c)!.get("deletedAt")) && !skills.some((x) => x.topic === s.id));
+}
+
+/**
+ * Plan one skill with the general plan: its topics and parts (or, for a narrow
+ * skill, just its course), each part's lesson titles. With `lessons`, also
+ * write the first lessons so it can be started right away.
+ */
+export function planSkillRequest(ws: Workspace, skillId: string, opts: { lessons?: boolean } = {}): ClaudeRequest | null {
   const skill = listSkills(ws.doc).find((s) => s.id === skillId);
   if (!skill) return null;
   const stats = learnerStats(ws.doc);
-  const prompt = `Create a course for my skill "${skill.name}" (skill id ${skill.id})${skill.description ? `: ${skill.description}` : ""}.
-1. Research it (web search) enough to be accurate.
-2. create_course with a short curriculum (one level, two or three modules of three short lessons; more gets added as I progress) and a clear, specific goal, then link_to_skill to "${skill.id}".
-3. Write the first ${stats.aheadTarget} lessons with write_interactive_lesson, following its style guide and the learning loop.
+  const lessons = opts.lessons ?? true;
+  const topic = skill.topic ? listSkills(ws.doc).find((s) => s.id === skill.topic) : undefined;
+  const prompt = `Plan my skill "${skill.name}" (skill id ${skill.id})${skill.description ? `: ${skill.description}` : ""}${topic ? `. It's part of "${topic.name}"` : ""}.
+1. Call get_skill_tree, and research the skill (web search) enough to be accurate.
+2. If it's narrow enough to learn in about ten short lessons, just give it a course outline with plan_courses. Otherwise plan it completely with the general plan below, with "${skill.name}" itself as the subject (don't add a new subject skill: its topics get topic "${skill.id}")${skill.branch ? ` and branch "${skill.branch}"` : ""}.
+3. ${lessons ? `Write the first ${stats.aheadTarget} lessons of the first course on its path with write_interactive_lesson, following its style guide and the learning loop.` : "Don't write any lessons yet: titles only."}
+
+${GENERAL_PLAN}
+
+${PLAN_STEPS}
 
 ${statsLine(stats, ws)} ${ADAPT}`;
-  return { key: `skill-course:${skill.id}`, label: `Building a course for ${skill.name}`, prompt };
+  return { key: `skill-plan:${skill.id}`, label: lessons ? `Planning ${skill.name} and writing your first lesson` : `Planning ${skill.name}`, prompt };
+}
+
+/** The request to plan every unplanned skill, as text (to paste into Claude where the app can't run it). */
+export function planAllText(ws: Workspace): string {
+  const list = unplannedSkills(ws);
+  return `Plan every skill in my Basalt skill tree that has no plan yet, one after another, titles only (don't write lessons): ${list.map((s) => `"${s.name}" (${s.id})`).join(", ")}.
+For each: call get_skill_tree first; if it's narrow enough for about ten short lessons, give it a course outline with plan_courses; otherwise plan it with the general plan below, with the skill itself as the subject (its topics get topic = its id).
+
+${GENERAL_PLAN}`;
+}
+
+// ---- planning every skill, one Claude run per skill -------------------------------------------
+
+interface PlanAll {
+  running: boolean;
+  total: number;
+  done: number;
+  current: string;
+}
+
+let planAll: PlanAll = { running: false, total: 0, done: 0, current: "" };
+let stopPlanAll = false;
+const planListeners = new Set<() => void>();
+const setPlanAll = (p: Partial<PlanAll>) => {
+  planAll = { ...planAll, ...p };
+  planListeners.forEach((l) => l());
+};
+
+export function usePlanAll(): PlanAll {
+  return useSyncExternalStore(
+    (l) => {
+      planListeners.add(l);
+      return () => planListeners.delete(l);
+    },
+    () => planAll,
+  );
+}
+
+/** Plan every skill that has no plan yet, one at a time, in the background. */
+export async function planEverySkill(ws: Workspace) {
+  if (planAll.running || !canRunClaude()) return;
+  stopPlanAll = false;
+  const queue = unplannedSkills(ws).filter((s) => !s.topic);
+  setPlanAll({ running: true, total: queue.length, done: 0, current: "" });
+  for (const skill of queue) {
+    if (stopPlanAll) break;
+    // Planned meanwhile (by hand, or as part of another skill)?
+    if (!unplannedSkills(ws).some((s) => s.id === skill.id)) {
+      setPlanAll({ done: planAll.done + 1 });
+      continue;
+    }
+    setPlanAll({ current: skill.name });
+    const req = planSkillRequest(ws, skill.id, { lessons: false });
+    const job = req ? await runRequest(ws, req) : undefined;
+    setPlanAll({ done: planAll.done + 1 });
+    // Claude couldn't run (signed out, no connection): the rest would fail the same way.
+    if (job?.status === "error") break;
+  }
+  setPlanAll({ running: false, current: "" });
+}
+
+export function stopPlanningEverySkill() {
+  stopPlanAll = true;
 }
 
 /**

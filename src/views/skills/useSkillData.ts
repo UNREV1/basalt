@@ -5,10 +5,12 @@ import { useMemo } from "react";
 import {
   characterSheet,
   computeSkillStats,
+  courseXp,
   listAreas,
   listSkills,
   todaysQuests,
   type CharacterSheet,
+  type CourseXp,
   type Skill,
   type SkillArea,
   type SkillStats,
@@ -27,6 +29,8 @@ export interface SkillTreeData {
   stats: Map<string, SkillStats>;
   sheet: CharacterSheet;
   quests: TodayQuest[];
+  /** Lesson counts of every course linked to a skill. */
+  courses: Map<string, CourseXp>;
 }
 
 export function useSkillTree(ws: Workspace): SkillTreeData {
@@ -46,6 +50,7 @@ export function useSkillTree(ws: Workspace): SkillTreeData {
       stats,
       sheet: characterSheet(ws.doc, now, stats),
       quests: todaysQuests(ws.doc, now),
+      courses: new Map([...new Set(skills.flatMap((s) => s.courseIds))].map((c) => [c, courseXp(ws.doc, c)])),
     };
   }, [ws, version]);
 }

@@ -30,9 +30,7 @@
   position: relative;
   z-index: 6;
 }
-.sk-tabs .tab svg {
-  opacity: 0.8;
-}
+
 .sk-filters {
   display: flex;
   align-items: center;
@@ -101,230 +99,14 @@
   color: var(--text-muted);
   white-space: nowrap;
 }
-.sk-ai-hint {
-  color: var(--text-muted);
-}
 
-/* ---- canvas -------------------------------------------------------------- */
+/* ---- the map area ------------------------------------------------------------ */
 
 .sk-body {
   flex: 1;
   min-height: 0;
   position: relative;
   overflow: hidden;
-}
-.sk-canvas {
-  position: absolute;
-  inset: 0;
-  touch-action: none;
-  cursor: grab;
-  outline: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-tap-highlight-color: transparent;
-}
-.sk-canvas.panning,
-.sk-canvas.dragging,
-.sk-canvas.dragging .sk-node {
-  cursor: grabbing;
-}
-.sk-canvas:focus-visible {
-  box-shadow: inset 0 0 0 2px var(--accent-soft);
-}
-.sk-svg {
-  display: block;
-}
-.sk-dot {
-  fill: var(--sk-dot);
-}
-
-/* ground under each group of skills */
-.sk-band line {
-  stroke: var(--border);
-  stroke-width: 1;
-}
-.sk-band text {
-  font-size: 12px;
-  font-weight: 500;
-  fill: var(--text-muted);
-  text-anchor: middle;
-}
-.sk-band-level {
-  fill: var(--text-faint);
-  font-weight: 400;
-}
-
-/* edges */
-.sk-edge {
-  transition: opacity 0.15s;
-}
-.sk-edge.dim {
-  opacity: 0.2;
-}
-.sk-edge-line {
-  fill: none;
-  stroke: var(--border-strong);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-}
-.sk-edge.off .sk-edge-line,
-.sk-edge.met .sk-edge-line {
-  stroke-dasharray: 4 5;
-}
-.sk-edge.met .sk-edge-line {
-  stroke: var(--text-faint);
-}
-.sk-edge.hl .sk-edge-line {
-  stroke: var(--accent);
-  stroke-width: 2;
-}
-
-/* nodes (no CSS transform on .sk-node: it would replace the SVG translate) */
-.sk-node {
-  cursor: pointer;
-  outline: none;
-  transition: opacity 0.15s;
-}
-.sk-node.dim {
-  opacity: 0.2;
-}
-.sk-node.locked {
-  opacity: 0.55;
-}
-.sk-node.locked.dim {
-  opacity: 0.15;
-}
-.sk-node-hit {
-  fill: transparent;
-}
-.sk-node-core {
-  fill: var(--bg);
-  stroke: var(--border-strong);
-  stroke-width: 2.5;
-  transition: fill 0.12s;
-}
-.sk-node:hover .sk-node-core {
-  fill: var(--bg-soft);
-}
-.sk-ring {
-  fill: none;
-  stroke: var(--c);
-  stroke-width: 2.5;
-  stroke-linecap: round;
-  transition: stroke-dasharray 0.5s ease;
-}
-.sk-node-icon {
-  font-size: 24px;
-  text-anchor: middle;
-  dominant-baseline: central;
-  pointer-events: none;
-}
-.sk-node-level rect {
-  fill: var(--bg);
-  stroke: var(--border-strong);
-  stroke-width: 1;
-}
-.sk-node-level text {
-  font-size: 10.5px;
-  font-weight: 600;
-  fill: var(--text-muted);
-  text-anchor: middle;
-  dominant-baseline: central;
-  font-variant-numeric: tabular-nums;
-}
-.sk-node-label {
-  font-size: 12.5px;
-  font-weight: 500;
-  fill: var(--text);
-  text-anchor: middle;
-  paint-order: stroke;
-  stroke: var(--bg);
-  stroke-width: 4px;
-  stroke-linejoin: round;
-  pointer-events: none;
-}
-.sk-node-select {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 1.5;
-}
-.sk-node:focus-visible .sk-node-core {
-  stroke: var(--accent);
-}
-.sk-node-lock rect {
-  fill: var(--bg);
-  stroke: var(--border-strong);
-  stroke-width: 1;
-}
-.sk-node-lock path {
-  fill: none;
-  stroke: var(--text-muted);
-  stroke-width: 1.4;
-  stroke-linejoin: round;
-}
-.sk-node-lock text {
-  font-size: 10px;
-  font-weight: 600;
-  fill: var(--text-muted);
-  text-anchor: middle;
-  dominant-baseline: central;
-}
-.sk-node-done circle {
-  fill: var(--success);
-  stroke: var(--bg);
-  stroke-width: 2;
-}
-.sk-node-done path {
-  fill: none;
-  stroke: #fff;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.sk-node-peer {
-  stroke: var(--bg);
-  stroke-width: 2;
-}
-/* a single quiet fade after a level-up */
-.sk-node-flash {
-  fill: none;
-  stroke: var(--c);
-  stroke-width: 2;
-  pointer-events: none;
-  animation: sk-flash 1.4s ease-out forwards;
-}
-@keyframes sk-flash {
-  from {
-    opacity: 0.9;
-  }
-  to {
-    opacity: 0;
-  }
-}
-
-/* hover tooltip */
-.sk-tip {
-  position: absolute;
-  transform: translate(-50%, calc(-100% - 8px));
-  max-width: 280px;
-  padding: 7px 10px;
-  border-radius: var(--radius);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-  pointer-events: none;
-  font-size: 12.5px;
-  z-index: 4;
-}
-.sk-tip.below {
-  transform: translate(-50%, 8px);
-}
-.sk-tip-title {
-  font-weight: 600;
-}
-.sk-tip-meta,
-.sk-tip-lock {
-  color: var(--text-muted);
 }
 
 /* today's quests strip */
@@ -377,7 +159,9 @@
   white-space: nowrap;
   cursor: pointer;
   font-size: 13px;
-  transition: border-color 0.12s, background 0.12s;
+  transition:
+    border-color 0.12s,
+    background 0.12s;
 }
 .sk-qchip:hover {
   background: var(--bg-soft);
@@ -405,74 +189,6 @@
   font-size: 12px;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
-}
-
-/* canvas controls & help */
-.sk-controls {
-  position: absolute;
-  left: 12px;
-  bottom: 12px;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--bg);
-  box-shadow: var(--shadow-sm);
-  z-index: 3;
-}
-.sk-controls .icon-btn {
-  width: 30px;
-  height: 30px;
-  font-weight: 600;
-}
-.sk-controls .sk-fit {
-  width: auto;
-  padding: 0 8px;
-  gap: 5px;
-  font-size: 12.5px;
-  font-weight: 500;
-}
-.sk-controls-sep {
-  width: 1px;
-  height: 18px;
-  margin: 0 2px;
-  background: var(--border);
-}
-.sk-legend {
-  position: absolute;
-  left: 12px;
-  bottom: 56px;
-  width: 300px;
-  padding: 12px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: var(--bg);
-  box-shadow: var(--shadow);
-  z-index: 4;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  animation: fade 0.12s ease-out;
-}
-.sk-legend p {
-  margin: 0;
-  line-height: 1.45;
-}
-.sk-legend-ranks {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 6px 0;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-}
-.sk-legend-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
 }
 
 /* ---- side panel / bottom sheet --------------------------------------------- */
@@ -791,7 +507,9 @@
   color: var(--accent-text);
   cursor: pointer;
   padding: 0;
-  transition: background 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
 }
 .sk-check:hover {
   border-color: var(--accent);
@@ -989,95 +707,12 @@
   padding: 8px;
 }
 
-/* ---- overview ---------------------------------------------------------------- */
+/* ---- the ability hexagon --------------------------------------------------------- */
 
-.sk-sheet-scroll,
 .sk-empty-scroll {
   position: absolute;
   inset: 0;
   overflow-y: auto;
-}
-.sk-sheet {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 24px 24px 80px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-.sk-hero {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 18px;
-  align-items: center;
-  padding: 18px 20px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: var(--bg);
-}
-.sk-hero-text {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-.sk-hero-text .sk-xpbar {
-  max-width: 420px;
-}
-.sk-hero-title {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.sk-hero-title .sk-rank {
-  font-size: 14px;
-}
-.sk-hero-stats {
-  display: grid;
-  grid-template-columns: repeat(4, auto);
-  gap: 4px 24px;
-  margin: 0;
-}
-.sk-hero-stats dt {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-.sk-hero-stats dd {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.sk-sheet-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: 16px;
-}
-.sk-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  padding: 16px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border);
-  background: var(--bg);
-}
-.sk-card-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-}
-.sk-card-head h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
 }
 
 .sk-radar {
@@ -1162,88 +797,6 @@
   stroke-dasharray: 4 3;
 }
 
-/* Ability boxes, like the stat column of a D&D character sheet. */
-.sk-card-wide {
-  grid-column: 1 / -1;
-}
-.sk-abilities {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
-}
-.sk-ability {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas:
-    "abbr score"
-    "mod mod"
-    "name name"
-    "bar bar"
-    "sub sub";
-  align-items: center;
-  gap: 2px 8px;
-  min-width: 0;
-  padding: 10px 12px 11px;
-  border: 1px solid var(--border);
-  border-top: 3px solid var(--c);
-  border-radius: var(--radius);
-  background: var(--bg-soft);
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.sk-ability:hover {
-  background: var(--bg-hover);
-}
-.sk-ability:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.sk-ability-abbr {
-  grid-area: abbr;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  color: var(--c);
-}
-.sk-ability-score {
-  grid-area: score;
-  min-width: 30px;
-  padding: 1px 7px;
-  border: 1px solid var(--border-strong);
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-.sk-ability-mod {
-  grid-area: mod;
-  font-size: 26px;
-  font-weight: 650;
-  line-height: 1.15;
-  font-variant-numeric: tabular-nums;
-}
-.sk-ability-name {
-  grid-area: name;
-  font-size: 13px;
-  font-weight: 500;
-}
-.sk-ability .sk-xpbar {
-  grid-area: bar;
-  height: 4px;
-  margin: 4px 0 2px;
-}
-.sk-ability-sub {
-  grid-area: sub;
-  display: -webkit-box;
-  min-height: 2.7em;
-  overflow: hidden;
-  line-height: 1.35;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
 .sk-area-hint {
   line-height: 1.4;
 }
@@ -1445,7 +998,9 @@
   cursor: pointer;
 }
 .sk-swatch.active {
-  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--text-muted);
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 3.5px var(--text-muted);
 }
 .sk-preview {
   display: block;
@@ -1528,16 +1083,6 @@
   .sk-search {
     width: 160px;
   }
-  .sk-sheet-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .sk-hero {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-  .sk-hero-stats {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 720px) {
@@ -1588,24 +1133,12 @@
   .sk-body.with-panel .sk-quest-strip {
     right: 12px;
   }
-  .sk-sheet {
-    padding: 16px 16px 80px;
-  }
-  .sk-hero {
-    padding: 16px;
-    gap: 14px;
-  }
-  .sk-hero-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
+
   .sk-empty {
     padding: 28px 16px 80px;
   }
   .sk-empty-head h2 {
     font-size: 24px;
-  }
-  .sk-legend {
-    width: calc(100% - 24px);
   }
 }
 
@@ -1630,7 +1163,13 @@
   padding: 14px 16px;
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 10%, transparent), transparent 60%), var(--bg);
+  background:
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--c) 10%, transparent),
+      transparent 60%
+    ),
+    var(--bg);
 }
 .sk-page-top {
   display: flex;
@@ -1693,8 +1232,333 @@
 }
 html[data-glass] .sk-page {
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--c) 14%, transparent), transparent 60%),
+    linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--c) 14%, transparent),
+      transparent 60%
+    ),
     var(--glass-lens);
   border-color: var(--glass-edge-soft);
   box-shadow: inset 0 1px 0 var(--glass-edge);
+}
+
+/* ---- Claude at work ----------------------------------------------------------- */
+
+.sk-job {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  font-size: 13px;
+}
+.sk-spinner {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-top-color: var(--accent);
+  animation: sk-spin 0.8s linear infinite;
+}
+@keyframes sk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sk-spinner {
+    animation: none;
+  }
+}
+
+/* Waiting for a lesson Claude is writing: a banner over the map. */
+.sk-starting {
+  position: absolute;
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(560px, calc(100% - 24px));
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--glass-solid, var(--bg));
+  box-shadow: var(--shadow-lg);
+  font-size: 13.5px;
+  animation: fade 0.15s ease-out;
+}
+.sk-body.with-panel .sk-starting {
+  left: calc(50% - 198px);
+}
+.sk-starting.error {
+  background: var(--danger-soft);
+}
+.sk-starting strong {
+  font-weight: 600;
+}
+
+/* ---- the character, beside the map ---------------------------------------------- */
+
+.sk-char-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 14px 10px 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sk-char-head .sk-xpbar {
+  margin: 6px 0 4px;
+}
+.sk-char-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  font-size: 18px;
+  font-weight: 700;
+}
+.sk-char-head .icon-btn svg {
+  transform: rotate(0deg);
+}
+.sk-char-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.sk-char-section:last-child {
+  border-bottom: none;
+}
+.sk-char-section h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.sk-char-section > header {
+  align-items: center;
+}
+.sk-upnext {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sk-upnext-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sk-upnext-row:hover {
+  background: var(--bg-hover);
+}
+.sk-upnext-row > .grow {
+  display: flex;
+  flex-direction: column;
+}
+.sk-upnext-icon {
+  font-size: 20px;
+}
+.sk-upnext-name {
+  font-weight: 600;
+}
+.sk-upnext-go {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+}
+.sk-char-abilities {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.sk-char-ability {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "abbr score"
+    "mod mod"
+    "bar bar";
+  align-items: center;
+  gap: 0 6px;
+  padding: 7px 9px 8px;
+  border: 1px solid var(--border);
+  border-top: 3px solid var(--c);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.sk-char-ability:hover {
+  background: var(--bg-hover);
+}
+.sk-char-abbr {
+  grid-area: abbr;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--c);
+}
+.sk-char-score {
+  grid-area: score;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.sk-char-mod {
+  grid-area: mod;
+  font-size: 21px;
+  font-weight: 650;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.sk-char-ability .sk-xpbar {
+  grid-area: bar;
+  height: 3px;
+  margin-top: 3px;
+}
+.sk-char .sk-radar {
+  max-width: 300px;
+  margin: 0 auto;
+}
+.sk-char-plan p {
+  margin: 0;
+  line-height: 1.45;
+}
+.sk-char-plan .btn {
+  align-self: flex-start;
+}
+
+/* ---- Learn: in the skill panel ------------------------------------------------------ */
+
+.sk-learn-go {
+  width: 100%;
+  justify-content: center;
+  height: 38px;
+}
+.sk-learn-note {
+  margin: 6px 0 0;
+  line-height: 1.4;
+}
+.sk-learn-done {
+  margin: 0;
+  font-weight: 600;
+  color: var(--success, var(--accent));
+}
+.sk-learn-first {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.sk-parts {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sk-part {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--radius);
+}
+.sk-part.next {
+  background: var(--accent-soft);
+}
+.sk-part-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 13.5px;
+  text-align: left;
+  cursor: pointer;
+  border-radius: var(--radius);
+}
+.sk-part-main:hover {
+  background: var(--bg-hover);
+}
+.sk-part.locked .sk-part-main {
+  color: var(--text-muted);
+}
+.sk-part-state {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-strong);
+  color: var(--text-muted);
+}
+.sk-part.done .sk-part-state {
+  border-color: var(--c, var(--accent));
+  background: var(--c, var(--accent));
+  color: #fff;
+}
+.sk-part.next .sk-part-state {
+  border-color: var(--accent);
+}
+.sk-part-icon {
+  font-size: 16px;
+}
+.sk-part-go {
+  flex: none;
+}
+
+@media (max-width: 720px) {
+  .sk-char {
+    height: 104px;
+  }
+  .sk-char.expanded {
+    height: 72%;
+  }
+  .sk-char-head {
+    padding-top: 4px;
+    cursor: pointer;
+    border-bottom: none;
+  }
+  .sk-char.expanded .sk-char-head {
+    border-bottom: 1px solid var(--border);
+    cursor: default;
+  }
+  .sk-starting,
+  .sk-body.with-panel .sk-starting {
+    left: 50%;
+    top: 60px;
+  }
 }

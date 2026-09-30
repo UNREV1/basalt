@@ -122,6 +122,31 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const FADED = 0.26;
 const EMOJI_FONT = '"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif';
 
+/**
+ * The map's type scale, in screen pixels. Every word on the map uses one of
+ * these, so the three layouts (and the notes graph) read the same.
+ */
+const TYPE = {
+  /** Areas, the names of the cluster circles, your level. */
+  heading: "650 13px",
+  /** Fields, and skills you've started. */
+  strong: "600 12px",
+  /** Topics and steps. */
+  label: "500 12px",
+  /** Courses and your class. */
+  caption: "500 11px",
+  /** Small capitals over a group: an ability's clusters, a path, a tier (uppercase, spaced out). */
+  section: "700 10.5px",
+} as const;
+type TypeStyle = keyof typeof TYPE;
+/** Text inside a node grows and shrinks with the map; smaller than this on screen, it's left out. */
+const MIN_TEXT = 8.5;
+
+/** Letter spacing where the browser supports it on a canvas (small capitals read better spaced out). */
+function spacing(ctx: CanvasRenderingContext2D, value: string) {
+  if ("letterSpacing" in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = value;
+}
+
 const radius = (n: SGNode) => {
   if (n.kind === "ability") return 30;
   if (n.kind === "course") return 9;
@@ -342,6 +367,12 @@ export class SkillGraph {
     this.inset = inset;
   }
 
+  /** Screen areas covered by controls over the map, so labels aren't hidden under them. */
+  setCovered(boxes: SkillGraph["covered"]) {
+    this.covered = boxes;
+    this.request();
+  }
+
   /** Level-up pulses. */
   pulse(ids: string[]) {
     const now = performance.now();
@@ -365,6 +396,10 @@ export class SkillGraph {
 
   /** Where the structured layouts (radial, tree) want each hub and skill; clusters leave it empty. */
   private slots = new Map<string, Pt>();
+  /** Tree: how far right of a skill its name can run (world units) before the next thing on its row. */
+  private labelRoom = new Map<string, number>();
+  /** Screen areas covered by controls over the map (labels keep out of them). */
+  private covered: { x0: number; y0: number; x1: number; y1: number }[] = [];
   /** Tier guides: horizontal lines (tree) or circles (radial). */
   private guides: { at: number; label: string }[] = [];
 
@@ -397,6 +432,7 @@ export class SkillGraph {
 
   private computeSlots(visible: Node[]) {
     this.slots = new Map();
+    this.labelRoom = new Map();
     this.guides = [];
     this.branchEdges = [];
     this.edgeSet = new Set();
@@ -438,13 +474,16 @@ export class SkillGraph {
     const COL = 290;
     const ROW = 34;
     const BEAD = 26;
-    const FIRST_BEAD = 230;
+    // (Room for the topic's name before its first step: names are 12px on screen at the fitted zoom.)
+    const FIRST_BEAD = 340;
     let row = 0;
     const put = (n: Node, depth: number): number => {
       const inside = kids.get(n.id) ?? [];
       const steps = inside.filter(isStep);
       const rest = inside.filter((c) => !isStep(c));
       const x = depth * COL;
+      // Its name runs right, up to its first step or the next column.
+      this.labelRoom.set(n.id, !rest.length && steps.length ? FIRST_BEAD : COL);
       if (!rest.length) {
         // A row of its own, its steps after it like beads on a string.
         const y = row++ * ROW;
@@ -1157,7 +1196,8 @@ export class SkillGraph {
       ctx.fillStyle = theme.muted;
       ctx.lineWidth = 1 / t.k;
       ctx.setLineDash([3 / t.k, 6 / t.k]);
-      ctx.font = `700 ${11 / Math.max(t.k, 0.6)}px ${theme.font}`;
+      ctx.font = `700 ${10.5 / t.k}px ${theme.font}`;
+      spacing(ctx, `${0.6 / t.k}px`);
       for (const g of this.guides) {
         ctx.globalAlpha = 0.28;
         ctx.beginPath();
@@ -1169,9 +1209,10 @@ export class SkillGraph {
         if (this.opts.layout === "tree") {
           ctx.globalAlpha = 0.6;
           ctx.textAlign = "left";
-          ctx.fillText(g.label.toUpperCase(), gx0 - 70, g.at + 14 / Math.max(t.k, 0.6));
+          ctx.fillText(g.label.toUpperCase(), gx0 - 70, g.at + 14 / t.k);
         }
       }
+      spacing(ctx, "0px");
       ctx.restore();
     }
 
@@ -1458,15 +1499,18 @@ export class SkillGraph {
         ctx.lineWidth = 2.5;
         ctx.strokeStyle = n.color;
         ctx.stroke();
-        ctx.fillStyle = n.color;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.font = `800 13px ${theme.font}`;
-        ctx.fillText(n.label, x, y - 6);
-        ctx.font = `600 11px ${theme.font}`;
-        ctx.fillStyle = theme.text;
-        ctx.fillText(n.sub ?? "", x, y + 9);
-        ctx.textBaseline = "alphabetic";
+        // Its name and score, while they're big enough to read (they grow with the map).
+        if (11 * t.k >= MIN_TEXT) {
+          ctx.fillStyle = n.color;
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.font = `${TYPE.heading} ${theme.font}`;
+          ctx.fillText(n.label, x, y - 6);
+          ctx.font = `${TYPE.caption} ${theme.font}`;
+          ctx.fillStyle = theme.text;
+          ctx.fillText(n.sub ?? "", x, y + 9);
+          ctx.textBaseline = "alphabetic";
+        }
       } else if (n.kind === "course") {
         const s = n.r;
         ctx.beginPath();
@@ -1570,8 +1614,9 @@ export class SkillGraph {
           const by = y + n.r * 0.78;
           // Badge: the level, "3/5" learnt for a topic, a check once learnt, a lock (none on a planned detail).
           const text = n.locked ? "🔒" : n.done ? "✓" : n.learnt ? `${n.learnt.done}/${n.learnt.total}` : n.planned ? "" : String(n.level);
-          if (text) {
-            ctx.font = `700 9px ${theme.font}`;
+          // (Only once it's big enough to read: it grows with the map.)
+          if (text && 9 * t.k >= MIN_TEXT) {
+            ctx.font = `600 9px ${theme.font}`;
             const bw = Math.max(15, ctx.measureText(text).width + 8);
             ctx.beginPath();
             ctx.roundRect(bx - bw / 2, by - 7.5, bw, 15, 7.5);
@@ -1642,30 +1687,16 @@ export class SkillGraph {
       ctx.lineWidth = 3;
       ctx.strokeStyle = theme.bg.startsWith("#") ? theme.bg : "#ffffff";
       ctx.stroke();
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#ffffff";
-      ctx.font = `800 22px ${theme.font}`;
-      ctx.fillText(me.initials, 0, 1);
-      ctx.textBaseline = "alphabetic";
+      if (20 * t.k >= MIN_TEXT) {
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "#ffffff";
+        ctx.font = `700 20px ${theme.font}`;
+        ctx.fillText(me.initials, 0, 1);
+        ctx.textBaseline = "alphabetic";
+      }
     }
     ctx.restore();
-    if (me) {
-      // Your level and class under you, in screen space like the other labels.
-      const c = this.toScreen({ x: 0, y: 0 });
-      const below = c.y + 47 * t.k + 16;
-      ctx.textAlign = "center";
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = theme.bg;
-      ctx.font = `800 14px ${theme.font}`;
-      ctx.strokeText(me.title, c.x, below);
-      ctx.fillStyle = theme.text;
-      ctx.fillText(me.title, c.x, below);
-      ctx.font = `600 11.5px ${theme.font}`;
-      ctx.strokeText(me.sub, c.x, below + 15);
-      ctx.fillStyle = theme.muted;
-      ctx.fillText(me.sub, c.x, below + 15);
-    }
 
     // Labels in screen space, crisp at any zoom. Most important first; a label
     // that would overlap one already placed (or another node) tries above its
@@ -1735,12 +1766,29 @@ export class SkillGraph {
     type Disc = { id: string; b: Box };
     const discs = grid<Disc>((d) => d.b);
     const hitsNode = (b: Box, except: string) => discs.some(b, (d) => d.id !== except);
-    if (me) {
-      // Your level and class under you.
-      const c = this.toScreen({ x: 0, y: 0 });
-      const below = c.y + 47 * t.k + 16;
-      placed.add({ x0: c.x - 80, y0: c.y - 47 * t.k, x1: c.x + 80, y1: below + 20 });
-    }
+    const font = (style: TypeStyle) => `${TYPE[style]} ${theme.font}`;
+    // Where labels go: the part of the canvas the map fits into (clear of the side panel,
+    // the phone's character sheet and the strip at the top), and out from under the toolbar.
+    const labelArea: Box = {
+      x0: 4,
+      y0: this.inset.top > 12 ? this.inset.top : 4,
+      x1: this.w - Math.max(4, this.inset.right - 12),
+      y1: this.h - Math.max(4, this.inset.bottom - 12),
+    };
+    const inView = (b: Box) => b.x0 >= labelArea.x0 && b.x1 <= labelArea.x1 && b.y0 >= labelArea.y0 && b.y1 <= labelArea.y1;
+    for (const b of this.covered) placed.add(b);
+    /** A label cut to fit a width, with an ellipsis. */
+    const fitTo = (label: string, max: number) => {
+      if (measure(label) <= max) return label;
+      let lo = 1;
+      let hi = label.length - 1;
+      while (lo < hi) {
+        const mid = Math.ceil((lo + hi) / 2);
+        if (measure(`${label.slice(0, mid).trimEnd()}…`) <= max) lo = mid;
+        else hi = mid - 1;
+      }
+      return `${label.slice(0, lo).trimEnd()}…`;
+    };
     const shown = this.nodes.filter((n) => n.x !== undefined && showCourse(n) && onScreen(n, n.r + 40));
     for (const n of shown) {
       const s = this.toScreen({ x: n.x!, y: n.y! });
@@ -1749,6 +1797,30 @@ export class SkillGraph {
       const b = { x0: s.x - r, y0: s.y - r, x1: s.x + r, y1: s.y + r };
       discs.add({ id: n.id, b });
       if (n.kind === "ability") placed.add(b);
+    }
+    if (me) {
+      // Your level and class under you, where they leave the map clear.
+      const c = this.toScreen({ x: 0, y: 0 });
+      const below = c.y + 47 * t.k + 16;
+      ctx.font = font("heading");
+      const w1 = measure(me.title);
+      ctx.font = font("caption");
+      const w = Math.max(w1, measure(me.sub));
+      const box = { x0: c.x - w / 2 - 3, y0: below - 12, x1: c.x + w / 2 + 3, y1: below + 19 };
+      if (inView(box) && !hitsNode(box, "") && !hitsPlaced(box)) {
+        placed.add(box);
+        ctx.textAlign = "center";
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = theme.bg;
+        ctx.font = font("heading");
+        ctx.strokeText(me.title, c.x, below);
+        ctx.fillStyle = theme.text;
+        ctx.fillText(me.title, c.x, below);
+        ctx.font = font("caption");
+        ctx.strokeText(me.sub, c.x, below + 15);
+        ctx.fillStyle = theme.muted;
+        ctx.fillText(me.sub, c.x, below + 15);
+      }
     }
     // General to detail as you zoom in: areas first, then fields, then topics, then the steps.
     const layout = this.opts.layout;
@@ -1772,12 +1844,14 @@ export class SkillGraph {
         const c = this.toScreen({ x: g.x, y: g.y });
         const r = g.r * t.k;
         if (r < (g.level === 1 ? 26 : 34) || c.x + r < 0 || c.x - r > this.w || c.y + r < 0 || c.y - r > this.h) continue;
+        // An area's name in small capitals over its circle; a field's inside the top of its own.
         const label = g.level === 1 ? g.label.toUpperCase() : g.label;
-        ctx.font = g.level === 1 ? `800 12px ${theme.font}` : `750 13px ${theme.font}`;
+        ctx.font = font(g.level === 1 ? "section" : "heading");
+        spacing(ctx, g.level === 1 ? "0.6px" : "0px");
         const w = measure(label);
         const y = g.level === 1 ? c.y - r - 7 : c.y - r + 17;
         const box = { x0: c.x - w / 2 - 3, y0: y - 12, x1: c.x + w / 2 + 3, y1: y + 4 };
-        if (hitsPlaced(box)) continue;
+        if (!inView(box) || hitsPlaced(box)) continue;
         placed.add(box);
         ctx.textAlign = "center";
         ctx.lineWidth = 4;
@@ -1786,6 +1860,7 @@ export class SkillGraph {
         ctx.fillStyle = g.level === 1 ? g.color : theme.text;
         ctx.fillText(label, c.x, y);
       }
+      spacing(ctx, "0px");
     }
     const candidates = shown
       .filter((n) => n.kind !== "ability" && !(layout === "clusters" && (n.tier === "general" || n.tier === "field") && n !== this.hover && this.opts.selectedId !== n.id))
@@ -1813,7 +1888,8 @@ export class SkillGraph {
     for (const road of roads) {
       const n = road.start;
       const s = this.toScreen({ x: n.x!, y: n.y! });
-      ctx.font = `800 11px ${theme.font}`;
+      ctx.font = font("section");
+      spacing(ctx, "0.6px");
       const label = (road.name.length > 32 ? `${road.name.slice(0, 31)}…` : road.name).toUpperCase();
       const w = measure(label);
       const gap = (n.r + (n.goal ? 10 : 7)) * t.k;
@@ -1825,7 +1901,11 @@ export class SkillGraph {
       });
       // Above its first step, else below it, wherever it covers no other skill.
       const spots = [s.y - gap - 7, s.y + gap + 13];
-      const y = spots.find((b) => !hitsPlaced(box(b)) && !hitsNode(box(b), n.id)) ?? spots[0];
+      const y = spots.find((b) => inView(box(b)) && !hitsPlaced(box(b)) && !hitsNode(box(b), n.id));
+      if (y === undefined) {
+        spacing(ctx, "0px");
+        continue;
+      }
       placed.add(box(y));
       ctx.globalAlpha = road.faded ? 0.35 : 1;
       ctx.lineWidth = 4;
@@ -1834,12 +1914,13 @@ export class SkillGraph {
       ctx.fillStyle = road.color;
       ctx.fillText(label, s.x, y);
       ctx.globalAlpha = 1;
+      spacing(ctx, "0px");
     }
     for (const { n, forced } of candidates) {
       const s = this.toScreen({ x: n.x!, y: n.y! });
-      const big = n.tier === "general" || n.tier === "field" || (!n.tier && !!n.learnt);
-      ctx.font = `${n.kind === "course" ? 500 : big ? 800 : n.learnt ? 700 : 600} ${n.kind === "course" ? 11 : n.tier === "general" ? 15.5 : big ? 14 : n.learnt ? 13 : 12}px ${theme.font}`;
-      const label = n.label.length > 28 ? `${n.label.slice(0, 27)}…` : n.label;
+      // (Bolder: fields, and topics you've started; planned topics and steps all read the same.)
+      ctx.font = font(n.kind === "course" ? "caption" : n.tier === "general" ? "heading" : n.tier === "field" || (!n.planned && !!n.learnt) ? "strong" : "label");
+      let label = n.label.length > 28 ? `${n.label.slice(0, 27)}…` : n.label;
       const w = measure(label);
       const gap = (n.r + (n.goal ? 10 : 7)) * t.k;
       // Radial: a path's steps sit in a line, so their labels run across the path, slanted at
@@ -1875,7 +1956,7 @@ export class SkillGraph {
           x1: Math.max(...pts.map((p) => p.x)),
           y1: Math.max(...pts.map((p) => p.y)),
         };
-        const blocked = hitsPlaced(box, (o) => !separated(pts, corners(o))) || hitsSlant(pts, box);
+        const blocked = !inView(box) || hitsPlaced(box, (o) => !separated(pts, corners(o))) || hitsSlant(pts, box);
         if (blocked && !forced) continue;
         slanted.add({ pts, box });
         ctx.save();
@@ -1897,9 +1978,18 @@ export class SkillGraph {
         const under = n.tier === "general" || n.tier === "field";
         const x = under ? s.x + n.r * t.k : s.x + n.r * t.k + 7;
         const y = under ? s.y - n.r * t.k - 13 : s.y;
-        const x0 = under ? x - w : x;
-        const box = { x0: x0 - 2, y0: y - 8 - (under ? 4 : 0), x1: x0 + w + 3, y1: y + 7 };
-        if (!forced && (hitsPlaced(box) || hitsSlant(corners(box), box))) continue;
+        // Beside it, it has until the first step on its row (or the next column): longer names are cut short.
+        const room = this.labelRoom.get(n.id);
+        if (!under && room !== undefined && !forced) {
+          const max = room * t.k - n.r * t.k - 7 - 12;
+          if (max < 36) continue;
+          label = fitTo(label, max);
+        }
+        const lw = measure(label);
+        const x0 = under ? x - lw : x;
+        // (As tall as the text: rows can sit a label's height apart.)
+        const box = { x0: x0 - 2, y0: y - 7 - (under ? 4 : 0), x1: x0 + lw + 3, y1: y + 6 };
+        if (!forced && (!inView(box) || hitsPlaced(box) || hitsSlant(corners(box), box))) continue;
         placed.add(box);
         ctx.textAlign = under ? "right" : "left";
         ctx.lineWidth = 4;
@@ -1939,7 +2029,7 @@ export class SkillGraph {
         const x0 = p.align === "center" ? p.x - w / 2 : p.align === "left" ? p.x : p.x - w;
         return { x0: x0 - 3, y0: p.y - 11, x1: x0 + w + 3, y1: p.y + 4 };
       };
-      const clearOfLabels = (b: Box) => !hitsPlaced(b) && !hitsSlant(corners(b), b);
+      const clearOfLabels = (b: Box) => inView(b) && !hitsPlaced(b) && !hitsSlant(corners(b), b);
       const clearOfNodes = (b: Box) => !hitsNode(b, n.id);
       let at = spots.find((p) => clearOfLabels(box(p)) && clearOfNodes(box(p)));
       if (at === undefined && forced) at = spots.find((p) => clearOfLabels(box(p))) ?? spots[0];

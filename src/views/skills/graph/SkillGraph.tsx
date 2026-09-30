@@ -398,6 +398,27 @@ export function SkillGraphView({
     engine.current?.setInsets(insets);
   }, [insets]);
 
+  // Labels keep out from under the toolbar over the map.
+  const toolsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const tools = toolsRef.current;
+    const host = hostRef.current;
+    if (!tools || !host) {
+      engine.current?.setCovered([]);
+      return;
+    }
+    const measure = () => {
+      const t = tools.getBoundingClientRect();
+      const h = host.getBoundingClientRect();
+      engine.current?.setCovered([{ x0: t.left - h.left - 4, y0: t.top - h.top - 4, x1: t.right - h.left + 4, y1: t.bottom - h.top + 4 }]);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(tools);
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [toolsBottom, hideTools]);
+
   useEffect(() => {
     if (effects.length) engine.current?.pulse(effects.map((f) => f.id));
   }, [effects]);
@@ -480,7 +501,7 @@ export function SkillGraphView({
       </ul>
 
       {!sheet && (
-        <div className="sg-tools" role="toolbar" aria-label="Map options" style={{ bottom: toolsBottom, maxWidth: `calc(100% - ${insets.right + 24}px)` }}>
+        <div ref={toolsRef} className="sg-tools" role="toolbar" aria-label="Map options" style={{ bottom: toolsBottom, maxWidth: `calc(100% - ${insets.right + 24}px)` }}>
           <div className="sg-seg" role="radiogroup" aria-label="Layout">
             {(
               [

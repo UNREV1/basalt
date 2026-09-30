@@ -7,6 +7,8 @@ import { useApp, useLatest, usePages } from "../../lib/hooks.ts";
 import type { Workspace } from "../../lib/workspace.ts";
 import { buildGraphData } from "./graph-model.ts";
 import { GraphRenderer, type GraphColors } from "./graph-renderer.ts";
+import { themedColor } from "../../../shared/skills.ts";
+import { usePalette } from "../../lib/theme.ts";
 import "./GraphView.css";
 
 export interface GraphViewProps {
@@ -39,12 +41,28 @@ function loadSettings(): StoredSettings {
   return { ...DEFAULTS, panelOpen: !matchMedia("(max-width: 720px)").matches };
 }
 
-/** Categorical palette (validated order) per theme; plain pages stay neutral. */
-const KIND_COLORS: Record<"light" | "dark", Record<PageKind, string>> = {
+/**
+ * Page kinds by color: plain pages stay neutral, the rest take a color slot
+ * (stored as the classic color), shown in this device's palette like the skill map.
+ */
+const KIND_SLOTS: Record<PageKind, string | null> = {
   // Legacy paint pages are canvases now, so they share the canvas color; chats take the free slot.
-  light: { doc: "#8b8a86", database: "#2a78d6", board: "#eb6834", paint: "#eb6834", notebook: "#eda100", course: "#e87ba4", chat: "#1baf7a" },
-  dark: { doc: "#8f8e8a", database: "#3987e5", board: "#d95926", paint: "#d95926", notebook: "#c98500", course: "#d55181", chat: "#199e70" },
+  doc: null,
+  database: "#2a78d6",
+  board: "#eb6834",
+  paint: "#eb6834",
+  notebook: "#eda100",
+  course: "#e87ba4",
+  chat: "#1baf7a",
 };
+
+function kindColors(dark: boolean): Record<PageKind, string> {
+  const out = {} as Record<PageKind, string>;
+  for (const [kind, hex] of Object.entries(KIND_SLOTS) as [PageKind, string | null][]) {
+    out[kind] = hex ? themedColor(hex, dark) : dark ? "#8f8e8a" : "#8b8a86";
+  }
+  return out;
+}
 
 const isDarkNow = () => document.documentElement.dataset.theme === "dark";
 
@@ -154,6 +172,8 @@ export default function GraphView({ ws, focusPageId, compact = false }: GraphVie
   }, [ws, allPages]);
   const linkGraph = useLinkGraph(ws);
   const dark = useDarkMode();
+  const palette = usePalette();
+  const kinds = useMemo(() => kindColors(dark), [dark, palette]);
   const [settings, setSettings] = useState(loadSettings);
   const [search, setSearch] = useState("");
   const [localMode, setLocalMode] = useState(true);
@@ -217,10 +237,11 @@ export default function GraphView({ ws, focusPageId, compact = false }: GraphVie
       edge: v("--border-strong", "#d3d2ce"),
       accent: v("--accent", "#5b5bd6"),
       font: v("--font", "sans-serif"),
-      kinds: KIND_COLORS[dark ? "dark" : "light"],
+      kinds,
     };
     rendererRef.current?.setColors(colors);
-  }, [dark]);
+    // (kinds changes with the palette, which also brings its accent.)
+  }, [dark, kinds]);
 
   // Re-fit when the neighborhood definition changes, not on every live edit.
   const fitKey = `${focusId ?? ""}|${settings.depth}|${settings.orphans}|${settings.hierarchy}|${settings.hiddenKinds.join(",")}`;
@@ -377,7 +398,7 @@ export default function GraphView({ ws, focusPageId, compact = false }: GraphVie
                         aria-pressed={!hidden}
                         title={hidden ? `Show ${k.label.toLowerCase()} pages` : `Hide ${k.label.toLowerCase()} pages`}
                       >
-                        <span className="gv-swatch" style={{ background: KIND_COLORS[dark ? "dark" : "light"][k.kind] }} />
+                        <span className="gv-swatch" style={{ background: kinds[k.kind] }} />
                         <span className="grow">{k.label}</span>
                         <span className="gv-count">{data.kindCounts.get(k.kind)}</span>
                       </button>
@@ -405,7 +426,7 @@ export default function GraphView({ ws, focusPageId, compact = false }: GraphVie
 
           {hoverTitle && (
             <div className="gv-hover" aria-hidden="true">
-              <span className="gv-swatch" style={{ background: KIND_COLORS[dark ? "dark" : "light"][hoverTitle.kind] }} />
+              <span className="gv-swatch" style={{ background: kinds[hoverTitle.kind] }} />
               {hoverTitle.icon && <span>{hoverTitle.icon}</span>}
               <span className="ellipsis">{hoverTitle.title}</span>
               <span className="faint">

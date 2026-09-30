@@ -600,10 +600,13 @@ export class GraphRenderer {
     labels.sort((p, q) => q.prio - p.prio || q.n.degree - p.n.degree);
     const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
     for (const l of labels.slice(0, 600)) {
+      // The skill map's label styles (see TYPE in skill-graph.ts): 12px, a little bolder for the one you're on.
       ctx.font = `${l.prio === 4 ? 600 : 500} 12px ${c.font}`;
       const half = ctx.measureText(l.text).width / 2 + 2;
       const box = { x0: l.sx - half, y0: l.sy - 1, x1: l.sx + half, y1: l.sy + 15 };
-      if (l.prio < 4 && placed.some((b) => b.x0 < box.x1 && box.x0 < b.x1 && b.y0 < box.y1 && box.y0 < b.y1)) continue;
+      // Whole labels only: one that would run off the edge waits until it's in view.
+      const inView = box.x0 >= 2 && box.x1 <= this.w - 2 && box.y0 >= 2 && box.y1 <= this.h - 2;
+      if (l.prio < 4 && (!inView || placed.some((b) => b.x0 < box.x1 && box.x0 < b.x1 && b.y0 < box.y1 && box.y0 < b.y1))) continue;
       placed.push(box);
       ctx.globalAlpha = l.a;
       ctx.lineWidth = 3.5;

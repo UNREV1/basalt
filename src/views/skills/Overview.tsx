@@ -36,58 +36,60 @@ export function Radar({ areas, dark, onPick }: { areas: AreaStats[]; dark: boole
     return <div className="sk-radar-empty muted small">Add at least three abilities to see your scores.</div>;
   }
   const hovered = hover ? areas[hover.i] : null;
+  // The labels are HTML over the drawing, so they're the same size as the rest of the app.
+  const VB = { x: -30, y: 20, w: size + 60, h: size - 40 };
+  const place = (p: { x: number; y: number }) => ({ left: `${((p.x - VB.x) / VB.w) * 100}%`, top: `${((p.y - VB.y) / VB.h) * 100}%` });
   return (
     <div className="sk-radar" ref={hostRef} onPointerLeave={() => setHover(null)}>
-      <svg
-        viewBox={`-40 0 ${size + 80} ${size}`}
-        role="img"
-        aria-label={`Ability scores: ${areas.map((a) => `${a.area.name} ${a.score}, modifier ${formatModifier(a.modifier)}`).join("; ")}`}
-      >
-        {rings.map((f) => (
-          <polygon key={f} className="sk-radar-ring" points={areas.map((_, i) => pt(i, f * R)).map((p) => `${p.x},${p.y}`).join(" ")} />
-        ))}
-        {areas.map((_, i) => {
-          const p = pt(i, R);
-          return <line key={i} className="sk-radar-axis" x1={c} y1={c} x2={p.x} y2={p.y} />;
-        })}
-        <polygon className={`sk-radar-shape${hasData ? "" : " base"}`} points={poly.map((p) => `${p.x},${p.y}`).join(" ")} />
+      <div className="sk-radar-chart">
+        <svg
+          viewBox={`${VB.x} ${VB.y} ${VB.w} ${VB.h}`}
+          role="img"
+          aria-label={`Ability scores: ${areas.map((a) => `${a.area.name} ${a.score}, modifier ${formatModifier(a.modifier)}`).join("; ")}`}
+        >
+          {rings.map((f) => (
+            <polygon key={f} className="sk-radar-ring" points={areas.map((_, i) => pt(i, f * R)).map((p) => `${p.x},${p.y}`).join(" ")} />
+          ))}
+          {areas.map((_, i) => {
+            const p = pt(i, R);
+            return <line key={i} className="sk-radar-axis" x1={c} y1={c} x2={p.x} y2={p.y} />;
+          })}
+          <polygon className={`sk-radar-shape${hasData ? "" : " base"}`} points={poly.map((p) => `${p.x},${p.y}`).join(" ")} />
+          {hasData &&
+            poly.map((p, i) => (
+              <circle key={areas[i].area.id} cx={p.x} cy={p.y} r={4} fill={themedColor(areas[i].area.color, dark)} className="sk-radar-dot" />
+            ))}
+        </svg>
         {areas.map((a, i) => {
-          const p = poly[i];
-          const color = themedColor(a.area.color, dark);
-          const lp = pt(i, R + 26);
-          const anchor = Math.abs(lp.x - c) < 8 ? "middle" : lp.x > c ? "start" : "end";
+          const lp = pt(i, R + 22);
+          const side = Math.abs(lp.x - c) < 8 ? "middle" : lp.x > c ? "start" : "end";
           const show = (e: React.PointerEvent | React.FocusEvent) => {
             const host = hostRef.current?.getBoundingClientRect();
             const r = (e.currentTarget as Element).getBoundingClientRect();
             if (host) setHover({ i, x: r.left + r.width / 2 - host.left, y: r.top - host.top });
           };
           return (
-            <g
+            <button
               key={a.area.id}
-              className="sk-radar-point"
-              tabIndex={0}
-              role="button"
+              type="button"
+              className={`sk-radar-point ${side}`}
+              style={place(lp)}
               aria-label={`${a.area.name}: score ${a.score} (${formatModifier(a.modifier)}), ${plural(a.skills, "skill")}. Show in tree`}
               onPointerEnter={show}
               onFocus={show}
               onBlur={() => setHover(null)}
               onClick={() => onPick(a.area.id)}
-              onKeyDown={(e) => e.key === "Enter" && onPick(a.area.id)}
             >
-              <circle cx={lp.x} cy={lp.y} r={24} className="sk-radar-hit" />
-              {hasData && <circle cx={p.x} cy={p.y} r={4} fill={color} className="sk-radar-dot" />}
-              <text x={lp.x} y={lp.y - 4} textAnchor={anchor} className="sk-radar-label">
-                {a.area.attribute || a.area.name}
-              </text>
-              <text x={lp.x} y={lp.y + 12} textAnchor={anchor} className="sk-radar-value">
+              <span className="sk-radar-label">{a.area.attribute || a.area.name}</span>
+              <span className="sk-radar-value">
                 {a.score} ({formatModifier(a.modifier)})
-              </text>
-            </g>
+              </span>
+            </button>
           );
         })}
-      </svg>
+      </div>
       <div className="sk-radar-caption small faint">
-        Center 8 · outer ring {max} · 10 is an average person
+        From 8 in the middle to {max} at the edge; 10 is average
       </div>
       {hover && hovered && (
         <div className="sk-radar-tip" style={{ left: hover.x, top: hover.y }}>

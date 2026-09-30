@@ -721,6 +721,9 @@
   max-width: 440px;
   margin: 0 auto;
 }
+.sk-radar-chart {
+  position: relative;
+}
 .sk-radar svg {
   display: block;
   width: 100%;
@@ -749,26 +752,50 @@
   stroke: var(--bg);
   stroke-width: 1.5;
 }
-.sk-radar-hit {
-  fill: transparent;
-}
 .sk-radar-point {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 3px 6px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  line-height: 1.2;
+  white-space: nowrap;
   cursor: pointer;
-  outline: none;
+  transform: translate(-50%, -50%);
+}
+.sk-radar-point.start {
+  align-items: flex-start;
+  transform: translate(-6px, -50%);
+}
+.sk-radar-point.end {
+  align-items: flex-end;
+  transform: translate(calc(-100% + 6px), -50%);
+}
+.sk-radar-point:hover {
+  background: var(--bg-hover);
+}
+.sk-radar-point:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .sk-radar-label {
   font-size: 12px;
-  font-weight: 500;
-  fill: var(--text);
+  font-weight: 600;
 }
 .sk-radar-value {
   font-size: 11px;
-  fill: var(--text-muted);
+  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 .sk-radar-point:hover .sk-radar-label,
 .sk-radar-point:focus-visible .sk-radar-label {
-  fill: var(--accent);
+  color: var(--accent);
 }
 .sk-radar-tip {
   position: absolute;
